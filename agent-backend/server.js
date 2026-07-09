@@ -148,6 +148,62 @@ app.delete("/api/sessions/:id", (req, res) => {
   }
 });
 
+// Search sessions
+app.get("/api/sessions/search", (req, res) => {
+  try {
+    const q = req.query.q;
+    if (!q) {
+      return res.json({ success: true, sessions: db.getAllSessions() });
+    }
+    const results = db.searchSessions(q);
+    res.json({ success: true, sessions: results });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// Export all sessions as JSON download
+app.get("/api/sessions/export/all", (req, res) => {
+  try {
+    const all = db.getAllSessions();
+    res.setHeader("Content-Type", "application/json");
+    res.setHeader("Content-Disposition", "attachment; filename=aegis-sessions-export.json");
+    res.json(all);
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// Import sessions from JSON
+app.post("/api/sessions/import", (req, res) => {
+  try {
+    const sessions = req.body;
+    if (!Array.isArray(sessions)) {
+      return res.status(400).json({ success: false, message: "Expected an array of sessions." });
+    }
+    let imported = 0;
+    for (const session of sessions) {
+      if (session.id && session.title !== undefined) {
+        db.saveSession(session);
+        imported++;
+      }
+    }
+    res.json({ success: true, imported });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// List available backups
+app.get("/api/sessions/backups", (req, res) => {
+  try {
+    const backups = db.getBackups();
+    res.json({ success: true, backups });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 // Proactive Notifier API (hits notify-send, Discord webhook, and WebSockets)
 app.post("/api/notify", (req, res) => {
   try {
@@ -361,6 +417,7 @@ async function spawnAgentSession(ws, sessionId) {
     let accumulatedText = "";
     let accumulatedThinking = "";
     let stdoutBuffer = "";
+    let lastSpokenTextLength = 0;
 
     piProcess.stdout.on("data", (data) => {
       stdoutBuffer += data.toString();
@@ -378,6 +435,20 @@ async function spawnAgentSession(ws, sessionId) {
               accumulatedText += ev.delta;
               let cleanStreamText = accumulatedText.replace(/<tts>[\s\S]*?$/gi, "").replace(/<tts>[\s\S]*?<\/tts>/gi, "").trim();
               ws.send(JSON.stringify({ type: "message", role: "assistant", content: cleanStreamText }));
+              
+              // Streaming TTS: detect newly completed sentences
+              const newChunk = cleanStreamText.slice(lastSpokenTextLength);
+              const sentenceRegex = /[.!?](?:\s|$)/g;
+              let match;
+              let lastEnd = 0;
+              while ((match = sentenceRegex.exec(newChunk)) !== null) {
+                const sentence = newChunk.slice(lastEnd, match.index + 1).trim();
+                if (sentence.length > 2) {
+                  ws.send(JSON.stringify({ type: "speech_sentence", content: sentence }));
+                }
+                lastEnd = match.index + 1;
+              }
+              lastSpokenTextLength = cleanStreamText.length;
             } 
             else if (ev.type === "thinking_delta") {
               accumulatedThinking += ev.delta;
@@ -393,6 +464,28 @@ async function spawnAgentSession(ws, sessionId) {
               name: tc.name || tc.toolName,
               arguments: tc.arguments
             }));
+            
+            // Streaming TTS: announce tool execution vocally
+            const toolName = tc.name || tc.toolName || "";
+            let toolAnnouncement = "";
+            if (toolName === "bash") {
+              toolAnnouncement = "Running shell command.";
+            } else if (toolName === "write") {
+              toolAnnouncement = "Creating file.";
+            } else if (toolName === "edit") {
+              toolAnnouncement = "Editing file.";
+            } else if (toolName === "read") {
+              toolAnnouncement = "Reading file.";
+            } else if (toolName === "find") {
+              toolAnnouncement = "Searching files.";
+            } else if (toolName.includes("lightpanda")) {
+              toolAnnouncement = "Browsing the web.";
+            } else if (toolName === "subagent") {
+              toolAnnouncement = "Spawning subagent.";
+            } else {
+              toolAnnouncement = `Running ${toolName}.`;
+            }
+            ws.send(JSON.stringify({ type: "speech_tool", content: toolAnnouncement }));
           } 
           else if (item.type === "tool_call_end" || item.type === "tool_execution_end") {
             const tc = item.toolCall || item;
@@ -423,7 +516,7 @@ async function spawnAgentSession(ws, sessionId) {
             ws.send(JSON.stringify({ type: "message", role: "assistant", content: cleanFinalText }));
             
             const userPrompt = ws.currentPrompt || "General assistant query";
-            if (ttsText && ttsText.length > 150) {
+            if (ttsText && (ttsText.length > 50 || ttsText.includes("`") || ttsText.includes("\n") || ttsText.includes("*") || ttsText.includes("#"))) {
               generateIntelligentSpeech(userPrompt, cleanFinalText).then(summary => {
                 if (summary) {
                   ws.send(JSON.stringify({ type: "intelligent_speech", content: summary }));
@@ -437,6 +530,7 @@ async function spawnAgentSession(ws, sessionId) {
 
             accumulatedText = "";
             accumulatedThinking = "";
+            lastSpokenTextLength = 0;
 
             sendStatus(ws, "done");
           }

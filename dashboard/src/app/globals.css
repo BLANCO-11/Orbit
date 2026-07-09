@@ -387,22 +387,28 @@ button:active {
   }
 }
 
-/* Retro TUI Terminal Box */
+/* Modern Frosted Panel (Layer 2) */
 .tui-panel {
-  background: rgba(9, 9, 11, 0.95) !important;
-  border: 2px double #3b82f6 !important;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
-  color: #3b82f6 !important;
-  box-shadow: inset 0 0 10px rgba(59, 130, 246, 0.1), 0 0 15px rgba(59, 130, 246, 0.15) !important;
-  text-shadow: 0 0 2px rgba(59, 130, 246, 0.3);
+  background: rgba(18, 18, 22, 0.75) !important;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.06) !important;
+  border-radius: var(--radius-lg) !important;
+  box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.6) !important;
+  color: var(--text-main) !important;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.tui-panel:hover {
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7) !important;
 }
 
 .tui-panel-title {
-  color: #3b82f6 !important;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  text-shadow: 0 0 5px rgba(59, 130, 246, 0.8) !important;
+  color: var(--text-main) !important;
+  font-family: inherit !important;
+  font-weight: 700;
+  letter-spacing: -0.2px;
 }
 
 /* Markdown rendering styling */
