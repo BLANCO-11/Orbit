@@ -1,0 +1,13 @@
+#!/bin/bash
+TITLE=$1
+MESSAGE=$2
+SEVERITY=${3:-info}
+
+if [ -z "$TITLE" ] || [ -z "$MESSAGE" ]; then
+  echo "Usage: aegis-notify <title> <message> [severity]"
+  exit 1
+fi
+
+curl -s -X POST -H "Content-Type: application/json" \
+  -d "{\"title\":\"$TITLE\", \"message\":\"$MESSAGE\", \"severity\":\"$SEVERITY\"}" \
+  http://localhost:6800/api/notify > /dev/null

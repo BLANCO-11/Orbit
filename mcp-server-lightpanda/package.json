@@ -1,0 +1,10 @@
+{
+  "name": "mcp-server-lightpanda",
+  "version": "1.0.0",
+  "description": "Lightpanda headless browser MCP server wrapper",
+  "main": "index.js",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.1",
+    "puppeteer-core": "^22.14.0"
+  }
+}

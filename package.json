@@ -1,0 +1,28 @@
+{
+  "name": "llm-os-agent",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start:backend": "node agent-backend/server.js",
+    "start:frontend": "npm --prefix dashboard run dev -- --port 6801 --hostname 0.0.0.0",
+    "build:frontend": "npm --prefix dashboard run build",
+    "start:frontend-prod": "npm --prefix dashboard run start -- --port 6801 --hostname 0.0.0.0",
+    "prod": "npm run build:frontend && concurrently \"npm run start:backend\" \"npm run start:frontend-prod\""
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "openai": "^6.45.0",
+    "puppeteer-core": "^25.3.0",
+    "ws": "^8.21.0"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.3"
+  }
+}

@@ -1,0 +1,13 @@
+node_modules/
+.next/
+env/
+.env
+*.db
+*.db-wal
+*.db-shm
+agent-backend/security-config.json
+workspace/
+temp-test/
+test_tts.mp3
+*.log
+.DS_Store
