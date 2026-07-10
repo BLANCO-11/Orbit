@@ -8,46 +8,14 @@ export default function ScreenshotViewer({ screenshotFile }) {
   if (!screenshotFile) return null;
 
   return (
-    <Card
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        background: "var(--surface-primary)",
-        borderColor: "var(--border-default)",
-      }}
-    >
-      <CardHeader
-        style={{
-          padding: "10px 16px",
-          borderBottom: "1px solid var(--border-subtle)",
-        }}
-      >
-        <CardTitle
-          style={{
-            fontSize: "0.75rem",
-            fontWeight: "600",
-            color: "var(--text-secondary)",
-          }}
-        >
-          🌐 Browser Preview (Lightpanda)
+    <Card className="flex flex-col">
+      <CardHeader className="border-b border-border py-2.5">
+        <CardTitle className="text-xs font-semibold text-muted-foreground">
+          Browser Preview (Lightpanda)
         </CardTitle>
       </CardHeader>
-      <CardContent
-        style={{
-          flex: "1",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          background: "rgba(0,0,0,0.3)",
-          padding: "12px",
-          overflow: "hidden",
-        }}
-      >
-        <img
-          src={screenshotFile}
-          alt="Browser Screenshot"
-          style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }}
-        />
+      <CardContent className="flex flex-1 items-center justify-center overflow-hidden bg-black/20 p-3">
+        <img src={screenshotFile} alt="Browser Screenshot" className="max-h-full max-w-full object-contain" />
       </CardContent>
     </Card>
   );

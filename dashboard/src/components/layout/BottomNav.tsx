@@ -13,44 +13,22 @@ export default function BottomNav({ items = [], activeTab, onTabChange }) {
 
   return (
     <nav
-      style={{
-        height: '56px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-around',
-        borderTop: '1px solid var(--border-subtle)',
-        background: 'var(--bg-base)',
-        flexShrink: 0,
-        paddingBottom: 'env(safe-area-inset-bottom, 0px)',
-        zIndex: 25,
-      }}
+      className="flex h-14 shrink-0 items-center justify-around border-t border-border bg-background"
+      style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
     >
-      {items.map(item => {
+      {items.map((item) => {
         const isActive = activeTab === item.id;
         return (
           <button
             key={item.id}
             onClick={() => onTabChange?.(item.id)}
-            className="interactive-base focus-ring"
             aria-label={item.label}
             aria-current={isActive ? 'page' : undefined}
-            style={{
-              flex: 1,
-              height: '100%',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '2px',
-              background: 'none',
-              border: 'none',
-              color: isActive ? 'var(--accent-primary)' : 'var(--text-tertiary)',
-              fontSize: '0.65rem',
-              fontWeight: isActive ? '600' : '400',
-              padding: '4px 0',
-              transition: 'color var(--duration-150) var(--ease-out-expo)',
-              borderTop: isActive ? '2px solid var(--accent-primary)' : '2px solid transparent',
-            }}
+            className={`flex h-full flex-1 flex-col items-center justify-center gap-0.5 border-t-2 pt-1 text-[0.65rem] transition-colors ${
+              isActive
+                ? 'border-primary font-semibold text-primary'
+                : 'border-transparent font-normal text-muted-foreground'
+            }`}
           >
             {item.icon}
             <span>{item.label}</span>

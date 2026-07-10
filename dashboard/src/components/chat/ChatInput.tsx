@@ -3,24 +3,10 @@
 
 import React, { useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Mic, Send, XCircle, Volume2, VolumeX, ChevronDown } from 'lucide-react';
+import { Mic, Send, XCircle, Volume2, VolumeX } from 'lucide-react';
 
 /**
  * ChatInput — The main input bar with mic, TTS, mode selector, textarea, send/stop
- *
- * Props:
- *   prompt, setPrompt
- *   status — 'idle' | 'thinking' | 'executing' | ...
- *   voiceState — 'audio' | 'mute' | 'disabled'
- *   onVoiceStateToggle
- *   onToggleListening — toggle mic
- *   isListening
- *   onSubmit
- *   onStop
- *   modeButton (ReactNode) — mode selector element to render
- *   inputHistory
- *   inputHistoryIndex
- *   onNavigateHistory
  */
 export default function ChatInput({
   prompt,
@@ -43,15 +29,13 @@ export default function ChatInput({
     const el = textareaRef.current;
     if (el) {
       el.style.height = '44px';
-      const capped = Math.min(el.scrollHeight, 80);
+      const capped = Math.min(el.scrollHeight, 120);
       el.style.height = capped + 'px';
-      el.style.overflowY = el.scrollHeight > 80 ? 'auto' : 'hidden';
+      el.style.overflowY = el.scrollHeight > 120 ? 'auto' : 'hidden';
     }
   };
 
-  useEffect(() => {
-    autoGrowTextarea();
-  }, [prompt]);
+  useEffect(() => { autoGrowTextarea(); }, [prompt]);
 
   const navigateInputHistory = (direction) => {
     const history = inputHistoryRef?.current || [];
@@ -75,45 +59,27 @@ export default function ChatInput({
     }
   };
 
+  const submitPrompt = () => {
+    const trimmed = prompt.trim();
+    if (trimmed) {
+      if (inputHistoryRef?.current) inputHistoryRef.current.push(trimmed);
+      if (inputHistoryIndexRef) inputHistoryIndexRef.current = -1;
+      onSubmit?.(trimmed);
+    }
+  };
+
   const isProcessing = status === 'thinking' || status === 'executing';
 
   return (
-    <div
-      className="chat-input-card"
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        borderRadius: 'var(--radius-lg)',
-        border: '1px solid var(--border-default)',
-        background: 'var(--surface-elevated)',
-        padding: '8px 12px',
-        maxWidth: '900px',
-        width: '100%',
-        margin: '0 auto',
-        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.15)',
-        transition: 'border-color 0.2s var(--ease-out-expo)',
-      }}
-      onFocusCapture={(e) => e.currentTarget.style.borderColor = 'var(--accent-primary)'}
-      onBlurCapture={(e) => e.currentTarget.style.borderColor = 'var(--border-default)'}
-    >
-      {/* ── Top Row: Textarea ── */}
+    <div className="mx-auto flex w-full max-w-3xl flex-col rounded-xl border border-border bg-card p-3 shadow-lg transition-colors focus-within:border-primary">
       <textarea
         ref={textareaRef}
         value={prompt}
-        onChange={(e) => {
-          setPrompt(e.target.value);
-        }}
+        onChange={(e) => setPrompt(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey) {
             e.preventDefault();
-            if (!isProcessing) {
-              const trimmed = prompt.trim();
-              if (trimmed && inputHistoryRef?.current) {
-                inputHistoryRef.current.push(trimmed);
-              }
-              if (inputHistoryIndexRef) inputHistoryIndexRef.current = -1;
-              onSubmit?.(trimmed);
-            }
+            if (!isProcessing) submitPrompt();
           } else if (e.key === 'ArrowUp' && !e.shiftKey) {
             e.preventDefault();
             navigateInputHistory('up');
@@ -129,143 +95,44 @@ export default function ChatInput({
         }
         rows={1}
         disabled={isProcessing}
-        style={{
-          width: '100%',
-          minHeight: '44px',
-          maxHeight: '120px',
-          fontSize: '0.9rem',
-          backgroundColor: 'transparent',
-          color: 'var(--text-primary)',
-          border: 'none',
-          padding: '8px 4px',
-          resize: 'none',
-          overflowY: 'auto',
-          lineHeight: '1.55',
-          fontFamily: 'inherit',
-          outline: 'none',
-        }}
+        className="max-h-[120px] min-h-[44px] w-full resize-none bg-transparent px-1 py-2 text-[0.9rem] leading-relaxed outline-none placeholder:text-muted-foreground"
       />
 
       {/* ── Bottom Row: Controls ── */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          marginTop: '6px',
-          paddingTop: '8px',
-          borderTop: '1px solid var(--border-subtle)',
-        }}
-      >
-        {/* Left: Mode selectors */}
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+      <div className="mt-1.5 flex items-center justify-between border-t border-border pt-2">
+        <div className="flex items-center gap-2">
           {modeButton}
           {promptTypeButton}
         </div>
 
-        {/* Right: Audio toggles + Action Button */}
-        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-          {/* Mic Button */}
-          <button
+        <div className="flex items-center gap-1.5">
+          <Button
+            variant="ghost"
+            size="icon-sm"
             onClick={onToggleListening}
-            className={`interactive-base ${isListening ? 'pulsing-mic' : ''}`}
-            style={{
-              width: '32px',
-              height: '32px',
-              borderRadius: 'var(--radius-sm)',
-              border: 'none',
-              background: isListening ? 'var(--accent-primary-muted)' : 'transparent',
-              color: isListening ? 'var(--accent-primary)' : 'var(--text-secondary)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              transition: 'all 0.2s ease',
-            }}
-            title="Voice input"
             disabled={isProcessing}
+            title="Voice input"
+            className={isListening ? 'animate-pulse bg-accent text-primary' : 'text-muted-foreground'}
           >
             <Mic size={15} />
-          </button>
+          </Button>
 
-          {/* TTS Button */}
-          <button
+          <Button
+            variant="ghost"
+            size="icon-sm"
             onClick={onVoiceStateToggle}
-            className="interactive-base"
-            style={{
-              width: '32px',
-              height: '32px',
-              borderRadius: 'var(--radius-sm)',
-              border: 'none',
-              background: voiceState === 'audio' ? 'rgba(255, 255, 255, 0.05)' : 'transparent',
-              color: voiceState === 'audio' ? 'var(--accent-primary)' : 'var(--text-secondary)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              transition: 'all 0.2s ease',
-            }}
-            title={
-              voiceState === 'audio'
-                ? 'Audio output active'
-                : voiceState === 'mute'
-                ? 'Muted'
-                : 'TTS disabled'
-            }
+            title={voiceState === 'audio' ? 'Audio output active' : voiceState === 'mute' ? 'Muted' : 'TTS disabled'}
+            className={voiceState === 'audio' ? 'text-primary' : 'text-muted-foreground'}
           >
-            {voiceState === 'audio' ? (
-              <Volume2 size={15} />
-            ) : (
-              <VolumeX size={15} style={{ opacity: voiceState === 'disabled' ? 0.4 : 0.8 }} />
-            )}
-          </button>
+            {voiceState === 'audio' ? <Volume2 size={15} /> : <VolumeX size={15} className={voiceState === 'disabled' ? 'opacity-40' : 'opacity-80'} />}
+          </Button>
 
-          <div style={{ width: '4px' }} />
-
-          {/* Send / Stop Button */}
           {isProcessing ? (
-            <Button
-              onClick={onStop}
-              style={{
-                borderRadius: 'var(--radius-md)',
-                padding: '0 12px',
-                height: '32px',
-                backgroundColor: 'var(--accent-danger)',
-                color: '#fff',
-                fontSize: '0.75rem',
-                fontWeight: '600',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '4px',
-              }}
-            >
+            <Button variant="destructive" size="sm" onClick={onStop}>
               <XCircle size={13} /> Stop
             </Button>
           ) : (
-            <Button
-              onClick={() => {
-                const trimmed = prompt.trim();
-                if (trimmed) {
-                  if (inputHistoryRef?.current) {
-                    inputHistoryRef.current.push(trimmed);
-                  }
-                  if (inputHistoryIndexRef) inputHistoryIndexRef.current = -1;
-                  onSubmit?.(trimmed);
-                }
-              }}
-              style={{
-                borderRadius: 'var(--radius-md)',
-                padding: '0 12px',
-                height: '32px',
-                fontSize: '0.75rem',
-                fontWeight: '600',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '4px',
-                backgroundColor: 'var(--accent-primary)',
-                color: '#fff',
-              }}
-            >
+            <Button size="sm" onClick={submitPrompt}>
               <Send size={13} /> Send
             </Button>
           )}

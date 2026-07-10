@@ -5,6 +5,15 @@ import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Sun, Moon, Menu, PanelRightClose, PanelRightOpen, Eye, EyeOff, Settings } from 'lucide-react';
 
+const STATUS_META = {
+  idle: { label: 'Idle', dot: 'bg-muted-foreground' },
+  thinking: { label: 'Thinking', dot: 'bg-chart-3 shadow-[0_0_8px_var(--chart-3)]' },
+  executing: { label: 'Executing', dot: 'bg-primary shadow-[0_0_8px_var(--primary)]' },
+  waiting_approval: { label: 'Awaiting Approval', dot: 'bg-warning shadow-[0_0_8px_var(--warning)]' },
+  done: { label: 'Done', dot: 'bg-success shadow-[0_0_8px_var(--success)]' },
+  error: { label: 'Error', dot: 'bg-destructive shadow-[0_0_8px_var(--destructive)]' },
+};
+
 /**
  * Header — App navigation bar
  *
@@ -12,8 +21,7 @@ import { Sun, Moon, Menu, PanelRightClose, PanelRightOpen, Eye, EyeOff, Settings
  * Mobile:  [logo] [hamburger + right panel toggle]
  */
 export default function Header({
-  status,
-  getStatusColor,
+  status: statusKey,
   showThinking,
   onToggleThinking,
   showSettings,
@@ -23,57 +31,40 @@ export default function Header({
   onToggleTheme,
   onToggleSidebar,
   onToggleRightPanel,
-  sidebarOpen,
   rightPanelOpen,
   isDesktop,
   isMobile,
   notificationCenter,
   connectionState,
 }) {
+  // Connection problems take priority over the agent's own status.
+  const meta = connectionState === 'connecting'
+    ? { label: 'Connecting...', dot: 'bg-warning shadow-[0_0_8px_var(--warning)]' }
+    : connectionState === 'disconnected'
+      ? { label: 'Disconnected', dot: 'bg-destructive shadow-[0_0_8px_var(--destructive)]' }
+      : STATUS_META[statusKey] || STATUS_META.idle;
+
   return (
-    <header className="app-header">
+    <header className="flex h-14 shrink-0 items-center justify-between border-b border-border px-4">
       {/* ── Left: Logo + Sidebar toggle ── */}
-      <div className="header-logo">
+      <div className="flex items-center gap-3">
         {!isDesktop && (
-          <button
-            onClick={onToggleSidebar}
-            className="interactive-base focus-ring"
-            aria-label="Toggle sidebar"
-            style={{
-              background: 'none',
-              border: 'none',
-              color: 'var(--text-secondary)',
-              padding: 'var(--space-1)',
-              borderRadius: 'var(--radius-sm)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
+          <Button variant="ghost" size="icon" onClick={onToggleSidebar} aria-label="Toggle sidebar">
             <Menu size={18} />
-          </button>
+          </Button>
         )}
-        <div className="header-logo-dot" />
-        <span className="header-logo-text">AegisAgent</span>
+        <div className="size-2 shrink-0 rounded-full bg-primary" />
+        <span className="whitespace-nowrap text-[15px] font-semibold tracking-tight">AegisAgent</span>
       </div>
 
       {/* ── Center: Toggle buttons (desktop) ── */}
       {isDesktop && (
-        <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onToggleThinking}
-          >
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={onToggleThinking}>
             {showThinking ? <EyeOff size={14} /> : <Eye size={14} />}
             {showThinking ? 'Chat View' : 'Console View'}
           </Button>
-
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onToggleSettings}
-          >
+          <Button variant="outline" size="sm" onClick={onToggleSettings}>
             <Settings size={14} />
             {showSettings ? 'Hide Settings' : 'Configure'}
           </Button>
@@ -81,100 +72,35 @@ export default function Header({
       )}
 
       {/* ── Right: Status + Theme + Panel toggles ── */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+      <div className="flex items-center gap-3">
         {/* Status indicator */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <div
-            style={{
-              width: '8px',
-              height: '8px',
-              borderRadius: '50%',
-              backgroundColor: connectionState === 'connected' ? 'var(--accent-success)' : connectionState === 'connecting' ? 'var(--accent-warning)' : getStatusColor?.(),
-              boxShadow: `0 0 8px ${connectionState === 'connected' ? 'var(--accent-success)' : getStatusColor?.() || 'var(--text-tertiary)'}`,
-              flexShrink: 0,
-            }}
-          />
-          <span
-            style={{
-              fontSize: '0.7rem',
-              textTransform: 'uppercase',
-              letterSpacing: '1px',
-              fontWeight: '600',
-              color: getStatusColor?.(),
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {status}
+        <div className="flex items-center gap-1.5">
+          <div className={`size-2 shrink-0 rounded-full ${meta.dot}`} />
+          <span className="whitespace-nowrap text-[0.7rem] font-semibold tracking-wide text-muted-foreground uppercase">
+            {meta.label}
           </span>
         </div>
 
         {/* Theme toggle */}
         {mounted && (
-          <button
+          <Button
+            variant="outline"
+            size="icon"
             onClick={onToggleTheme}
-            className="interactive-base focus-ring"
             aria-label={`Switch to ${theme.mode === 'dark' ? 'light' : 'dark'} theme`}
-            style={{
-              background: 'none',
-              border: '1px solid var(--border-subtle)',
-              color: 'var(--text-secondary)',
-              padding: '6px',
-              borderRadius: 'var(--radius-sm)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              lineHeight: 0,
-            }}
           >
             {theme.mode === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
-          </button>
+          </Button>
         )}
 
         {/* Notification center */}
         {notificationCenter}
 
-        {/* Right panel toggle (desktop) */}
-        {isDesktop && (
-          <button
-            onClick={onToggleRightPanel}
-            className="interactive-base focus-ring"
-            aria-label="Toggle right panel"
-            style={{
-              background: 'none',
-              border: '1px solid var(--border-subtle)',
-              color: 'var(--text-secondary)',
-              padding: '6px',
-              borderRadius: 'var(--radius-sm)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              lineHeight: 0,
-            }}
-          >
-            {rightPanelOpen ? <PanelRightClose size={15} /> : <PanelRightOpen size={15} />}
-          </button>
-        )}
-
-        {/* Mobile: right panel toggle */}
-        {isMobile && (
-          <button
-            onClick={onToggleRightPanel}
-            className="interactive-base focus-ring"
-            aria-label="Toggle right panel"
-            style={{
-              background: 'none',
-              border: '1px solid var(--border-subtle)',
-              color: 'var(--text-secondary)',
-              padding: '6px',
-              borderRadius: 'var(--radius-sm)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              lineHeight: 0,
-            }}
-          >
-            <PanelRightOpen size={18} />
-          </button>
+        {/* Right panel toggle (desktop + mobile) */}
+        {(isDesktop || isMobile) && (
+          <Button variant="outline" size="icon" onClick={onToggleRightPanel} aria-label="Toggle right panel">
+            {isDesktop && rightPanelOpen ? <PanelRightClose size={15} /> : <PanelRightOpen size={15} />}
+          </Button>
         )}
       </div>
     </header>

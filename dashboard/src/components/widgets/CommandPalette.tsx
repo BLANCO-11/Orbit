@@ -1,16 +1,14 @@
+// @ts-nocheck
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Search, CornerDownLeft } from 'lucide-react';
+import { Kbd } from '@/components/ui/kbd';
 
 /**
  * CommandPalette — Spotlight-style command launcher (Ctrl+K).
- *
- * Commands:
- *   New Session, Switch Theme, Toggle Sidebar, Toggle Detail Panel,
- *   Compact Memory, Stop Agent, Open Settings, Toggle Logs
  */
-const COMMANDS: Array<{ id: string; label: string; shortcut: string; category: string; type?: string; theme?: string }> = [
+const COMMANDS = [
   { id: 'new-session', label: 'New Session', shortcut: 'Ctrl+N', category: 'Sessions' },
   { id: 'toggle-sidebar', label: 'Toggle Sidebar', shortcut: 'Ctrl+B', category: 'View' },
   { id: 'toggle-panel', label: 'Toggle Detail Panel', shortcut: 'Ctrl+J', category: 'View' },
@@ -21,32 +19,22 @@ const COMMANDS: Array<{ id: string; label: string; shortcut: string; category: s
   { id: 'toggle-workspace', label: 'Open Workspace', shortcut: '', category: 'View' },
 ];
 
-const THEME_COMMANDS: Array<{ id: string; label: string; shortcut?: string; category?: string; type?: string; theme?: string }> = [
-  { id: 'theme-deep-space', label: 'Theme: Deep Space', theme: 'deep-space' },
-  { id: 'theme-frost', label: 'Theme: Frost', theme: 'frost' },
-  { id: 'theme-forest', label: 'Theme: Forest', theme: 'forest' },
-  { id: 'theme-ocean', label: 'Theme: Ocean', theme: 'ocean' },
-  { id: 'theme-sepia', label: 'Theme: Sepia', theme: 'sepia' },
-  { id: 'theme-high-contrast', label: 'Theme: High Contrast', theme: 'high-contrast' },
+const THEME_COMMANDS = [
+  { id: 'theme-light', label: 'Theme: Light', theme: 'light' },
+  { id: 'theme-dark', label: 'Theme: Dark', theme: 'dark' },
 ];
 
 export default function CommandPalette({ isOpen, onClose, handlers }) {
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef(null);
-  const listRef = useRef(null);
 
   const allCommands = [...COMMANDS, ...THEME_COMMANDS];
 
   const filtered = query.trim()
-    ? allCommands.filter(c => c.label.toLowerCase().includes(query.toLowerCase()))
-    : [
-        ...COMMANDS.filter(c => !c.category || c.category !== 'theme'),
-        { type: 'header' as const, id: 'header-themes', label: 'Themes' },
-        ...THEME_COMMANDS,
-      ];
+    ? allCommands.filter((c) => c.label.toLowerCase().includes(query.toLowerCase()))
+    : [...COMMANDS, { type: 'header', id: 'header-themes', label: 'Themes' }, ...THEME_COMMANDS];
 
-  // Reset on open
   useEffect(() => {
     if (isOpen) {
       setQuery('');
@@ -55,32 +43,9 @@ export default function CommandPalette({ isOpen, onClose, handlers }) {
     }
   }, [isOpen]);
 
-  // Keyboard navigation
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleKey = (e) => {
-      if (e.key === 'Escape') { onClose(); return; }
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        setSelectedIndex(i => Math.min(i + 1, filtered.filter(f => !f.type).length - 1));
-      }
-      if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        setSelectedIndex(i => Math.max(i - 1, 0));
-      }
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        executeCommand(filtered.filter(f => !f.type)[selectedIndex]);
-      }
-    };
-    window.addEventListener('keydown', handleKey);
-    return () => window.removeEventListener('keydown', handleKey);
-  }, [isOpen, selectedIndex, filtered]);
-
   const executeCommand = useCallback((cmd) => {
     if (!cmd) return;
     onClose();
-
     switch (cmd.id) {
       case 'new-session': handlers.onNewSession?.(); break;
       case 'toggle-sidebar': handlers.onToggleSidebar?.(); break;
@@ -96,71 +61,50 @@ export default function CommandPalette({ isOpen, onClose, handlers }) {
     }
   }, [handlers, onClose]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKey = (e) => {
+      if (e.key === 'Escape') { onClose(); return; }
+      const selectable = filtered.filter((f) => !f.type);
+      if (e.key === 'ArrowDown') { e.preventDefault(); setSelectedIndex((i) => Math.min(i + 1, selectable.length - 1)); }
+      if (e.key === 'ArrowUp') { e.preventDefault(); setSelectedIndex((i) => Math.max(i - 1, 0)); }
+      if (e.key === 'Enter') { e.preventDefault(); executeCommand(selectable[selectedIndex]); }
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [isOpen, selectedIndex, filtered, onClose, executeCommand]);
+
   if (!isOpen) return null;
 
-  const selectableItems = filtered.filter(f => !f.type);
+  const selectableItems = filtered.filter((f) => !f.type);
 
   return (
-    <div style={{
-      position: 'fixed', inset: 0, zIndex: 100,
-      display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
-      paddingTop: '15vh',
-    }}>
-      {/* Backdrop */}
-      <div onClick={onClose} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)' }} />
+    <div className="fixed inset-0 z-[100] flex items-start justify-center pt-[15vh]">
+      <div onClick={onClose} className="absolute inset-0 bg-black/50" />
 
-      {/* Palette */}
-      <div style={{
-        position: 'relative', width: '560px', maxWidth: '90vw',
-        background: 'var(--surface-elevated)',
-        backdropFilter: 'blur(30px)', WebkitBackdropFilter: 'blur(30px)',
-        border: '1px solid var(--border-strong)',
-        borderRadius: 'var(--radius-lg)',
-        boxShadow: '0 16px 48px rgba(0,0,0,0.4)',
-        overflow: 'hidden',
-        animation: 'scale-in var(--duration-150) var(--ease-out-expo) both',
-      }}>
-        {/* Search input */}
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: '10px',
-          padding: '14px 16px', borderBottom: '1px solid var(--border-subtle)',
-        }}>
-          <Search size={16} style={{ color: 'var(--text-tertiary)', flexShrink: 0 }} />
+      <div className="relative w-[560px] max-w-[90vw] animate-in zoom-in-95 overflow-hidden rounded-xl border border-border bg-popover shadow-2xl backdrop-blur-2xl">
+        <div className="flex items-center gap-2.5 border-b border-border px-4 py-3.5">
+          <Search size={16} className="shrink-0 text-muted-foreground" />
           <input
             ref={inputRef}
             value={query}
             onChange={(e) => { setQuery(e.target.value); setSelectedIndex(0); }}
             placeholder="Type a command..."
-            style={{
-              flex: 1, background: 'none', border: 'none', outline: 'none',
-              color: 'var(--text-primary)', fontSize: '0.9rem',
-              fontFamily: 'inherit',
-            }}
+            className="flex-1 bg-transparent text-[0.9rem] outline-none"
           />
-          <span style={{
-            fontSize: '0.65rem', color: 'var(--text-tertiary)',
-            border: '1px solid var(--border-subtle)', borderRadius: '4px',
-            padding: '2px 6px', display: 'flex', alignItems: 'center', gap: '2px',
-          }}>
+          <span className="flex items-center gap-0.5 rounded border border-border px-1.5 py-0.5 text-[0.65rem] text-muted-foreground">
             <CornerDownLeft size={10} /> select
           </span>
         </div>
 
-        {/* Results */}
-        <div ref={listRef} style={{ maxHeight: '360px', overflowY: 'auto', padding: '6px' }}>
+        <div className="max-h-[360px] overflow-y-auto p-1.5">
           {filtered.length === 0 ? (
-            <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-tertiary)', fontSize: '0.8rem' }}>
-              No commands found
-            </div>
+            <div className="p-5 text-center text-sm text-muted-foreground">No commands found</div>
           ) : (
             filtered.map((item, i) => {
               if (item.type === 'header') {
                 return (
-                  <div key={i} style={{
-                    fontSize: '0.62rem', fontWeight: '700', color: 'var(--text-tertiary)',
-                    textTransform: 'uppercase', letterSpacing: '1px',
-                    padding: '8px 10px 4px 10px',
-                  }}>
+                  <div key={i} className="px-2.5 pb-1 pt-2 text-[0.62rem] font-bold uppercase tracking-wider text-muted-foreground">
                     {item.label}
                   </div>
                 );
@@ -172,25 +116,13 @@ export default function CommandPalette({ isOpen, onClose, handlers }) {
                 <div
                   key={item.id}
                   onClick={() => executeCommand(item)}
-                  style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    padding: '8px 10px', borderRadius: 'var(--radius-sm)', cursor: 'pointer',
-                    background: isSelected ? 'var(--accent-primary-muted)' : 'transparent',
-                    color: 'var(--text-primary)', fontSize: '0.82rem',
-                    transition: 'background 0.1s ease',
-                  }}
                   onMouseEnter={() => setSelectedIndex(actualIndex)}
+                  role="button"
+                  tabIndex={0}
+                  className={`flex cursor-pointer items-center justify-between rounded-md px-2.5 py-2 text-[0.82rem] ${isSelected ? 'bg-accent' : ''}`}
                 >
                   <span>{item.label}</span>
-                  {item.shortcut && (
-                    <span style={{
-                      fontSize: '0.62rem', color: 'var(--text-tertiary)',
-                      border: '1px solid var(--border-subtle)', borderRadius: '3px',
-                      padding: '1px 5px',
-                    }}>
-                      {item.shortcut}
-                    </span>
-                  )}
+                  {item.shortcut && <Kbd>{item.shortcut}</Kbd>}
                 </div>
               );
             })

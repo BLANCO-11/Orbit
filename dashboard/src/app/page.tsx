@@ -24,9 +24,7 @@ import WorkspaceTab from '@/components/panels/WorkspaceTab';
 // Components
 import SessionList from '@/components/SessionList';
 import ExecutionPlan from '@/components/ExecutionPlan';
-import MetricsPanel from '@/components/MetricsPanel';
 import LogViewer from '@/components/LogViewer';
-import ScreenshotViewer from '@/components/ScreenshotViewer';
 import SettingsPanel from '@/components/SettingsPanel';
 import PairDevice from '@/components/PairDevice';
 import { installApiAuthFetch } from '@/lib/api-auth';
@@ -265,28 +263,6 @@ function DashboardInner() {
     return () => window.removeEventListener('keydown', handler);
   }, [state.status, cmdPaletteOpen, handleStopAgent]);
 
-  const getStatusColor = useCallback(() => {
-    switch (state.status) {
-      case 'thinking': return 'var(--accent-info)';
-      case 'executing': return 'var(--accent-primary)';
-      case 'waiting_approval': return 'var(--accent-warning)';
-      case 'done': return 'var(--accent-success)';
-      case 'error': return 'var(--accent-danger)';
-      default: return 'var(--text-tertiary)';
-    }
-  }, [state.status]);
-
-  const getStatusLabel = useCallback(() => {
-    switch (state.status) {
-      case 'thinking': return 'Thinking';
-      case 'executing': return 'Executing';
-      case 'waiting_approval': return 'Awaiting Approval';
-      case 'done': return 'Done';
-      case 'error': return 'Error';
-      default: return 'Idle';
-    }
-  }, [state.status]);
-
   // ── Mobile nav ──
   const bottomNavItems = [
     { id: 'chat', label: 'Chat', icon: <MessageSquare size={18} /> },
@@ -370,14 +346,14 @@ function DashboardInner() {
             </ComponentErrorBoundary>
           )}
           {rightPanelTab === 'logs' && (
-            <div style={{ padding: 'var(--space-4)', height: '100%', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            <div className="flex h-full flex-col overflow-hidden p-4">
               <ComponentErrorBoundary label="Log viewer">
                 <LogViewer logs={state.logs} logEndRef={logEndRef} />
               </ComponentErrorBoundary>
             </div>
           )}
           {rightPanelTab === 'settings' && (
-            <div style={{ padding: 'var(--space-4)', height: '100%', overflowY: 'auto' }}>
+            <div className="h-full overflow-y-auto p-4">
               <ComponentErrorBoundary label="Settings panel">
               <SettingsPanel
                 settings={settings}
@@ -400,8 +376,7 @@ function DashboardInner() {
         </DetailPanel>
       }
       headerProps={{
-        status: getStatusLabel(),
-        getStatusColor,
+        status: state.status,
         showThinking,
         onToggleThinking: () => {
           if (showThinking && rightPanelTab !== 'settings') {

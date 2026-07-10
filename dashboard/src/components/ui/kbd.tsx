@@ -1,32 +1,18 @@
 // @ts-nocheck
-import React from 'react';
-import { cn } from '@/lib/utils';
+import * as React from "react"
+import { cn } from "@/lib/utils"
 
-/**
- * Kbd — Keyboard shortcut display
- */
-export function Kbd({ children, className, ...props }) {
+function Kbd({ className, ...props }) {
   return (
     <kbd
+      data-slot="kbd"
       className={cn(
-        'inline-flex items-center justify-center font-mono font-medium',
+        "inline-flex h-5 min-w-5 items-center justify-center rounded border border-b-2 border-border bg-muted px-1.5 font-mono text-[0.65rem] font-medium text-muted-foreground",
         className
       )}
-      style={{
-        minWidth: '20px',
-        height: '20px',
-        padding: '0 5px',
-        fontSize: '0.65rem',
-        borderRadius: '4px',
-        background: 'var(--surface-secondary)',
-        border: '1px solid var(--border-subtle)',
-        borderBottomWidth: '2px',
-        color: 'var(--text-secondary)',
-        lineHeight: 1,
-      }}
       {...props}
-    >
-      {children}
-    </kbd>
+    />
   );
 }
+
+export { Kbd }

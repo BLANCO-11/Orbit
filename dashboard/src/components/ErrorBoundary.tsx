@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { Button } from '@/components/ui/button';
 
 /**
  * ErrorBoundary — Catch render errors, show friendly fallback.
@@ -27,35 +28,22 @@ export class ErrorBoundary extends React.Component<{ children: React.ReactNode }
   render() {
     if (this.state.hasError) {
       return (
-        <div style={{
-          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-          height: '100vh', padding: '40px', textAlign: 'center',
-          background: 'var(--bg-base)', color: 'var(--text-primary)',
-        }}>
-          <div style={{
-            width: '48px', height: '48px', borderRadius: '50%',
-            background: 'var(--accent-danger-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            marginBottom: '16px',
-          }}>
-            <span style={{ fontSize: '1.5rem' }}>!</span>
+        <div className="flex h-screen flex-col items-center justify-center bg-background p-10 text-center text-foreground">
+          <div className="mb-4 flex size-12 items-center justify-center rounded-full bg-destructive/10">
+            <span className="text-2xl">!</span>
           </div>
-          <h3 style={{ marginBottom: '8px', fontSize: '1.1rem' }}>Something went wrong</h3>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '20px', maxWidth: '400px' }}>
+          <h3 className="mb-2 text-[1.1rem] font-semibold">Something went wrong</h3>
+          <p className="mb-5 max-w-[400px] text-[0.85rem] text-muted-foreground">
             {this.state.error?.message || 'An unexpected error occurred.'}
           </p>
-          <button
+          <Button
             onClick={() => {
               this.setState({ hasError: false, error: null });
               window.location.reload();
             }}
-            style={{
-              padding: '8px 20px', borderRadius: 'var(--radius-sm)',
-              border: '1px solid var(--accent-primary)', background: 'var(--accent-primary)',
-              color: '#fff', cursor: 'pointer', fontWeight: '600', fontSize: '0.85rem',
-            }}
           >
             Reload Page
-          </button>
+          </Button>
         </div>
       );
     }
@@ -67,8 +55,7 @@ export class ErrorBoundary extends React.Component<{ children: React.ReactNode }
  * ComponentErrorBoundary — Lightweight wrapper for individual panels/widgets.
  *
  * Unlike ErrorBoundary (full-page takeover), this renders a compact inline
- * fallback so a crash in one panel (e.g. the metrics panel) doesn't take the
- * whole dashboard down with it.
+ * fallback so a crash in one panel doesn't take the whole dashboard down.
  */
 export class ComponentErrorBoundary extends React.Component<
   { children: React.ReactNode; fallback?: React.ReactNode; label?: string },
@@ -91,22 +78,11 @@ export class ComponentErrorBoundary extends React.Component<
     if (this.state.hasError) {
       if (this.props.fallback) return this.props.fallback;
       return (
-        <div style={{
-          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-          gap: '8px', padding: '24px', textAlign: 'center',
-          color: 'var(--text-secondary)', fontSize: '0.8rem',
-        }}>
+        <div className="flex flex-col items-center justify-center gap-2 p-6 text-center text-[0.8rem] text-muted-foreground">
           <span>{this.props.label ? `${this.props.label} failed to render.` : 'This panel failed to render.'}</span>
-          <button
-            onClick={() => this.setState({ hasError: false, error: null })}
-            style={{
-              padding: '4px 12px', borderRadius: 'var(--radius-sm)',
-              border: '1px solid var(--border-default)', background: 'transparent',
-              color: 'var(--text-primary)', cursor: 'pointer', fontSize: '0.75rem',
-            }}
-          >
+          <Button variant="outline" size="sm" onClick={() => this.setState({ hasError: false, error: null })}>
             Retry
-          </button>
+          </Button>
         </div>
       );
     }

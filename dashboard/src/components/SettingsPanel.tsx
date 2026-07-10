@@ -6,8 +6,75 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { Separator } from "@/components/ui/separator";
 import { Plus, Trash2, Settings, Shield, Edit3, Zap, Smartphone, Copy, X } from "lucide-react";
 import { useDevices } from "@/hooks/useDevices";
+
+const AGENT_MODES = [
+  { id: "plan", label: "Plan", desc: "Plan then approve", icon: Shield, color: "text-chart-3" },
+  { id: "edit", label: "Edit", desc: "Read free, write needs ok", icon: Edit3, color: "text-warning" },
+  { id: "yolo", label: "YOLO", desc: "Full autonomy", icon: Zap, color: "text-destructive" },
+];
+
+function SectionLabel({ children }) {
+  return <div className="mt-2 mb-2 border-b border-border pb-2 text-[0.95rem] font-bold">{children}</div>;
+}
+
+function FieldLabel({ children }) {
+  return <label className="mb-1 block text-xs font-semibold text-muted-foreground">{children}</label>;
+}
+
+function ToggleRow({ label, checked, onCheckedChange }) {
+  return (
+    <div className="flex items-center justify-between rounded-md border border-border bg-muted/30 p-2">
+      <span className="text-xs font-semibold text-muted-foreground">{label}</span>
+      <Switch checked={checked} onCheckedChange={onCheckedChange} />
+    </div>
+  );
+}
+
+function TagList({ items, onRemove, tone = "default" }) {
+  const toneClass = tone === "success" ? "border-success/30 bg-success/10 text-success" : "border-primary/30 bg-primary/10 text-primary";
+  return (
+    <div className="my-1.5 flex flex-wrap gap-1">
+      {items.map((p, i) => (
+        <span key={i} className={`inline-flex items-center gap-0.5 rounded-full border px-1.5 py-px text-[0.7rem] ${toneClass}`}>
+          {p}
+          <button onClick={() => onRemove(i)} className="text-destructive">×</button>
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function PathList({ items, onRemove, danger }) {
+  return (
+    <div className="my-1 flex flex-col gap-0.5">
+      {items.map((p, i) => (
+        <div
+          key={i}
+          className={`flex items-center justify-between rounded px-1.5 py-0.5 text-[0.7rem] ${
+            danger ? "border border-destructive/15 bg-destructive/5" : "border border-border bg-muted/30"
+          }`}
+        >
+          <span className="max-w-[85%] overflow-hidden text-ellipsis whitespace-nowrap">{p}</span>
+          <Trash2 size={12} onClick={() => onRemove(i)} className="shrink-0 cursor-pointer text-destructive" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function AddRow({ value, onChange, placeholder, onAdd }) {
+  return (
+    <div className="flex gap-1">
+      <Input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className="h-[26px] flex-1 text-xs" />
+      <Button onClick={onAdd} variant="outline" size="xs">
+        <Plus size={12} />
+      </Button>
+    </div>
+  );
+}
 
 export default function SettingsPanel({
   settings,
@@ -29,232 +96,59 @@ export default function SettingsPanel({
 }) {
   const { devices, pairing, startPairing, clearPairing, revokeDevice } = useDevices();
   const [newDeviceLabel, setNewDeviceLabel] = useState("");
-  const sectionLabelStyle = {
-    fontSize: "0.95rem",
-    fontWeight: "700",
-    color: "var(--text-primary)",
-    borderBottom: "1px solid var(--border-subtle)",
-    paddingBottom: "10px",
-    marginTop: "10px",
-    marginBottom: "10px",
-  };
-
-  const fieldLabelStyle = {
-    display: "block",
-    fontSize: "0.75rem",
-    color: "var(--text-secondary)",
-    marginBottom: "4px",
-    fontWeight: "600",
-  };
-
-  const rowStyle = {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    background: "rgba(255,255,255,0.02)",
-    padding: "8px",
-    borderRadius: "var(--radius-sm)",
-    border: "1px solid var(--border-default)",
-  };
-
-  const tagStyle = {
-    background: "rgba(124, 58, 237, 0.15)",
-    border: "1px solid rgba(124, 58, 237, 0.3)",
-    padding: "1px 6px",
-    borderRadius: "12px",
-    fontSize: "0.7rem",
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "3px",
-  };
-
-  const tagGreenStyle = {
-    ...tagStyle,
-    background: "rgba(16, 185, 129, 0.15)",
-    border: "1px solid rgba(16, 185, 129, 0.3)",
-  };
-
-  const pathRowStyle = {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    background: "rgba(255,255,255,0.02)",
-    padding: "3px 6px",
-    borderRadius: "6px",
-    fontSize: "0.7rem",
-    border: "1px solid var(--border-default)",
-  };
-
-  const blockedPathRowStyle = {
-    ...pathRowStyle,
-    background: "rgba(239, 68, 68, 0.03)",
-    border: "1px solid rgba(239, 68, 68, 0.15)",
-  };
-
-  const addRowStyle = {
-    display: "flex",
-    gap: "4px",
-  };
-
-  const smallInputStyle = {
-    flex: "1",
-    height: "26px",
-    fontSize: "0.75rem",
-    padding: "2px 8px",
-  };
-
-  const smallButtonStyle = {
-    height: "26px",
-    padding: "0 10px",
-    fontSize: "0.75rem",
-  };
-
-  const renderTagList = (items, onRemove, tagStyles = tagStyle) => (
-    <div style={{ display: "flex", gap: "4px", flexWrap: "wrap", margin: "6px 0" }}>
-      {items.map((p, i) => (
-        <span key={i} style={tagStyles}>
-          {p}
-          <button
-            onClick={() => onRemove(i)}
-            style={{ background: "none", border: "none", color: "#f87171", cursor: "pointer", fontSize: "0.7rem" }}
-          >
-            ×
-          </button>
-        </span>
-      ))}
-    </div>
-  );
-
-  // settingsKey: which `settings` field this input reads/writes (e.g. "newReadPath")
-  const renderAddRow = (settingsKey, placeholder, onAdd) => (
-    <div style={addRowStyle}>
-      <Input
-        value={settings[settingsKey]}
-        onChange={(e) => onSettingsChange({ [settingsKey]: e.target.value })}
-        placeholder={placeholder}
-        style={smallInputStyle}
-      />
-      <Button onClick={onAdd} variant="outline" style={smallButtonStyle}>
-        <Plus size={12} />
-      </Button>
-    </div>
-  );
-
-  const renderPathList = (items, onRemove, rowStyles = pathRowStyle) => (
-    <div style={{ display: "flex", flexDirection: "column", gap: "3px", margin: "4px 0" }}>
-      {items.map((p, i) => (
-        <div key={i} style={rowStyles}>
-          <span
-            style={{
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-              maxWidth: "85%",
-            }}
-          >
-            {p}
-          </span>
-          <Trash2
-            size={12}
-            onClick={() => onRemove(i)}
-            style={{ color: "#f87171", cursor: "pointer", flexShrink: 0 }}
-          />
-        </div>
-      ))}
-    </div>
-  );
 
   return (
-    <aside className="sidebar-panel">
-      <div
-        style={{
-          fontSize: "0.95rem",
-          fontWeight: "700",
-          color: "var(--text-primary)",
-          borderBottom: "1px solid var(--border-subtle)",
-          paddingBottom: "10px",
-          display: "flex",
-          alignItems: "center",
-          gap: "8px"
-        }}
-      >
+    <aside className="flex flex-col gap-4 p-1">
+      <div className="flex items-center gap-2 border-b border-border pb-2.5 text-[0.95rem] font-bold">
         <Settings size={14} /> Agent Settings
       </div>
 
       {/* ── LiteLLM configurations ── */}
-      <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+      <div className="flex flex-col gap-2.5">
         <div>
-          <label style={fieldLabelStyle}>LITELLM BASE ENDPOINT</label>
-          <Input
-            value={settings.baseURL}
-            onChange={(e) => onSettingsChange({ baseURL: e.target.value })}
-            style={{ height: "32px", fontSize: "0.8rem" }}
-          />
+          <FieldLabel>LITELLM BASE ENDPOINT</FieldLabel>
+          <Input value={settings.baseURL} onChange={(e) => onSettingsChange({ baseURL: e.target.value })} className="h-8 text-sm" />
         </div>
         <div>
-          <label style={fieldLabelStyle}>API KEY</label>
-          <Input
-            type="password"
-            value={settings.apiKey}
-            onChange={(e) => onSettingsChange({ apiKey: e.target.value })}
-            style={{ height: "32px", fontSize: "0.8rem" }}
-          />
+          <FieldLabel>API KEY</FieldLabel>
+          <Input type="password" value={settings.apiKey} onChange={(e) => onSettingsChange({ apiKey: e.target.value })} className="h-8 text-sm" />
         </div>
       </div>
 
       {/* ── Model Selections ── */}
-      <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+      <div className="flex flex-col gap-2.5">
         <div>
-          <label style={fieldLabelStyle}>NORMAL EXECUTION MODEL</label>
+          <FieldLabel>NORMAL EXECUTION MODEL</FieldLabel>
           <Select value={settings.selectedNormalModel} onValueChange={(v) => onSettingsChange({ selectedNormalModel: v })}>
-            <SelectTrigger style={{ width: "100%", height: "32px", fontSize: "0.8rem" }}>
-              <SelectValue placeholder="Select model" />
-            </SelectTrigger>
+            <SelectTrigger className="h-8 w-full text-sm"><SelectValue placeholder="Select model" /></SelectTrigger>
             <SelectContent>
               {models.length > 0 ? (
-                models.map((m) => (
-                  <SelectItem key={m.id} value={m.id}>
-                    {m.id}
-                  </SelectItem>
-                ))
+                models.map((m) => <SelectItem key={m.id} value={m.id}>{m.id}</SelectItem>)
               ) : (
-                <SelectItem value="loading" disabled>
-                  No models loaded
-                </SelectItem>
+                <SelectItem value="loading" disabled>No models loaded</SelectItem>
               )}
             </SelectContent>
           </Select>
         </div>
         <div>
-          <label style={fieldLabelStyle}>REASONING PLANNER MODEL</label>
+          <FieldLabel>REASONING PLANNER MODEL</FieldLabel>
           <Select value={settings.selectedReasoningModel} onValueChange={(v) => onSettingsChange({ selectedReasoningModel: v })}>
-            <SelectTrigger style={{ width: "100%", height: "32px", fontSize: "0.8rem" }}>
-              <SelectValue placeholder="Select model" />
-            </SelectTrigger>
+            <SelectTrigger className="h-8 w-full text-sm"><SelectValue placeholder="Select model" /></SelectTrigger>
             <SelectContent>
               {models.length > 0 ? (
-                models.map((m) => (
-                  <SelectItem key={m.id} value={m.id}>
-                    {m.id}
-                  </SelectItem>
-                ))
+                models.map((m) => <SelectItem key={m.id} value={m.id}>{m.id}</SelectItem>)
               ) : (
-                <SelectItem value="loading" disabled>
-                  No models loaded
-                </SelectItem>
+                <SelectItem value="loading" disabled>No models loaded</SelectItem>
               )}
             </SelectContent>
           </Select>
         </div>
       </div>
 
-      {/* ── Agent Thinking Mode ── */}
       <div>
-        <label style={fieldLabelStyle}>AGENT THINKING MODE</label>
+        <FieldLabel>AGENT THINKING MODE</FieldLabel>
         <Select value={settings.taskMode} onValueChange={(v) => onSettingsChange({ taskMode: v })}>
-          <SelectTrigger style={{ width: "100%", height: "32px", fontSize: "0.8rem" }}>
-            <SelectValue />
-          </SelectTrigger>
+          <SelectTrigger className="h-8 w-full text-sm"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="normal">Normal Model Only (Fast)</SelectItem>
             <SelectItem value="reasoning">Reasoning Model Only (Deep)</SelectItem>
@@ -263,13 +157,10 @@ export default function SettingsPanel({
         </Select>
       </div>
 
-      {/* ── System Prompt Directives ── */}
       <div>
-        <label style={fieldLabelStyle}>SYSTEM PROMPT DIRECTIVES</label>
+        <FieldLabel>SYSTEM PROMPT DIRECTIVES</FieldLabel>
         <Select value={systemPromptType} onValueChange={setSystemPromptType}>
-          <SelectTrigger style={{ width: "100%", height: "32px", fontSize: "0.8rem" }}>
-            <SelectValue />
-          </SelectTrigger>
+          <SelectTrigger className="h-8 w-full text-sm"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="standard">Standard PA Prompt</SelectItem>
             <SelectItem value="fable-5">Claude Fable 5 Leak Prompt</SelectItem>
@@ -277,20 +168,13 @@ export default function SettingsPanel({
         </Select>
       </div>
 
-      {/* ── TTS Voice Selection ── */}
       <div>
-        <label style={fieldLabelStyle}>LOCAL TTS VOICE</label>
+        <FieldLabel>LOCAL TTS VOICE</FieldLabel>
         <Select value={settings.selectedVoice} onValueChange={(v) => onSettingsChange({ selectedVoice: v })}>
-          <SelectTrigger style={{ width: "100%", height: "32px", fontSize: "0.8rem" }}>
-            <SelectValue />
-          </SelectTrigger>
+          <SelectTrigger className="h-8 w-full text-sm"><SelectValue /></SelectTrigger>
           <SelectContent>
             {voices.length > 0 ? (
-              voices.map((v) => (
-                <SelectItem key={v.id} value={v.id}>
-                  {v.display_name || v.id}
-                </SelectItem>
-              ))
+              voices.map((v) => <SelectItem key={v.id} value={v.id}>{v.display_name || v.id}</SelectItem>)
             ) : (
               <SelectItem value="alba">alba (Default)</SelectItem>
             )}
@@ -298,41 +182,20 @@ export default function SettingsPanel({
         </Select>
       </div>
 
-      {/* ── Voice Response Toggle ── */}
-      <div style={rowStyle}>
-        <span style={{ fontSize: "0.75rem", color: "var(--text-secondary)", fontWeight: "600" }}>
-          VOICE RESPONSES (TTS)
-        </span>
-        <Switch checked={voiceResponse} onCheckedChange={setVoiceResponse} />
-      </div>
+      <ToggleRow label="VOICE RESPONSES (TTS)" checked={voiceResponse} onCheckedChange={setVoiceResponse} />
 
       {/* ── Memory & Compaction ── */}
-      <div style={sectionLabelStyle}>Memory & Compaction</div>
-
-      <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginBottom: "18px" }}>
-        <div style={rowStyle}>
-          <span style={{ fontSize: "0.75rem", color: "var(--text-secondary)", fontWeight: "600" }}>
-            AUTO COMPACTION
-          </span>
-          <Switch
-            checked={settings.autoCompactEnabled}
-            onCheckedChange={(v) => onSettingsChange({ autoCompactEnabled: v })}
-          />
-        </div>
-
-        <div style={{ padding: "4px" }}>
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              fontSize: "0.75rem",
-              color: "var(--text-secondary)",
-              marginBottom: "6px",
-              fontWeight: "600",
-            }}
-          >
+      <SectionLabel>Memory &amp; Compaction</SectionLabel>
+      <div className="mb-2 flex flex-col gap-2.5">
+        <ToggleRow
+          label="AUTO COMPACTION"
+          checked={settings.autoCompactEnabled}
+          onCheckedChange={(v) => onSettingsChange({ autoCompactEnabled: v })}
+        />
+        <div className="p-1">
+          <div className="mb-1.5 flex justify-between text-xs font-semibold text-muted-foreground">
             <span>COMPACTION THRESHOLD</span>
-            <span style={{ color: "var(--text-inverse)" }}>{settings.autoCompactThreshold}%</span>
+            <span className="text-foreground">{settings.autoCompactThreshold}%</span>
           </div>
           <input
             type="range"
@@ -341,260 +204,163 @@ export default function SettingsPanel({
             step="5"
             value={settings.autoCompactThreshold}
             onChange={(e) => onSettingsChange({ autoCompactThreshold: parseInt(e.target.value) })}
-            style={{ width: "100%", accentColor: "var(--accent-primary)", cursor: "pointer" }}
             disabled={!settings.autoCompactEnabled}
+            className="w-full accent-primary"
           />
         </div>
-
-        <Button
-          variant="outline"
-          onClick={onManualCompact}
-          style={{ width: "100%", height: "32px", fontSize: "0.8rem", gap: "6px" }}
-        >
+        <Button variant="outline" onClick={onManualCompact} className="w-full">
           Compact Memory Now
         </Button>
       </div>
 
       {/* ── Agent Mode ── */}
-      <div style={sectionLabelStyle}>Agent Mode</div>
-      <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "16px" }}>
-        <div style={{ display: "flex", gap: "6px" }}>
-          {[
-            { id: "plan", label: "Plan", icon: Shield, desc: "Plan then approve", color: "#3b82f6" },
-            { id: "edit", label: "Edit", icon: Edit3, desc: "Read free, write needs ok", color: "#f59e0b" },
-            { id: "yolo", label: "YOLO", icon: Zap, desc: "Full autonomy", color: "#ef4444" }
-          ].map(mode => (
-            <button
-              key={mode.id}
-              onClick={() => onSetSessionMode(mode.id)}
-              style={{
-                flex: "1",
-                padding: "10px 8px",
-                borderRadius: "8px",
-                cursor: "pointer",
-                background: sessionMode === mode.id ? `${mode.color}22` : "rgba(255,255,255,0.03)",
-                border: sessionMode === mode.id ? `1px solid ${mode.color}66` : "1px solid var(--border-default)",
-                color: sessionMode === mode.id ? mode.color : "var(--text-secondary)",
-                fontWeight: sessionMode === mode.id ? "700" : "400",
-                fontSize: "0.72rem",
-                transition: "all 0.15s ease",
-                textAlign: "center"
-              }}
-            >
-              <mode.icon size={16} style={{ marginBottom: "2px" }} />
-              <div>{mode.label}</div>
-              <div style={{ fontSize: "0.6rem", opacity: 0.7, marginTop: "2px" }}>{mode.desc}</div>
-            </button>
-          ))}
+      <SectionLabel>Agent Mode</SectionLabel>
+      <div className="mb-2 flex flex-col gap-2">
+        <div className="flex gap-1.5">
+          {AGENT_MODES.map((mode) => {
+            const isActive = sessionMode === mode.id;
+            return (
+              <button
+                key={mode.id}
+                onClick={() => onSetSessionMode(mode.id)}
+                className={`flex-1 rounded-lg border p-2.5 text-center transition-colors ${
+                  isActive ? `border-current bg-accent ${mode.color}` : "border-border bg-muted/20 text-muted-foreground hover:bg-muted"
+                }`}
+              >
+                <mode.icon size={16} className="mx-auto mb-0.5" />
+                <div className={`text-[0.72rem] ${isActive ? "font-bold" : ""}`}>{mode.label}</div>
+                <div className="mt-0.5 text-[0.6rem] opacity-70">{mode.desc}</div>
+              </button>
+            );
+          })}
         </div>
         {sessionMode && (
-          <div style={{
-            fontSize: "0.7rem",
-            color: "var(--text-tertiary)",
-            padding: "4px 8px",
-            background: "rgba(255,255,255,0.03)",
-            borderRadius: "4px"
-          }}>
+          <div className="rounded bg-muted/30 px-2 py-1 text-[0.7rem] text-muted-foreground">
             Current session mode: <strong>{sessionMode.toUpperCase()}</strong>
           </div>
         )}
       </div>
 
       {/* ── Security Configurations ── */}
-      <div style={sectionLabelStyle}>Security configurations</div>
+      <SectionLabel>Security Configurations</SectionLabel>
 
       {securityConfig ? (
-        <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-          {/* HITL Toggle */}
-          <div style={rowStyle}>
-            <span style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>
-              Require Approval (HITL)
-            </span>
-            <Switch
-              checked={securityConfig.shellCommands?.requireApproval ?? true}
-              onCheckedChange={(checked) => {
-                const updated = { ...securityConfig };
-                if (!updated.shellCommands) updated.shellCommands = {};
-                updated.shellCommands.requireApproval = checked;
-                setSecurityConfig(updated);
-              }}
+        <div className="flex flex-col gap-3.5">
+          <ToggleRow
+            label="Require Approval (HITL)"
+            checked={securityConfig.shellCommands?.requireApproval ?? true}
+            onCheckedChange={(checked) => {
+              const updated = { ...securityConfig };
+              if (!updated.shellCommands) updated.shellCommands = {};
+              updated.shellCommands.requireApproval = checked;
+              setSecurityConfig(updated);
+            }}
+          />
+
+          <div>
+            <span className="text-xs font-semibold text-muted-foreground">Allowed Utilities list:</span>
+            <TagList items={securityConfig.shellCommands?.allowedPrefixes || []} onRemove={(i) => onRemoveConfigItem("shellCommands", "allowedPrefixes", i)} />
+            <AddRow
+              value={settings.newAllowedPrefix}
+              onChange={(v) => onSettingsChange({ newAllowedPrefix: v })}
+              placeholder="e.g. git"
+              onAdd={() => onAddConfigItem("shellCommands", "allowedPrefixes", settings.newAllowedPrefix, "newAllowedPrefix")}
             />
           </div>
 
-          {/* Allowed Utilities */}
           <div>
-            <span style={{ fontSize: "0.75rem", color: "var(--text-secondary)", fontWeight: "600" }}>
-              Allowed Utilities list:
-            </span>
-            {renderTagList(
-              securityConfig.shellCommands?.allowedPrefixes || [],
-              (i) => onRemoveConfigItem("shellCommands", "allowedPrefixes", i)
-            )}
-            {renderAddRow(
-              "newAllowedPrefix",
-              "e.g. git",
-              () => onAddConfigItem("shellCommands", "allowedPrefixes", settings.newAllowedPrefix, "newAllowedPrefix")
-            )}
+            <span className="text-xs font-semibold text-muted-foreground">Auto-Approve commands:</span>
+            <TagList items={securityConfig.shellCommands?.autoApprove || []} onRemove={(i) => onRemoveConfigItem("shellCommands", "autoApprove", i)} tone="success" />
+            <AddRow
+              value={settings.newAutoApprove}
+              onChange={(v) => onSettingsChange({ newAutoApprove: v })}
+              placeholder="e.g. ls"
+              onAdd={() => onAddConfigItem("shellCommands", "autoApprove", settings.newAutoApprove, "newAutoApprove")}
+            />
           </div>
 
-          {/* Auto-Approve Commands */}
           <div>
-            <span style={{ fontSize: "0.75rem", color: "var(--text-secondary)", fontWeight: "600" }}>
-              Auto-Approve commands:
-            </span>
-            {renderTagList(
-              securityConfig.shellCommands?.autoApprove || [],
-              (i) => onRemoveConfigItem("shellCommands", "autoApprove", i),
-              tagGreenStyle
-            )}
-            {renderAddRow(
-              "newAutoApprove",
-              "e.g. ls",
-              () => onAddConfigItem("shellCommands", "autoApprove", settings.newAutoApprove, "newAutoApprove")
-            )}
+            <span className="mb-0.5 block text-xs font-semibold text-muted-foreground">Allowed Read Directories:</span>
+            <PathList items={securityConfig.fileSystem?.allowedReadPaths || []} onRemove={(i) => onRemoveConfigItem("fileSystem", "allowedReadPaths", i)} />
+            <AddRow
+              value={settings.newReadPath}
+              onChange={(v) => onSettingsChange({ newReadPath: v })}
+              placeholder="/absolute/path"
+              onAdd={() => onAddConfigItem("fileSystem", "allowedReadPaths", settings.newReadPath, "newReadPath")}
+            />
           </div>
 
-          {/* Allowed Read Paths */}
           <div>
-            <span
-              style={{ fontSize: "0.75rem", color: "var(--text-secondary)", fontWeight: "600", display: "block", marginBottom: "3px" }}
-            >
-              Allowed Read Directories:
-            </span>
-            {renderPathList(
-              securityConfig.fileSystem?.allowedReadPaths || [],
-              (i) => onRemoveConfigItem("fileSystem", "allowedReadPaths", i)
-            )}
-            {renderAddRow(
-              "newReadPath",
-              "/absolute/path",
-              () => onAddConfigItem("fileSystem", "allowedReadPaths", settings.newReadPath, "newReadPath")
-            )}
+            <span className="mb-0.5 block text-xs font-semibold text-muted-foreground">Allowed Write Directories:</span>
+            <PathList items={securityConfig.fileSystem?.allowedWritePaths || []} onRemove={(i) => onRemoveConfigItem("fileSystem", "allowedWritePaths", i)} />
+            <AddRow
+              value={settings.newWritePath}
+              onChange={(v) => onSettingsChange({ newWritePath: v })}
+              placeholder="/absolute/path"
+              onAdd={() => onAddConfigItem("fileSystem", "allowedWritePaths", settings.newWritePath, "newWritePath")}
+            />
           </div>
 
-          {/* Allowed Write Paths */}
           <div>
-            <span
-              style={{ fontSize: "0.75rem", color: "var(--text-secondary)", fontWeight: "600", display: "block", marginBottom: "3px" }}
-            >
-              Allowed Write Directories:
-            </span>
-            {renderPathList(
-              securityConfig.fileSystem?.allowedWritePaths || [],
-              (i) => onRemoveConfigItem("fileSystem", "allowedWritePaths", i)
-            )}
-            {renderAddRow(
-              "newWritePath",
-              "/absolute/path",
-              () => onAddConfigItem("fileSystem", "allowedWritePaths", settings.newWritePath, "newWritePath")
-            )}
+            <span className="mb-0.5 block text-xs font-semibold text-muted-foreground">Explicitly Blocked Directories:</span>
+            <PathList items={securityConfig.fileSystem?.blockedPaths || []} onRemove={(i) => onRemoveConfigItem("fileSystem", "blockedPaths", i)} danger />
+            <AddRow
+              value={settings.newBlockedPath}
+              onChange={(v) => onSettingsChange({ newBlockedPath: v })}
+              placeholder="/absolute/path"
+              onAdd={() => onAddConfigItem("fileSystem", "blockedPaths", settings.newBlockedPath, "newBlockedPath")}
+            />
           </div>
 
-          {/* Blocked Paths */}
-          <div>
-            <span
-              style={{ fontSize: "0.75rem", color: "var(--text-secondary)", fontWeight: "600", display: "block", marginBottom: "3px" }}
-            >
-              Explicitly Blocked Directories:
-            </span>
-            {renderPathList(
-              securityConfig.fileSystem?.blockedPaths || [],
-              (i) => onRemoveConfigItem("fileSystem", "blockedPaths", i),
-              blockedPathRowStyle
-            )}
-            {renderAddRow(
-              "newBlockedPath",
-              "/absolute/path",
-              () => onAddConfigItem("fileSystem", "blockedPaths", settings.newBlockedPath, "newBlockedPath")
-            )}
-          </div>
-
-          {/* Save Button */}
-          <Button
-            onClick={onSave}
-            style={{ width: "100%", padding: "10px", marginTop: "10px", fontSize: "0.85rem" }}
-          >
-            Save Settings & Policies
+          <Button onClick={onSave} className="mt-2 w-full">
+            Save Settings &amp; Policies
           </Button>
         </div>
       ) : (
-        <div style={{ color: "var(--text-secondary)", fontSize: "0.8rem" }}>Loading settings...</div>
+        <div className="text-sm text-muted-foreground">Loading settings...</div>
       )}
 
       {/* ── Paired Devices ── */}
-      <div style={sectionLabelStyle}>
-        <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-          <Smartphone size={13} /> Paired Devices
-        </span>
-      </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "16px" }}>
+      <SectionLabel>
+        <span className="flex items-center gap-1.5"><Smartphone size={13} /> Paired Devices</span>
+      </SectionLabel>
+      <div className="mb-2 flex flex-col gap-2">
         {devices.length === 0 ? (
-          <div style={{ fontSize: "0.75rem", color: "var(--text-tertiary)", fontStyle: "italic" }}>
-            No other devices paired yet.
-          </div>
+          <div className="text-xs italic text-muted-foreground">No other devices paired yet.</div>
         ) : (
           devices.map((d) => (
-            <div key={d.id} style={rowStyle}>
-              <div style={{ display: "flex", flexDirection: "column", gap: "2px", overflow: "hidden" }}>
-                <span style={{ fontSize: "0.78rem", fontWeight: 600, color: d.revoked ? "var(--text-tertiary)" : "var(--text-primary)" }}>
+            <div key={d.id} className="flex items-center justify-between rounded-md border border-border bg-muted/30 p-2">
+              <div className="flex flex-col gap-0.5 overflow-hidden">
+                <span className={`text-[0.78rem] font-semibold ${d.revoked ? "text-muted-foreground" : ""}`}>
                   {d.label} {d.revoked && "(revoked)"}
                 </span>
-                <span style={{ fontSize: "0.68rem", color: "var(--text-tertiary)" }}>
+                <span className="text-[0.68rem] text-muted-foreground">
                   {d.lastSeen ? `Last seen ${new Date(d.lastSeen).toLocaleString()}` : "Never connected"}
                 </span>
               </div>
               {!d.revoked && (
-                <Trash2
-                  size={13}
-                  onClick={() => revokeDevice(d.id)}
-                  style={{ color: "#f87171", cursor: "pointer", flexShrink: 0 }}
-                />
+                <Trash2 size={13} onClick={() => revokeDevice(d.id)} className="shrink-0 cursor-pointer text-destructive" />
               )}
             </div>
           ))
         )}
 
         {pairing ? (
-          <div style={{
-            display: "flex", flexDirection: "column", gap: "8px", padding: "12px",
-            background: "var(--accent-primary-muted)", border: "1px solid var(--accent-primary)",
-            borderRadius: "var(--radius-sm)",
-          }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontSize: "0.72rem", color: "var(--text-secondary)", fontWeight: 600 }}>
-                Enter this code on the new device — expires in 5 minutes
-              </span>
-              <X size={13} onClick={clearPairing} style={{ cursor: "pointer", color: "var(--text-tertiary)" }} />
+          <div className="flex flex-col gap-2 rounded-md border border-primary bg-primary/10 p-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-muted-foreground">Enter this code on the new device — expires in 5 minutes</span>
+              <X size={13} onClick={clearPairing} className="cursor-pointer text-muted-foreground" />
             </div>
-            <div style={{
-              fontFamily: "var(--font-mono)", fontSize: "1.3rem", fontWeight: 700, letterSpacing: "0.2em",
-              textAlign: "center", color: "var(--accent-primary)",
-            }}>
-              {pairing.code}
-            </div>
-            <div style={{ display: "flex", gap: "4px" }}>
-              <Input readOnly value={pairing.pairingUrl} style={smallInputStyle} />
-              <Button
-                variant="outline"
-                style={smallButtonStyle}
-                onClick={() => navigator.clipboard?.writeText(pairing.pairingUrl)}
-              >
+            <div className="text-center font-mono text-[1.3rem] font-bold tracking-[0.2em] text-primary">{pairing.code}</div>
+            <div className="flex gap-1">
+              <Input readOnly value={pairing.pairingUrl} className="h-[26px] flex-1 text-xs" />
+              <Button variant="outline" size="xs" onClick={() => navigator.clipboard?.writeText(pairing.pairingUrl)}>
                 <Copy size={12} />
               </Button>
             </div>
           </div>
         ) : (
-          <div style={addRowStyle}>
-            <Input
-              value={newDeviceLabel}
-              onChange={(e) => setNewDeviceLabel(e.target.value)}
-              placeholder="Device name, e.g. My Phone"
-              style={smallInputStyle}
-            />
-            <Button onClick={() => startPairing(newDeviceLabel)} variant="outline" style={smallButtonStyle}>
-              <Plus size={12} /> Pair
-            </Button>
-          </div>
+          <AddRow value={newDeviceLabel} onChange={setNewDeviceLabel} placeholder="Device name, e.g. My Phone" onAdd={() => startPairing(newDeviceLabel)} />
         )}
       </div>
     </aside>

@@ -1,128 +1,37 @@
+// @ts-nocheck
 'use client';
 
 import React from 'react';
 import { Shield, Edit3, Zap, GitBranch } from 'lucide-react';
+
+const MODE_META = {
+  plan: { label: 'Plan Mode', desc: 'Agent plans the approach, explains what it will do, then asks for approval before any action.', icon: Shield, color: 'text-chart-3' },
+  edit: { label: 'Edit Mode', desc: 'Agent can read files freely but asks for approval before writing or editing anything.', icon: Edit3, color: 'text-warning' },
+  yolo: { label: 'YOLO Mode', desc: 'Full autonomous execution. No approval prompts for any action.', icon: Zap, color: 'text-destructive' },
+};
 
 /**
  * ModePrompt — Full mode selection screen shown when no mode is set
  */
 export function ModePrompt({ onSetMode }) {
   return (
-    <div
-      className="animate-fade-in"
-      style={{
-        maxWidth: '600px',
-        margin: '0 auto var(--space-5) auto',
-        padding: 'var(--space-5)',
-        background: 'var(--accent-primary-muted)',
-        border: '1px solid color-mix(in oklch, var(--accent-primary) 30%, transparent)',
-        borderRadius: 'var(--radius-lg)',
-        textAlign: 'center',
-      }}
-    >
-      <h3
-        className="text-h3"
-        style={{ marginBottom: 'var(--space-3)' }}
-      >
-        Choose Agent Mode
-      </h3>
-      <p
-        className="text-secondary"
-        style={{ marginBottom: 'var(--space-4)' }}
-      >
-        Select how autonomous you want the agent to be. This applies for the
-        entire session.
+    <div className="mx-auto mb-5 max-w-2xl animate-in fade-in rounded-xl border border-primary/30 bg-accent p-5 text-center">
+      <h3 className="mb-3 text-lg font-semibold">Choose Agent Mode</h3>
+      <p className="mb-4 text-sm text-muted-foreground">
+        Select how autonomous you want the agent to be. This applies for the entire session.
       </p>
-      <div
-        style={{
-          display: 'flex',
-          gap: 'var(--space-3)',
-          justifyContent: 'center',
-          flexWrap: 'wrap',
-        }}
-      >
-        {/* Plan Mode */}
-        <button
-          onClick={() => onSetMode('plan')}
-          className="interactive-base focus-ring"
-          style={{
-            flex: '1',
-            minWidth: '140px',
-            padding: 'var(--space-4) var(--space-5)',
-            background: 'var(--accent-info-muted)',
-            border: '1px solid color-mix(in oklch, var(--accent-info) 30%, transparent)',
-            borderRadius: 'var(--radius-md)',
-            color: 'var(--text-primary)',
-            textAlign: 'left',
-          }}
-        >
-          <Shield
-            size={20}
-            style={{ marginBottom: '6px', color: 'var(--accent-info)' }}
-          />
-          <div style={{ fontWeight: '700', fontSize: '0.95rem', marginBottom: '4px' }}>
-            Plan Mode
-          </div>
-          <div className="text-tertiary" style={{ lineHeight: '1.4' }}>
-            Agent plans the approach, explains what it will do, then asks for
-            approval before any action.
-          </div>
-        </button>
-
-        {/* Edit Mode */}
-        <button
-          onClick={() => onSetMode('edit')}
-          className="interactive-base focus-ring"
-          style={{
-            flex: '1',
-            minWidth: '140px',
-            padding: 'var(--space-4) var(--space-5)',
-            background: 'var(--accent-warning-muted)',
-            border: '1px solid color-mix(in oklch, var(--accent-warning) 30%, transparent)',
-            borderRadius: 'var(--radius-md)',
-            color: 'var(--text-primary)',
-            textAlign: 'left',
-          }}
-        >
-          <Edit3
-            size={20}
-            style={{ marginBottom: '6px', color: 'var(--accent-warning)' }}
-          />
-          <div style={{ fontWeight: '700', fontSize: '0.95rem', marginBottom: '4px' }}>
-            Edit Mode
-          </div>
-          <div className="text-tertiary" style={{ lineHeight: '1.4' }}>
-            Agent can read files freely but asks for approval before writing or
-            editing anything.
-          </div>
-        </button>
-
-        {/* YOLO Mode */}
-        <button
-          onClick={() => onSetMode('yolo')}
-          className="interactive-base focus-ring"
-          style={{
-            flex: '1',
-            minWidth: '140px',
-            padding: 'var(--space-4) var(--space-5)',
-            background: 'var(--accent-danger-muted)',
-            border: '1px solid color-mix(in oklch, var(--accent-danger) 30%, transparent)',
-            borderRadius: 'var(--radius-md)',
-            color: 'var(--text-primary)',
-            textAlign: 'left',
-          }}
-        >
-          <Zap
-            size={20}
-            style={{ marginBottom: '6px', color: 'var(--accent-danger)' }}
-          />
-          <div style={{ fontWeight: '700', fontSize: '0.95rem', marginBottom: '4px' }}>
-            YOLO Mode
-          </div>
-          <div className="text-tertiary" style={{ lineHeight: '1.4' }}>
-            Full autonomous execution. No approval prompts for any action.
-          </div>
-        </button>
+      <div className="flex flex-wrap justify-center gap-3">
+        {Object.entries(MODE_META).map(([id, m]) => (
+          <button
+            key={id}
+            onClick={() => onSetMode(id)}
+            className="min-w-[140px] flex-1 rounded-lg border border-border bg-card p-4 text-left hover:bg-muted"
+          >
+            <m.icon size={20} className={`mb-1.5 ${m.color}`} />
+            <div className="mb-1 text-[0.95rem] font-bold">{m.label}</div>
+            <div className="text-xs leading-normal text-muted-foreground">{m.desc}</div>
+          </button>
+        ))}
       </div>
     </div>
   );
@@ -133,51 +42,15 @@ export function ModePrompt({ onSetMode }) {
  */
 export function ModeBadge({ sessionMode }) {
   if (!sessionMode) return null;
-
-  const getModeColor = () => {
-    switch (sessionMode) {
-      case 'plan': return 'var(--accent-info)';
-      case 'edit': return 'var(--accent-warning)';
-      case 'yolo': return 'var(--accent-danger)';
-      default: return 'var(--accent-primary)';
-    }
-  };
-
-  const getModeDesc = () => {
-    switch (sessionMode) {
-      case 'plan': return 'All actions require approval';
-      case 'edit': return 'Reads auto-approved, writes need approval';
-      case 'yolo': return 'Full autonomous execution';
-      default: return '';
-    }
-  };
-
-  const color = getModeColor();
-  const bg = `color-mix(in oklch, ${color} 10%, transparent)`;
-  const border = `color-mix(in oklch, ${color} 25%, transparent)`;
+  const m = MODE_META[sessionMode];
+  if (!m) return null;
 
   return (
-    <div
-      className="animate-fade-in"
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: '8px',
-        margin: '0 auto var(--space-3) auto',
-        padding: '6px 16px',
-        maxWidth: '600px',
-        background: bg,
-        border: `1px solid ${border}`,
-        borderRadius: '20px',
-        fontSize: '0.75rem',
-        color: color,
-      }}
-    >
-      <GitBranch size={12} style={{ flexShrink: 0 }} />
-      <span style={{ fontWeight: '600' }}>{sessionMode.toUpperCase()}</span>
-      <span style={{ opacity: 0.6 }}>&bull;</span>
-      <span style={{ opacity: 0.8 }}>{getModeDesc()}</span>
+    <div className={`mx-auto mb-3 flex max-w-xl animate-in fade-in items-center justify-center gap-2 rounded-full border border-border bg-accent px-4 py-1.5 text-xs ${m.color}`}>
+      <GitBranch size={12} className="shrink-0" />
+      <span className="font-semibold">{sessionMode.toUpperCase()}</span>
+      <span className="opacity-60">&bull;</span>
+      <span className="opacity-80">{m.desc.split('.')[0]}</span>
     </div>
   );
 }
