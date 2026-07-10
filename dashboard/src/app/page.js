@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { marked } from 'marked';
+import DOMPurify from 'dompurify';
 import { Mic, Send, XCircle, Volume2, VolumeX, MessageSquare, List, BarChart3, Cog } from 'lucide-react';
 
 // Providers & Hooks
@@ -10,8 +11,12 @@ import { useTheme, useResponsive, useWebSocket, useSessions, useTTS, useSTT } fr
 
 // Layout
 import AppShell from '@/components/layout/AppShell';
-import RightPanelShell from '@/components/layout/RightPanelShell';
 import ChatArea from '@/components/chat/ChatArea';
+
+// Panels
+import DetailPanel from '@/components/panels/DetailPanel';
+import AgentTab from '@/components/panels/AgentTab';
+import WorkspaceTab from '@/components/panels/WorkspaceTab';
 
 // Components
 import SessionList from '@/components/SessionList';
@@ -275,7 +280,9 @@ function DashboardInner() {
   // ── Markdown ──
   const renderMarkdown = useCallback((text) => {
     try {
-      return { __html: marked.parse(text || '', { breaks: true }) };
+      const raw = marked.parse(text || '', { breaks: true });
+      const clean = DOMPurify.sanitize(raw);
+      return { __html: clean };
     } catch {
       return { __html: text || '' };
     }
@@ -387,66 +394,57 @@ function DashboardInner() {
         />
       }
       rightPanel={
-        <RightPanelShell
-          activeTab={rightPanelTab}
-          onTabChange={setRightPanelTab}
-          show={showThinking}
-        >
-          {rightPanelTab === 'roadmap' && (
-            <ExecutionPlan executionPlan={state.executionPlan} reasoningHistory={state.reasoningHistory} />
-          )}
-          {rightPanelTab === 'console' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)', height: '100%' }}>
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-                <div className="text-h4" style={{ marginBottom: 'var(--space-2)' }}>System Output Logs</div>
-                <div className="surface-secondary" style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-                  <LogViewer logs={state.logs} logEndRef={logEndRef} />
-                </div>
-              </div>
-              {state.screenshotFile && (
-                <div style={{ height: '200px', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
-                  <div className="text-h4" style={{ marginBottom: 'var(--space-2)' }}>Browser State</div>
-                  <ScreenshotViewer screenshotFile={state.screenshotFile} />
-                </div>
-              )}
-            </div>
-          )}
+        <DetailPanel activeTab={rightPanelTab} onTabChange={setRightPanelTab}>
           {rightPanelTab === 'agent' && (
-            <MetricsPanel
+            <AgentTab
               metrics={state.metrics}
               status={state.status}
               approvalsHistory={state.approvalsHistory}
+              subAgents={state.metrics.activeSubagents || []}
             />
+          )}
+          {rightPanelTab === 'workspace' && (
+            <WorkspaceTab backendHttpUrl={backendHttpUrl} />
+          )}
+          {rightPanelTab === 'plan' && (
+            <ExecutionPlan executionPlan={state.executionPlan} reasoningHistory={state.reasoningHistory} />
+          )}
+          {rightPanelTab === 'logs' && (
+            <div style={{ padding: 'var(--space-4)', height: '100%', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+              <LogViewer logs={state.logs} logEndRef={logEndRef} />
+            </div>
           )}
           {rightPanelTab === 'settings' && (
-            <SettingsPanel
-              securityConfig={securityConfig}
-              setSecurityConfig={setSecurityConfig}
-              baseURL={baseURL} setBaseURL={setBaseURL}
-              apiKey={apiKey} setApiKey={setApiKey}
-              selectedNormalModel={selectedNormalModel} setSelectedNormalModel={setSelectedNormalModel}
-              selectedReasoningModel={selectedReasoningModel} setSelectedReasoningModel={setSelectedReasoningModel}
-              selectedVoice={selectedVoice} setSelectedVoice={setSelectedVoice}
-              taskMode={taskMode} setTaskMode={setTaskMode}
-              systemPromptType={systemPromptType} setSystemPromptType={setSystemPromptType}
-              voiceResponse={state.voiceState === 'audio'}
-              setVoiceResponse={(val) => dispatch(actions.setVoiceState(val ? 'audio' : 'disabled'))}
-              autoCompactEnabled={autoCompactEnabled} setAutoCompactEnabled={setAutoCompactEnabled}
-              autoCompactThreshold={autoCompactThreshold} setAutoCompactThreshold={setAutoCompactThreshold}
-              models={models} voices={voices}
-              onSave={saveAllSettings}
-              onManualCompact={handleManualCompact}
-              onAddConfigItem={addConfigItem} onRemoveConfigItem={removeConfigItem}
-              newReadPath={newReadPath} setNewReadPath={setNewReadPath}
-              newWritePath={newWritePath} setNewWritePath={setNewWritePath}
-              newBlockedPath={newBlockedPath} setNewBlockedPath={setNewBlockedPath}
-              newAllowedPrefix={newAllowedPrefix} setNewAllowedPrefix={setNewAllowedPrefix}
-              newAutoApprove={newAutoApprove} setNewAutoApprove={setNewAutoApprove}
-              sessionMode={state.sessionMode}
-              onSetSessionMode={handleSetSessionMode}
-            />
+            <div style={{ padding: 'var(--space-4)', height: '100%', overflowY: 'auto' }}>
+              <SettingsPanel
+                securityConfig={securityConfig}
+                setSecurityConfig={setSecurityConfig}
+                baseURL={baseURL} setBaseURL={setBaseURL}
+                apiKey={apiKey} setApiKey={setApiKey}
+                selectedNormalModel={selectedNormalModel} setSelectedNormalModel={setSelectedNormalModel}
+                selectedReasoningModel={selectedReasoningModel} setSelectedReasoningModel={setSelectedReasoningModel}
+                selectedVoice={selectedVoice} setSelectedVoice={setSelectedVoice}
+                taskMode={taskMode} setTaskMode={setTaskMode}
+                systemPromptType={systemPromptType} setSystemPromptType={setSystemPromptType}
+                voiceResponse={state.voiceState === 'audio'}
+                setVoiceResponse={(val) => dispatch(actions.setVoiceState(val ? 'audio' : 'disabled'))}
+                autoCompactEnabled={autoCompactEnabled} setAutoCompactEnabled={setAutoCompactEnabled}
+                autoCompactThreshold={autoCompactThreshold} setAutoCompactThreshold={setAutoCompactThreshold}
+                models={models} voices={voices}
+                onSave={saveAllSettings}
+                onManualCompact={handleManualCompact}
+                onAddConfigItem={addConfigItem} onRemoveConfigItem={removeConfigItem}
+                newReadPath={newReadPath} setNewReadPath={setNewReadPath}
+                newWritePath={newWritePath} setNewWritePath={setNewWritePath}
+                newBlockedPath={newBlockedPath} setNewBlockedPath={setNewBlockedPath}
+                newAllowedPrefix={newAllowedPrefix} setNewAllowedPrefix={setNewAllowedPrefix}
+                newAutoApprove={newAutoApprove} setNewAutoApprove={setNewAutoApprove}
+                sessionMode={state.sessionMode}
+                onSetSessionMode={handleSetSessionMode}
+              />
+            </div>
           )}
-        </RightPanelShell>
+        </DetailPanel>
       }
       headerProps={{
         status: getStatusLabel(),
@@ -456,7 +454,7 @@ function DashboardInner() {
           if (showThinking && rightPanelTab !== 'settings') {
             setShowThinking(false);
           } else {
-            if (rightPanelTab === 'settings') setRightPanelTab('console');
+            if (rightPanelTab === 'settings') setRightPanelTab('logs');
             setShowThinking(true);
           }
         },
