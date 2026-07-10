@@ -15,9 +15,15 @@ function isUnderDirectory(parent, target) {
  * @param {object} config - The security configuration
  * @returns {object} { allowed: boolean, reason?: string, resolvedPath: string }
  */
-function validatePath(action, targetPath, config) {
+function validatePath(action, targetPath, config, mode) {
   const resolved = path.resolve(targetPath);
-  
+  const activeMode = mode || process.env.AEGIS_MODE || (config && config.defaultMode) || "chat";
+
+  // YOLO mode: full access (bypasses all allowed/blocked restrictions)
+  if (activeMode === "yolo") {
+    return { allowed: true, resolvedPath: resolved };
+  }
+
   // Check explicit blocklist first
   if (config.blockedPaths) {
     for (const blocked of config.blockedPaths) {
@@ -30,6 +36,29 @@ function validatePath(action, targetPath, config) {
         };
       }
     }
+  }
+
+  // Plan mode: only reading and writing plans (under plan/ directory)
+  if (activeMode === "plan") {
+    const planDir = path.resolve(path.join(__dirname, "../plan"));
+    const isPlanPath = resolved === planDir || isUnderDirectory(planDir, resolved);
+    if (!isPlanPath) {
+      return {
+        allowed: false,
+        reason: `Plan mode restriction: reading and writing is restricted to the plans directory only (${planDir}). Path: ${targetPath}`,
+        resolvedPath: resolved
+      };
+    }
+    return { allowed: true, resolvedPath: resolved };
+  }
+
+  // Chat mode: no OS filesystem access
+  if (activeMode === "chat") {
+    return {
+      allowed: false,
+      reason: `Access denied: Chat mode does not allow filesystem access. Please switch to PLAN, EDIT, or YOLO mode.`,
+      resolvedPath: resolved
+    };
   }
 
   // Check read permissions
@@ -84,12 +113,38 @@ function validatePath(action, targetPath, config) {
 }
 
 /**
+ * Read-only command patterns used in Edit mode to auto-approve reads.
+ */
+const READ_ONLY_COMMANDS = [
+  /^\s*(ls|pwd|echo|cat|head|tail|less|more|wc|sort|uniq|grep|find|which|stat|du|df|file|type|whereis|locate|strings|diff|cmp)\b/,
+  /^\s*git\s+(status|diff|log|show|branch|remote|ls-files|ls-tree|describe|rev-parse|config|help|version)/,
+  /^\s*npm\s+(list|view|search|pack|help|version)/,
+  /^\s*docker\s+(ps|images|logs|inspect|stats|info|version)/,
+  /^\s*node\s+(-[evp]|--version|--help)/
+];
+
+/**
+ * Check if a command is read-only (safe for auto-approval in Edit mode).
+ */
+function isReadOnlyCommand(commandString) {
+  const cmd = commandString.trim();
+  for (const pattern of READ_ONLY_COMMANDS) {
+    if (pattern.test(cmd)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
  * Validates a shell command string against security rules.
  * @param {string} commandString - The full command execution request
  * @param {object} config - The security configuration
+ * @param {string} [mode] - The session mode: 'plan', 'edit', 'yolo', or undefined
  * @returns {object} { allowed: boolean, action: 'allow' | 'approve' | 'block', reason?: string }
  */
-function validateCommand(commandString, config) {
+function validateCommand(commandString, config, mode) {
+  const activeMode = mode || process.env.AEGIS_MODE || (config && config.defaultMode) || "chat";
   const cmd = commandString.trim();
   const tokens = cmd.split(/\s+/);
   const primaryCommand = tokens[0];
@@ -128,6 +183,32 @@ function validateCommand(commandString, config) {
     }
   }
 
+  // YOLO mode check: bypass remaining whitelists/blocklists
+  if (activeMode === "yolo") {
+    return {
+      allowed: true,
+      action: "allow"
+    };
+  }
+
+  // Chat mode check: block all command execution
+  if (activeMode === "chat") {
+    return {
+      allowed: false,
+      action: "block",
+      reason: "Command execution blocked: Chat mode does not allow executing commands. Please switch to PLAN, EDIT, or YOLO mode."
+    };
+  }
+
+  // Plan mode check: require approval for all command execution
+  if (activeMode === "plan") {
+    return {
+      allowed: true,
+      action: "approve",
+      reason: "Command requires human approval (Plan mode)."
+    };
+  }
+
   // 2. Check for auto-approve whitelist
   if (config.autoApprove) {
     for (const approved of config.autoApprove) {
@@ -159,7 +240,24 @@ function validateCommand(commandString, config) {
     }
   }
 
-  // 4. Default approval level
+  // 4. Edit mode check
+  if (activeMode === "edit") {
+    // Edit mode: read-only commands auto-approved, writes need approval
+    if (isReadOnlyCommand(cmd)) {
+      return {
+        allowed: true,
+        action: "allow"
+      };
+    }
+    // Everything else needs approval
+    return {
+      allowed: true,
+      action: "approve",
+      reason: "Write command requires human approval (Edit mode)."
+    };
+  }
+
+  // 5. Fallback: use config-level requireApproval
   if (config.requireApproval) {
     return {
       allowed: true,

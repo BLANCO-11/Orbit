@@ -6,7 +6,7 @@ const dbPath = path.join(__dirname, "aegis.db");
 const db = new DatabaseSync(dbPath);
 
 // ── Schema Versioning ───────────────────────────────────────────────
-const CURRENT_SCHEMA_VERSION = 2;
+const CURRENT_SCHEMA_VERSION = 3;
 const BACKUP_INTERVAL = 10; // auto-backup every N saves
 let saveCount = 0;
 
@@ -30,13 +30,24 @@ try {
 // ── Schema Migrations ───────────────────────────────────────────────
 
 if (currentSchemaVersion < 2) {
-  // Add schema_version column to sessions table (default 0 for existing rows)
   try {
     db.exec("ALTER TABLE sessions ADD COLUMN schema_version INTEGER DEFAULT 0");
   } catch (e) {
     // Column may already exist from a partial migration; ignore
   }
-  // Persist the new schema version
+  db.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)").run(
+    "schema_version",
+    String(CURRENT_SCHEMA_VERSION)
+  );
+  console.log(`[DB] Migrated sessions schema to version ${CURRENT_SCHEMA_VERSION}`);
+}
+
+if (currentSchemaVersion < 3) {
+  try {
+    db.exec("ALTER TABLE sessions ADD COLUMN mode TEXT NOT NULL DEFAULT ''");
+  } catch (e) {
+    // Column may already exist from a partial migration; ignore
+  }
   db.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)").run(
     "schema_version",
     String(CURRENT_SCHEMA_VERSION)
@@ -53,6 +64,7 @@ db.exec(`
     logs TEXT NOT NULL,
     execution_plan TEXT NOT NULL,
     metrics TEXT NOT NULL,
+    mode TEXT NOT NULL DEFAULT '',
     timestamp INTEGER NOT NULL
   )
 `);
@@ -94,6 +106,7 @@ function mapRow(row) {
     logs: JSON.parse(row.logs || "[]"),
     executionPlan: row.execution_plan,
     metrics: JSON.parse(row.metrics || "{}"),
+    mode: row.mode || "",
     timestamp: row.timestamp,
     schemaVersion: row.schema_version || 0,
   };
@@ -113,14 +126,15 @@ function enforceTTL() {
 
 function saveSession(session) {
   const stmt = db.prepare(`
-    INSERT INTO sessions (id, title, messages, logs, execution_plan, metrics, timestamp)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO sessions (id, title, messages, logs, execution_plan, metrics, mode, timestamp)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       title = excluded.title,
       messages = excluded.messages,
       logs = excluded.logs,
       execution_plan = excluded.execution_plan,
       metrics = excluded.metrics,
+      mode = excluded.mode,
       timestamp = excluded.timestamp
   `);
   stmt.run(
@@ -130,6 +144,7 @@ function saveSession(session) {
     JSON.stringify(session.logs || []),
     session.executionPlan || "",
     JSON.stringify(session.metrics || {}),
+    session.mode || "",
     session.timestamp || Date.now()
   );
 

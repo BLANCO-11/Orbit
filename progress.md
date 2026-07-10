@@ -1,32 +1,41 @@
 # Progress
 
 ## Status
-In Progress
+Phase 1-2 Complete — UI/UX Overhaul Foundation & Layout Shell
 
 ## Tasks
-- [x] Create Header.jsx component (top navbar)
-- [x] Create SessionList.jsx component (sessions sidebar with search, grouping, preview)
-- [x] Create ChatMessage.jsx component (message bubble rendering)
-- [x] Create ToolCallCard.jsx component (collapsible tool call display)
-- [x] Create ApprovalBanner.jsx component (HITL approval prompt)
-- [x] Create MetricsPanel.jsx component (metrics grid, subagents, action feed, approval history)
-- [x] Create ExecutionPlan.jsx component (roadmap plan display)
-- [x] Create LogViewer.jsx component (console log terminal view)
-- [x] Create ScreenshotViewer.jsx component (browser preview)
-- [x] Create SettingsPanel.jsx component (settings sidebar)
-- [ ] Refactor page.js to use extracted components
+- [x] Create plan/UI-UX-OVERHAUL.md (comprehensive design system)
+- [x] Remove old plan files (01-05, reference.md)
+- [x] Rewrite globals.css (3-layer design system, light & dark themes, all tokens)
+- [x] Create hooks/useTheme.js (theme toggle with localStorage persistence)
+- [x] Create hooks/useResponsive.js (breakpoint-aware hook)
+- [x] Create lib/constants.js (JS design tokens)
+- [x] Create app/ThemeScript.js (FOUC prevention)
+- [x] Create components/ui/badge.jsx (new primitive)
+- [x] Create components/ui/kbd.jsx (new primitive)
+- [x] Create components/ui/separator.jsx (new primitive)
+- [x] Create components/layout/AppShell.jsx (responsive 3-column shell)
+- [x] Create components/layout/Header.jsx (redesigned with theme toggle, panel toggles)
+- [x] Create components/layout/Sidebar.jsx (wrapper)
+- [x] Create components/layout/RightPanel.jsx (wrapper)
+- [x] Create components/layout/RightPanelShell.jsx (tabbed panel)
+- [x] Create components/layout/BottomNav.jsx (mobile navigation)
+- [x] Create components/chat/ChatInput.jsx (extracted input bar)
+- [x] Create components/chat/ModeSelector.jsx (mode dropdown)
+- [x] Create components/chat/ModePrompt.jsx (mode selection screen + badge)
+- [x] Create components/chat/ChatArea.jsx (chat domain shell)
+- [x] Refactor page.js (uses AppShell + domain components, ~1100 lines)
 
-## Files Changed
-- dashboard/src/components/SettingsPanel.jsx (new)
-- dashboard/src/components/Header.jsx (new)
-- dashboard/src/components/SessionList.jsx (new)
-- dashboard/src/components/ChatMessage.jsx (new)
-- dashboard/src/components/ToolCallCard.jsx (new)
-- dashboard/src/components/ApprovalBanner.jsx (new)
-- dashboard/src/components/MetricsPanel.jsx (new)
-- dashboard/src/components/ExecutionPlan.jsx (new)
-- dashboard/src/components/LogViewer.jsx (new)
-- dashboard/src/components/ScreenshotViewer.jsx (new)
+## Next Phases
+- Phase 3: Component Refinement — polish existing components with new CSS variables
+- Phase 4: Motion & Polish — add animations, skeleton states
+- Phase 5: Responsive QA & Accessibility — test all breakpoints, WCAG contrast
 
-## Notes
-All components use the same inline dark theme CSS variables (--text-main, --text-muted, --border-color, --input-bg, etc.) as the original page.js. Props-based design for easy integration into the parent Dashboard component. Next step: create SettingsPanel.jsx and refactor page.js.
+## Design System Summary
+- 3-layer depth: Background → Surfaces → Controls
+- Color: oklch-based, named tokens (accent-primary, accent-success, etc.)
+- Type: Inter (sans) + JetBrains Mono (mono), modular scale 1.2
+- Spacing: 4px base grid
+- Radii: 6/10/14/18/9999px
+- Motion: 50/150/300/500ms durations, expo-out easing
+- Responsive: xl(3-col) / lg(2-col+overlays) / md(1-col+drawers) / sm(1-col+bottom-nav)

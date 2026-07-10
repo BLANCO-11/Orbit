@@ -1,0 +1,24 @@
+[
+  {
+    "id": "session-1783653480816",
+    "title": "hello",
+    "messages": "[{\"role\":\"user\",\"content\":\"hello\"},{\"role\":\"assistant\",\"content\":\"Hello! 👋 How can I help you today?\",\"latency\":\"4.6\"},{\"role\":\"user\",\"content\":\"whats your name\"},{\"role\":\"assistant\",\"content\":\"I go by **Pi** (short for the Pi AI agent framework I run on). I'm your friendly AI assistant here to help you with tasks, coding, research, and whatever else you need! \\n\\nIs there something specific you'd like to work on?\",\"latency\":\"2.2\"},{\"role\":\"user\",\"content\":\"you are PI or AegisAgent?\"},{\"role\":\"user\",\"content\":\"you are PI or AegisAgent?\"}]",
+    "logs": "[]",
+    "execution_plan": "",
+    "metrics": "{\"_schemaVersion\":1,\"sessionStart\":\"2026-07-10T03:22:40.338Z\",\"lastActivity\":\"2026-07-10T03:22:40.339Z\",\"toolCalls\":{\"total\":0,\"byTool\":{}},\"tokens\":{\"input\":0,\"output\":0,\"reasoning\":0,\"total\":0,\"estimated\":true},\"latency\":{\"totalMs\":0,\"perTool\":{},\"perPhase\":{}},\"subagents\":[],\"reasoningSteps\":0,\"sessionToolCalls\":0,\"sessionTokens\":0,\"actionFeed\":[],\"mode\":\"\"}",
+    "timestamp": 1783653480816,
+    "schema_version": 0,
+    "mode": ""
+  },
+  {
+    "id": "session-1783653914004",
+    "title": "New Session",
+    "messages": "[]",
+    "logs": "[]",
+    "execution_plan": "",
+    "metrics": "{\"_schemaVersion\":1,\"sessionStart\":\"2026-07-10T03:25:17.495Z\",\"lastActivity\":\"2026-07-10T03:29:47.589Z\",\"toolCalls\":{\"total\":0,\"byTool\":{}},\"tokens\":{\"input\":85,\"output\":0,\"reasoning\":75,\"total\":160,\"estimated\":true},\"latency\":{\"totalMs\":0,\"perTool\":{},\"perPhase\":{}},\"subagents\":[],\"reasoningSteps\":79,\"sessionToolCalls\":0,\"sessionTokens\":160,\"actionFeed\":[],\"mode\":\"\"}",
+    "timestamp": 1783653914004,
+    "schema_version": 0,
+    "mode": ""
+  }
+]

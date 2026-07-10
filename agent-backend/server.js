@@ -11,6 +11,8 @@ require("dotenv").config();
 const { validatePath, validateCommand } = require("./security-guard");
 const LightpandaMcpClient = require("./mcp-client");
 const db = require("./db");
+const { metricsManager, migrateLegacyMetrics, estimateTokens } = require("./metrics");
+const { SubagentTracker, STATUS } = require("./subagent-tracker");
 
 const PORT = process.env.PORT || 6800;
 
@@ -63,7 +65,7 @@ const activeSessions = new Map();
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: "50mb" }));
 app.use("/screenshots", express.static(path.join(__dirname, "../workspace/screenshots")));
 
 const server = http.createServer(app);
@@ -84,6 +86,65 @@ mcpClient.connect().catch((err) => {
 // Map to track pending user approvals
 const pendingApprovals = new Map();
 
+// Session-level directory permissions (paths allowed for the session)
+const sessionAllowedPaths = new Map(); // sessionId -> Set of paths allowed for duration of session
+
+// Project safe zone — the root directory the agent is allowed to operate in without permission
+const PROJECT_ROOT = path.resolve(__dirname, "..");
+
+// Extract file/directory paths from tool call arguments
+function extractPathsFromArgs(args) {
+  const paths = [];
+  if (!args) return paths;
+  if (typeof args === "string") {
+    try { args = JSON.parse(args); } catch(e) { return paths; }
+  }
+  // Common path fields in tool call arguments
+  const pathFields = ["path", "filePath", "dir", "directory", "target", "destination", "source", "location", "folder"];
+  for (const field of pathFields) {
+    if (args[field] && typeof args[field] === "string") {
+      // Check if it's a filesystem path (starts with / or ~ or ./ or ../ or a letter on Windows)
+      if (/^([~\/.\\]|[a-zA-Z]:\\)/.test(args[field])) {
+        paths.push(args[field]);
+      }
+    }
+  }
+  // Also check for path in command arguments (bash tool)
+  if (args.command && typeof args.command === "string") {
+    // Extract paths from command (cd, cat, ls, etc.)
+    const cmdPaths = args.command.match(/(?:^|\s)(?:cd\s+|cat\s+|ls\s+|rm\s+|cp\s+|mv\s+|mkdir\s+|touch\s+|chmod\s+|chown\s+)([~\/][^\s;|&]+)/gi);
+    if (cmdPaths) {
+      cmdPaths.forEach(cp => {
+        const p = cp.replace(/^\s*\w+\s+/, "").trim();
+        if (p) paths.push(p);
+      });
+    }
+  }
+  return paths;
+}
+
+// Resolve a path to its absolute form
+function resolveTargetPath(inputPath) {
+  if (inputPath.startsWith("~")) {
+    return inputPath.replace(/^~/, os.homedir());
+  }
+  return path.resolve(inputPath);
+}
+
+// Check if a target path is within the project safe zone
+function isPathAllowed(targetPath, projectRoot) {
+  try {
+    const resolved = resolveTargetPath(targetPath);
+    // Allow if inside project root
+    if (resolved.startsWith(projectRoot + "/") || resolved === projectRoot) {
+      return true;
+    }
+    return false;
+  } catch (e) {
+    return false;
+  }
+}
+
 // Helper to get dynamic OpenAI client
 function getOpenAIClient() {
   return new OpenAI({
@@ -102,6 +163,20 @@ app.post("/api/config", (req, res) => {
   try {
     securityConfig = req.body;
     fs.writeFileSync(configPath, JSON.stringify(securityConfig, null, 2), "utf-8");
+    
+    // Kill all active agent sessions to force them to reload the new configuration
+    for (const [sessionId, session] of activeSessions.entries()) {
+      if (session.piProcess) {
+        console.log(`Killing active session ${sessionId} to apply new configuration...`);
+        try {
+          session.piProcess.kill("SIGINT");
+        } catch (e) {
+          console.error(`Failed to kill session ${sessionId}:`, e);
+        }
+      }
+      activeSessions.delete(sessionId);
+    }
+    
     res.json({ success: true, message: "Configuration saved successfully." });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -246,7 +321,7 @@ app.post("/api/notify", (req, res) => {
       if (client.readyState === WebSocket.OPEN) {
         client.send(JSON.stringify({
           type: "log",
-          content: `🔔 Proactive Notify [${(severity || "info").toUpperCase()}]: ${title} - ${message}`,
+          content: `[Proactive Notify] [${(severity || "info").toUpperCase()}]: ${title} - ${message}`,
           isSystem: true
         }));
       }
@@ -348,27 +423,134 @@ server.on("upgrade", (request, socket, head) => {
   }
 });
 
-// Active WebSocket helper
-const sendLog = (ws, content, isSystem = true) => {
-  console.log(`[Log] ${ws ? "" : "[Global] "}${content}`);
+// ── Session-aware WebSocket helpers ──
+// Every event includes sessionId so the frontend can route it to the correct session tab
+
+function getActiveSessionId(ws) {
+  return ws && ws.activeSessionId ? ws.activeSessionId : "unknown";
+}
+
+// sendLog with optional explicit sessionId (preferred for before ws.activeSessionId is set)
+const sendLog = (ws, content, isSystem = true, explicitSessionId) => {
+  const sessionId = explicitSessionId || getActiveSessionId(ws);
+  console.log(`[Log][${sessionId}] ${content}`);
   if (ws) {
-    ws.send(JSON.stringify({ type: "log", content, isSystem }));
+    ws.send(JSON.stringify({ type: "log", content, isSystem, sessionId }));
   }
 };
 
-const sendStatus = (ws, status) => {
+// sendStatus with optional explicit sessionId
+const sendStatus = (ws, status, explicitSessionId) => {
+  const sessionId = explicitSessionId || getActiveSessionId(ws);
   if (ws) {
-    ws.send(JSON.stringify({ type: "status", status }));
+    ws.send(JSON.stringify({ type: "status", status, sessionId }));
   }
 };
+
+// Helper: send any WebSocket payload with sessionId auto-attached
+// For explicit sessionId, pass it in the data object as sessionId
+const sendWithSession = (ws, data, explicitSessionId) => {
+  if (!ws) return;
+  const sessionId = explicitSessionId || getActiveSessionId(ws);
+  ws.send(JSON.stringify({ ...data, sessionId }));
+};
+
+// ── Helper: strip TUI box-drawing characters from reasoning/plan output ──
+function stripTuiChars(text) {
+  // Remove all box-drawing / line-drawing characters that clutter the reasoning tab
+  const lines = text
+    .replace(/[╔╗╚╝║═╠╣╦╩╬┌┐└┘├┤┬┴┼─│]/g, "")
+    .split("\n")
+    .map(line => {
+      // Strip leading/trailing decorative pipes, corners
+      let cleaned = line.replace(/^[\s│├┤┌┐└┘║╠╣┬┴┼─═]*\s*/, "");
+      cleaned = cleaned.replace(/[\s│├┤┌┐└┘║╠╣┬┴┼─═]*$/, "");
+      return cleaned.trim();
+    })
+    .filter(line => {
+      // Remove purely decorative lines (only dashes, spaces, brackets, TUI remnants)
+      const stripped = line.replace(/[\-\=\[\]\(\)\s\.<>]/g, "").trim();
+      return stripped.length > 0;
+    });
+  
+  // Deduplicate progressive refinements:
+  // When the agent outputs "The user", then "The user is", then "The user is asking",
+  // only keep the most complete version of repeated thoughts.
+  const deduped = [];
+  for (let i = 0; i < lines.length; i++) {
+    const current = lines[i];
+    const next = i + 1 < lines.length ? lines[i + 1] : null;
+    // Skip if next line is a continuation/expansion (current is a prefix of next)
+    if (next && next.startsWith(current) && next.length > current.length + 3) {
+      continue;
+    }
+    // Skip if current line looks like a fragment that continues on next
+    if (current.length < 15 && next && next.includes(current.trim())) {
+      continue;
+    }
+    deduped.push(current);
+  }
+  
+  // Remove trailing fragments that look incomplete (single chars or mid-word cuts)
+  while (deduped.length > 0) {
+    const last = deduped[deduped.length - 1];
+    if (last.length < 2) { deduped.pop(); continue; }
+    // Remove short lines ending mid-word (no punctuation, no known short words)
+    if (last.length < 5 && !/[.!?\)\]\"\'>]\s*$/.test(last) && !/^(No|Ok|Hi|Bye|Yes|Done|Step|File|Code|Test|Bug|Fix|Add|Run|Set|Get|Put|Try|Use|New|All|The|And|But|For|Not|Are|Was|Had|Has|Can|May|Will|Its|Let|How|Why|What|Who|When|Where)$/i.test(last)) {
+      deduped.pop(); continue;
+    }
+    break;
+  }
+  
+  return deduped.join("\n");
+}
+
+function isMutatingTool(toolName) {
+  const mutatingTools = ["write", "edit", "replace_file_content", "multi_replace_file_content", "bash", "subagent"];
+  return mutatingTools.includes(toolName);
+}
+
+function isReadOnlyTool(toolName) {
+  if (toolName && toolName.startsWith("mcp_lightpanda_")) return true;
+  const readOnlyTools = ["read", "find", "grep", "ls", "code_search", "web_search", "fetch_content", "get_search_content"];
+  return readOnlyTools.includes(toolName);
+}
 
 // Spawn a persistent, long-running agent session in RPC mode mapped by sessionId
-async function spawnAgentSession(ws, sessionId) {
+async function spawnAgentSession(ws, sessionId, mode, systemPromptType) {
   try {
     const normalModel = securityConfig.litellm.selectedNormalModel;
     const apiKey = securityConfig.litellm.apiKey;
-    const promptFile = "standard.md";
-    const selectedPromptPath = path.join(__dirname, "../prompts", promptFile);
+    const activePromptType = systemPromptType || securityConfig.systemPromptType || "standard";
+    
+    // Select base prompt file
+    const basePromptFile = (activePromptType === "fable-5") ? "claude-fable-5.md" : "standard.md";
+    
+    // Select mode-specific instructions
+    let modePromptFile = null;
+    if (mode === "plan") modePromptFile = "plan-mode.md";
+    else if (mode === "edit") modePromptFile = "edit-mode.md";
+    else if (mode === "yolo") modePromptFile = "yolo-mode.md";
+    
+    // Read and combine prompts
+    const promptsDir = path.join(__dirname, "../prompts");
+    const basePrompt = fs.readFileSync(path.join(promptsDir, basePromptFile), "utf-8");
+    let combinedPrompt = basePrompt;
+    
+    if (modePromptFile) {
+      const modePrompt = fs.readFileSync(path.join(promptsDir, modePromptFile), "utf-8");
+      combinedPrompt = combinedPrompt + "\n\n" + modePrompt;
+    }
+    
+    // Write combined prompt to a temporary file in the workspace
+    const tempPromptDir = path.join(__dirname, "../workspace/temp");
+    if (!fs.existsSync(tempPromptDir)) {
+      fs.mkdirSync(tempPromptDir, { recursive: true });
+    }
+    const tempPromptPath = path.join(tempPromptDir, `system-prompt-${sessionId}.md`);
+    fs.writeFileSync(tempPromptPath, combinedPrompt, "utf-8");
+    
+    const selectedPromptPath = tempPromptPath;
 
     // Terminate existing active session for this ID if any
     const existing = activeSessions.get(sessionId);
@@ -385,29 +567,60 @@ async function spawnAgentSession(ws, sessionId) {
     const childEnv = {
       ...process.env,
       LITELLM_KEY: apiKey,
-      OPENAI_API_KEY: apiKey
+      OPENAI_API_KEY: apiKey,
+      AEGIS_MODE: mode || "chat"
     };
+
+    const systemPromptText = fs.readFileSync(selectedPromptPath, "utf-8");
 
     const piArgs = [
       "--session-id", sessionId,
       "--provider", "litellm",
       "--model", `litellm/${normalModel}`,
       "--mode", "rpc",
-      "--system-prompt", `@${selectedPromptPath}`
+      "--system-prompt", systemPromptText
     ];
 
     const nodePath = "/home/blanco/.local/share/pi-node/node-v22.22.3-linux-x64/bin/node";
     const piPath = "/home/blanco/.local/share/pi-node/node-v22.22.3-linux-x64/bin/pi";
     const spawnArgs = [piPath, ...piArgs];
 
-    console.log(`[Spawn] Spawning persistent agent session for ${sessionId}: ${nodePath} ${spawnArgs.join(" ")}`);
+    console.log(`[Spawn] Spawning persistent agent session for ${sessionId} (mode=${mode}): ${nodePath} ${spawnArgs.join(" ")}`);
     const piProcess = spawn(nodePath, spawnArgs, {
       env: childEnv,
       cwd: process.cwd(),
       stdio: ['pipe', 'pipe', 'pipe']
     });
 
-    activeSessions.set(sessionId, { piProcess, ws });
+    // ── Initialize metrics & subagent tracking ──
+    // Load existing metrics from DB if available, otherwise start fresh
+    let existingMetrics = null;
+    try {
+      const existingSession = db.getSession(sessionId);
+      if (existingSession && existingSession.metrics) {
+        existingMetrics = existingSession.metrics;
+      }
+    } catch (e) {
+      // Session may not exist yet, that's fine
+    }
+    
+    if (existingMetrics && Object.keys(existingMetrics).length > 0) {
+      metricsManager.loadSession(sessionId, existingMetrics);
+    } else {
+      metricsManager.initSession(sessionId, mode);
+    }
+    
+    // Initialize subagent tracker
+    const subagentTracker = new SubagentTracker(sessionId);
+    
+    // Wire subagent tracker events to WebSocket
+    subagentTracker.onEvent((sid, event) => {
+      if (sid === sessionId && ws) {
+        sendWithSession(ws, event.data || event, sessionId);
+      }
+    });
+    
+    activeSessions.set(sessionId, { piProcess, ws, mode, pendingModeSwitch: null, metricsManager, subagentTracker });
     ws.activeSessionId = sessionId;
 
     piProcess.on("error", (err) => {
@@ -418,6 +631,10 @@ async function spawnAgentSession(ws, sessionId) {
     let accumulatedThinking = "";
     let stdoutBuffer = "";
     let lastSpokenTextLength = 0;
+    let ttsAccumulator = "";  // Only captures content inside <tts> tags
+    
+    // Reference to the session entry (with metrics & subagent tracker)
+    const getSessionEntry = () => activeSessions.get(sessionId);
 
     piProcess.stdout.on("data", (data) => {
       stdoutBuffer += data.toString();
@@ -434,103 +651,287 @@ async function spawnAgentSession(ws, sessionId) {
             if (ev.type === "text_delta") {
               accumulatedText += ev.delta;
               let cleanStreamText = accumulatedText.replace(/<tts>[\s\S]*?$/gi, "").replace(/<tts>[\s\S]*?<\/tts>/gi, "").trim();
-              ws.send(JSON.stringify({ type: "message", role: "assistant", content: cleanStreamText }));
+              sendWithSession(ws, { type: "message", role: "assistant", content: cleanStreamText });
               
-              // Streaming TTS: detect newly completed sentences
-              const newChunk = cleanStreamText.slice(lastSpokenTextLength);
-              const sentenceRegex = /[.!?](?:\s|$)/g;
-              let match;
-              let lastEnd = 0;
-              while ((match = sentenceRegex.exec(newChunk)) !== null) {
-                const sentence = newChunk.slice(lastEnd, match.index + 1).trim();
-                if (sentence.length > 2) {
-                  ws.send(JSON.stringify({ type: "speech_sentence", content: sentence }));
-                }
-                lastEnd = match.index + 1;
+              // Track output tokens via metrics manager
+              metricsManager.recordInputTokens(sessionId, ev.delta);
+              
+              // Extract any <tts>...</tts> content or fallback to cleanStreamText
+              const ttsTagMatch = accumulatedText.match(/<tts>([\s\S]*?)<\/tts>/i);
+              let activeTtsContent = "";
+              if (ttsTagMatch) {
+                activeTtsContent = ttsTagMatch[1].trim();
+              } else {
+                activeTtsContent = cleanStreamText;
               }
-              lastSpokenTextLength = cleanStreamText.length;
+
+              if (activeTtsContent && activeTtsContent !== ttsAccumulator) {
+                const appended = activeTtsContent.slice(ttsAccumulator.length).trim();
+                if (appended.length > 3) {
+                  const sentenceRegex = /[.!?](?:\s|$)/g;
+                  let match;
+                  let lastEnd = 0;
+                  while ((match = sentenceRegex.exec(appended)) !== null) {
+                    const sentence = appended.slice(lastEnd, match.index + 1).trim();
+                    if (sentence.length > 2) {
+                      sendWithSession(ws, { type: "speech_sentence", content: sentence });
+                    }
+                    lastEnd = match.index + 1;
+                  }
+                }
+                ttsAccumulator = activeTtsContent;
+              }
             } 
             else if (ev.type === "thinking_delta") {
               accumulatedThinking += ev.delta;
-              ws.send(JSON.stringify({ type: "plan", content: accumulatedThinking }));
+              // Track reasoning tokens via metrics manager
+              metricsManager.recordReasoning(sessionId, estimateTokens(ev.delta));
+              const cleanThinking = stripTuiChars(accumulatedThinking);
+              sendWithSession(ws, { type: "plan", content: cleanThinking });
+              sendWithSession(ws, { type: "reasoning_update", content: cleanThinking });
             }
           } 
           else if (item.type === "tool_call_start" || item.type === "tool_execution_start") {
             const tc = item.toolCall || item;
-            sendLog(ws, `[Tool Call] ${tc.name || tc.toolName} ${JSON.stringify(tc.arguments || {})}`);
-            ws.send(JSON.stringify({
-              type: "tool_start",
-              toolCallId: tc.id || tc.toolCallId,
-              name: tc.name || tc.toolName,
-              arguments: tc.arguments
-            }));
-            
-            // Streaming TTS: announce tool execution vocally
             const toolName = tc.name || tc.toolName || "";
-            let toolAnnouncement = "";
-            if (toolName === "bash") {
-              toolAnnouncement = "Running shell command.";
-            } else if (toolName === "write") {
-              toolAnnouncement = "Creating file.";
-            } else if (toolName === "edit") {
-              toolAnnouncement = "Editing file.";
-            } else if (toolName === "read") {
-              toolAnnouncement = "Reading file.";
-            } else if (toolName === "find") {
-              toolAnnouncement = "Searching files.";
-            } else if (toolName.includes("lightpanda")) {
-              toolAnnouncement = "Browsing the web.";
-            } else if (toolName === "subagent") {
-              toolAnnouncement = "Spawning subagent.";
-            } else {
-              toolAnnouncement = `Running ${toolName}.`;
+            const argsStr = JSON.stringify(tc.arguments || {});
+            const toolCallId = tc.id || tc.toolCallId;
+            
+            sendLog(ws, `[Tool Call] ${toolName} ${argsStr}`);
+            
+            // Track tool call via metrics manager (for latency + counts)
+            metricsManager.startToolCall(sessionId, toolCallId, toolName);
+            metricsManager.setToolCallArgs(sessionId, toolCallId, tc.arguments);
+            
+            sendWithSession(ws, {
+              type: "tool_start",
+              toolCallId,
+              name: toolName,
+              arguments: tc.arguments
+            });
+            
+            // Track subagent spawns
+            if (toolName === "subagent") {
+              const saPrompt = (tc.arguments && (tc.arguments.prompt || tc.arguments.task)) || "Task execution";
+              const subagentName = "Subagent (" + (saPrompt.substring(0, 24) + (saPrompt.length > 24 ? "..." : "")) + ")";
+              const saId = tc.id || tc.toolCallId;
+              const inheritedMode = (mode || "chat");
+              const sesEntry = getSessionEntry();
+              
+              sendLog(ws, `[Subagent Spawn] Mode="${inheritedMode}" inherited by subagent.`, false);
+              
+              // Register via subagent tracker
+              if (sesEntry && sesEntry.subagentTracker) {
+                sesEntry.subagentTracker.spawnAgent(
+                  saId, 
+                  subagentName, 
+                  null, // parentId — main agent
+                  inheritedMode,
+                  saPrompt
+                );
+                sesEntry.subagentTracker.setStatus(saId, STATUS.WORKING);
+              }
+              
+              // Also register in metrics manager
+              metricsManager.addSubagent(sessionId, {
+                id: saId,
+                name: subagentName,
+                parentId: null,
+                status: "working",
+                mode: inheritedMode
+              });
             }
-            ws.send(JSON.stringify({ type: "speech_tool", content: toolAnnouncement }));
+            
+            // MODE ENFORCEMENT
+            const isMutating = isMutatingTool(toolName);
+            const isReadOnly = isReadOnlyTool(toolName);
+            
+            let blockTool = false;
+            let suggestedMode = "";
+            let blockReason = "";
+            
+            if (!mode || mode === "chat") {
+              blockTool = true;
+              suggestedMode = isMutating ? "edit" : "plan";
+              blockReason = `The agent tried to use the "${toolName}" tool, but the current session is in Chat mode. Chat mode is for free conversation only. Please switch to ${suggestedMode.toUpperCase()} mode to run this tool.`;
+            } else if (mode === "plan") {
+              if (isMutating) {
+                blockTool = true;
+                suggestedMode = "edit";
+                blockReason = `The agent tried to run a write/execution operation ("${toolName}"), but you are in Plan mode. Only read-only tools are allowed in Plan mode. Please switch to EDIT mode to allow modifications.`;
+              }
+            }
+            
+            if (blockTool) {
+              sendLog(ws, `[Mode Enforcement] Blocked "${toolName}" tool execution in current mode "${mode || "chat"}". Suggesting switch to "${suggestedMode}".`, false);
+              
+              // Save pending mode switch so frontend can re-run with correct mode
+              const sessionEntry = activeSessions.get(sessionId);
+              if (sessionEntry) {
+                sessionEntry.pendingModeSwitch = { 
+                  mode: suggestedMode, 
+                  reason: blockReason, 
+                  toolName,
+                  prompt: ws.currentPrompt || ""
+                };
+              }
+              
+              sendWithSession(ws, {
+                type: "mode_suggestion",
+                mode: suggestedMode,
+                reason: blockReason
+              });
+              
+              if (piProcess) {
+                console.log(`Gracefully terminating agent session ${sessionId} due to mode restriction...`);
+                try { piProcess.kill("SIGINT"); } catch (e) {}
+                activeSessions.delete(sessionId);
+              }
+              sendStatus(ws, "done");
+              continue;
+            }
+            
+            // EDIT MODE DIRECTORY PERMISSION CHECK
+            if (mode === "edit") {
+              const toolPaths = extractPathsFromArgs(tc.arguments);
+              if (toolPaths.length > 0) {
+                const sessionPerms = sessionAllowedPaths.get(sessionId) || new Set();
+                const outsidePaths = toolPaths.filter(p => !isPathAllowed(p, PROJECT_ROOT));
+                if (outsidePaths.length > 0) {
+                  const unresolvedPaths = outsidePaths.filter(p => {
+                    const resolved = resolveTargetPath(p);
+                    return !sessionPerms.has(resolved);
+                  });
+                  if (unresolvedPaths.length > 0) {
+                    sendLog(ws, `[Edit Mode] Tool "${toolName}" accessing path(s) outside safe zone: ${unresolvedPaths.join(", ")}`, false);
+                    sendWithSession(ws, {
+                      type: "edit_permission_request",
+                      toolCallId: tc.id || tc.toolCallId,
+                      toolName: toolName,
+                      paths: unresolvedPaths,
+                      outsidePaths: unresolvedPaths,
+                      safeZone: PROJECT_ROOT
+                    });
+                  }
+                }
+              }
+            }
           } 
           else if (item.type === "tool_call_end" || item.type === "tool_execution_end") {
             const tc = item.toolCall || item;
-            sendLog(ws, `[Tool Done] Finished ${tc.name || tc.toolName}`);
-            ws.send(JSON.stringify({
+            const toolName = tc.name || tc.toolName || "";
+            const toolCallId = tc.id || tc.toolCallId;
+            
+            sendLog(ws, `[Tool Done] Finished ${toolName}`);
+            
+            const resultStr = typeof item.result === "string" ? item.result : JSON.stringify(item.result || "");
+            
+            // Track tool completion via metrics manager
+            metricsManager.endToolCall(sessionId, toolCallId, toolName, resultStr);
+            
+            sendWithSession(ws, {
               type: "tool_end",
-              toolCallId: tc.id || tc.toolCallId,
-              name: tc.name || tc.toolName,
+              toolCallId,
+              name: toolName,
               result: item.result
-            }));
+            });
+            
+            // Track subagent completion via subagent tracker
+            if (toolName === "subagent") {
+              const sesEntry = getSessionEntry();
+              if (sesEntry && sesEntry.subagentTracker) {
+                sesEntry.subagentTracker.markCompleted(toolCallId, resultStr);
+              }
+              metricsManager.completeSubagent(sessionId, toolCallId, resultStr);
+            }
+            
+            // Track subagent tool calls (when subagentId is present)
+            if (item.subagentId) {
+              const sesEntry = getSessionEntry();
+              if (sesEntry && sesEntry.subagentTracker) {
+                sesEntry.subagentTracker.endToolCall(item.subagentId, toolCallId, resultStr);
+              }
+              metricsManager.addSubagentToolCall(sessionId, item.subagentId, toolName, null, resultStr, 0);
+            }
+            
+            // Send metrics update to frontend
+            const sesEntry2 = getSessionEntry();
+            if (sesEntry2 && sesEntry2.subagentTracker) {
+              sendWithSession(ws, {
+                type: "subagent_metrics",
+                subagents: sesEntry2.subagentTracker.toFrontendSummary(),
+                ...metricsManager.toFrontendUpdate(sessionId)
+              });
+            }
+          }
+          else if (item.type === "subagent_update") {
+            const sesEntry = getSessionEntry();
+            if (!sesEntry || !sesEntry.subagentTracker) continue;
+            
+            if (item.subagentId) {
+              if (item.reasoning) {
+                sesEntry.subagentTracker.addReasoning(item.subagentId, item.reasoning, item.tokens || 0);
+                sesEntry.subagentTracker.markReasoning(item.subagentId);
+              }
+              if (item.tokens) {
+                metricsManager.addSubagentReasoning(sessionId, item.subagentId, "", item.tokens);
+              }
+              if (item.status) {
+                sesEntry.subagentTracker.setStatus(item.subagentId, item.status);
+              }
+              
+              sendWithSession(ws, {
+                type: "subagent_metrics",
+                subagents: sesEntry.subagentTracker.toFrontendSummary(),
+                ...metricsManager.toFrontendUpdate(sessionId)
+              });
+            }
+          }
+          else if (item.type === "mode_suggestion") {
+            sendWithSession(ws, {
+              type: "mode_suggestion",
+              mode: item.mode,
+              reason: item.reason || ""
+            });
+          }
+          else if (item.type === "reasoning_update") {
+            sendWithSession(ws, {
+              type: "reasoning_update",
+              content: stripTuiChars(item.content)
+            });
           }
           else if (item.type === "agent_end") {
             sendLog(ws, "Agent prompt turn completed.");
 
-            // Parse TTS tags from accumulated text
             const ttsMatch = accumulatedText.match(/<tts>([\s\S]*?)<\/tts>/i);
             let ttsText = "";
-            let cleanFinalText = accumulatedText;
+            let cleanFinalText = accumulatedText.replace(/<tts>[\s\S]*?<\/tts>/gi, "").trim();
+
+            sendWithSession(ws, { type: "message", role: "assistant", content: cleanFinalText });
             
             if (ttsMatch) {
               ttsText = ttsMatch[1].trim();
-              cleanFinalText = accumulatedText.replace(/<tts>[\s\S]*?<\/tts>/gi, "").trim();
             } else {
-              cleanFinalText = accumulatedText;
-              ttsText = accumulatedText;
+              ttsText = cleanFinalText;
             }
 
-            ws.send(JSON.stringify({ type: "message", role: "assistant", content: cleanFinalText }));
-            
             const userPrompt = ws.currentPrompt || "General assistant query";
             if (ttsText && (ttsText.length > 50 || ttsText.includes("`") || ttsText.includes("\n") || ttsText.includes("*") || ttsText.includes("#"))) {
               generateIntelligentSpeech(userPrompt, cleanFinalText).then(summary => {
                 if (summary) {
-                  ws.send(JSON.stringify({ type: "intelligent_speech", content: summary }));
+                  sendWithSession(ws, { type: "intelligent_speech", content: summary });
                 } else {
-                  ws.send(JSON.stringify({ type: "intelligent_speech", content: ttsText }));
+                  sendWithSession(ws, { type: "intelligent_speech", content: ttsText });
                 }
               });
             } else if (ttsText) {
-              ws.send(JSON.stringify({ type: "intelligent_speech", content: ttsText }));
+              sendWithSession(ws, { type: "intelligent_speech", content: ttsText });
             }
 
             accumulatedText = "";
             accumulatedThinking = "";
             lastSpokenTextLength = 0;
+            ttsAccumulator = "";
 
             sendStatus(ws, "done");
           }
@@ -547,10 +948,49 @@ async function spawnAgentSession(ws, sessionId) {
       }
     });
 
+    // ── Periodic metrics autosave ──
+    const metricsAutoSave = setInterval(() => {
+      const ses = activeSessions.get(sessionId);
+      if (!ses) {
+        clearInterval(metricsAutoSave);
+        return;
+      }
+      try {
+        const persistable = metricsManager.toPersistable(sessionId);
+        const existingSession = db.getSession(sessionId);
+        if (existingSession) {
+          db.saveSession({ ...existingSession, metrics: persistable });
+        }
+      } catch (e) {
+        // Silently handle - not critical
+      }
+    }, 30000); // Every 30 seconds
+
     piProcess.on("close", (code) => {
       console.log(`Pi CLI session for ${sessionId} exited with code ${code}`);
+      
+      // Clear autosave interval
+      clearInterval(metricsAutoSave);
+      
+      // Persist final metrics to DB before cleanup
+      try {
+        const persistable = metricsManager.toPersistable(sessionId);
+        const existingSession = db.getSession(sessionId);
+        if (existingSession) {
+          db.saveSession({ ...existingSession, metrics: persistable });
+          console.log(`[Metrics] Persisted final metrics for session ${sessionId}: ${persistable.tokens.total} tokens, ${persistable.toolCalls.total} tool calls`);
+        }
+      } catch (e) {
+        console.error(`[Metrics] Error persisting session ${sessionId} metrics:`, e.message);
+      }
+      
       activeSessions.delete(sessionId);
       sendStatus(ws, "done");
+      
+      // Release metrics resources after a short delay
+      setTimeout(() => {
+        metricsManager.releaseSession(sessionId);
+      }, 5000);
     });
 
   } catch (error) {
@@ -559,12 +999,34 @@ async function spawnAgentSession(ws, sessionId) {
   }
 }
 
+function isConversationalPrompt(prompt) {
+  if (!prompt || typeof prompt !== "string") return false;
+  const conversationalPhrases = [
+    /^\s*hello\s*$/i,
+    /^\s*hi\s*$/i,
+    /^\s*hey\s*$/i,
+    /^\s*yo\s*$/i,
+    /^\s*howdy\s*$/i,
+    /^\s*sup\s*$/i,
+    /^\s*greetings\s*$/i,
+    /^\s*good\s+(morning|afternoon|evening)\s*$/i,
+    /^\s*thank(s|\s*you)\s*$/i,
+    /^\s*bye\s*$/i,
+    /^\s*goodbye\s*$/i
+  ];
+  return conversationalPhrases.some(regex => regex.test(prompt));
+}
+
 // Send prompt to the persistent background agent session
-async function sendPromptToAgent(ws, userPrompt, sessionId) {
+async function sendPromptToAgent(ws, userPrompt, sessionId, mode, systemPromptType) {
+  // Set ws.activeSessionId BEFORE any sendLog/sendStatus calls so events are properly routed
+  // This must ALWAYS be set, even if switching from another session
+  ws.activeSessionId = sessionId;
+  
   let sessionItem = activeSessions.get(sessionId);
   if (!sessionItem || !sessionItem.piProcess) {
-    sendLog(ws, `No active agent session for ${sessionId}. Spawning now...`, false);
-    await spawnAgentSession(ws, sessionId);
+    sendLog(ws, `No active agent session for ${sessionId}. Spawning now...`, false, sessionId);
+    await spawnAgentSession(ws, sessionId, mode, systemPromptType);
     sessionItem = activeSessions.get(sessionId);
   }
 
@@ -573,12 +1035,40 @@ async function sendPromptToAgent(ws, userPrompt, sessionId) {
     const taskMode = securityConfig.litellm.taskMode;
 
     ws.currentPrompt = userPrompt;
-    sendStatus(ws, "thinking");
-    sendLog(ws, `Processing prompt: "${userPrompt}"`);
+    
+    // ── CHAT MODE PRE-CHECK ──
+    // If in Chat mode, check if the prompt likely needs tools before spawning an agent.
+    // Chat mode is for free conversation only. If tools are needed, suggest switching.
+    if (!mode || mode === "chat") {
+      const toolKeyWords = ['read', 'write', 'edit', 'file', 'code', 'run', 'execute', 'command', 
+        'create', 'modify', 'search', 'find', 'grep', 'list', 'dir', 'folder', 'directory',
+        'install', 'npm', 'git', 'compile', 'build', 'test', 'deploy', 'bash', 'shell',
+        'terminal', 'open', 'navigate', 'browser', 'web', 'fetch', 'download', 'upload',
+        'delete', 'remove', 'copy', 'move', 'rename', 'make', 'generate', 'implement'];
+      const lowerPrompt = userPrompt.toLowerCase();
+      const needsTools = toolKeyWords.some(kw => lowerPrompt.includes(kw));
+      
+      if (needsTools) {
+        const suggestedMode = lowerPrompt.includes('read') || lowerPrompt.includes('search') || 
+          lowerPrompt.includes('find') || lowerPrompt.includes('list') ? 'plan' : 'edit';
+        sendLog(ws, `[Chat Mode] Prompt appears to need tools. Suggesting ${suggestedMode} mode.`, false, sessionId);
+        sendWithSession(ws, {
+          type: "mode_suggestion",
+          mode: suggestedMode,
+          reason: `Your prompt "${userPrompt.substring(0, 60)}${userPrompt.length > 60 ? '...' : ''}" appears to need tool execution, but you're in Chat mode which only allows free conversation. Please switch to ${suggestedMode.toUpperCase()} mode to proceed.`
+        }, sessionId);
+        sendStatus(ws, "done", sessionId);
+        return;
+      }
+    }
+    
+    sendStatus(ws, "thinking", sessionId);
+    sendLog(ws, `Processing prompt: "${userPrompt}"`, true, sessionId);
 
-    // 1. Orchestrate planning if hybrid mode is active
-    if (taskMode === "hybrid") {
-      sendLog(ws, `Asking Reasoning Model (${reasoningModel}) to construct a TUI execution plan...`);
+    // 1. Orchestrate planning if hybrid mode is active AND we are not in Chat mode AND the prompt is not a simple greeting
+    const isChat = !mode || mode === "chat";
+    if (taskMode === "hybrid" && !isChat && !isConversationalPrompt(userPrompt)) {
+      sendLog(ws, `Asking Reasoning Model (${reasoningModel}) to construct a TUI execution plan...`, true, sessionId);
       
       const planPrompt = `You are a reasoning and planning assistant.
 Given the following user request, generate a detailed step-by-step plan to achieve it.
@@ -595,20 +1085,22 @@ User request: ${userPrompt}`;
           messages: [{ role: "user", content: planPrompt }]
         });
         
-        const executionPlan = planCompletion.choices[0].message.content;
-        sendLog(ws, `TUI execution plan generated successfully.`);
-        ws.send(JSON.stringify({ type: "plan", content: executionPlan }));
+        const rawPlan = planCompletion.choices[0].message.content;
+        const executionPlan = stripTuiChars(rawPlan);
+        sendLog(ws, `TUI execution plan generated successfully.`, true, sessionId);
+        sendWithSession(ws, { type: "plan", content: executionPlan }, sessionId);
+        sendWithSession(ws, { type: "reasoning_update", content: executionPlan }, sessionId);
       } catch (planError) {
-        sendLog(ws, `Plan generation failed: ${planError.message}. Proceeding without plan.`, false);
+        sendLog(ws, `Plan generation failed: ${planError.message}. Proceeding without plan.`, false, sessionId);
       }
     }
 
-    sendStatus(ws, "executing");
+    sendStatus(ws, "executing", sessionId);
     sessionItem.piProcess.stdin.write(JSON.stringify({ type: "prompt", message: userPrompt }) + "\n");
 
   } catch (error) {
-    sendStatus(ws, "error");
-    sendLog(ws, `Error sending prompt to agent: ${error.message}`, false);
+    sendStatus(ws, "error", sessionId);
+    sendLog(ws, `Error sending prompt to agent: ${error.message}`, false, sessionId);
   }
 }
 
@@ -621,8 +1113,24 @@ wss.on("connection", (ws) => {
       const data = JSON.parse(messageStr);
       
       if (data.type === "start_task") {
-        const { prompt, sessionId } = data;
-        sendPromptToAgent(ws, prompt, sessionId || "default-session");
+        const { prompt, sessionId, mode, systemPromptType } = data;
+        const sid = sessionId || "default-session";
+        
+        // ── Kill ALL OTHER active sessions on THIS WebSocket before starting ──
+        // This prevents session cross-contamination when user switches sessions
+        for (const [existingId, session] of activeSessions.entries()) {
+          if (existingId !== sid && session.ws === ws) {
+            console.log(`[Session Isolation] Killing other session ${existingId} on this WebSocket before starting ${sid}...`);
+            try {
+              session.piProcess.kill("SIGINT");
+            } catch (e) {
+              console.error(`Error killing session ${existingId}:`, e);
+            }
+            activeSessions.delete(existingId);
+          }
+        }
+        
+        sendPromptToAgent(ws, prompt, sid, mode, systemPromptType);
       }
       
       if (data.type === "approval_response") {
@@ -631,6 +1139,29 @@ wss.on("connection", (ws) => {
         if (resolve) {
           pendingApprovals.delete(toolCallId);
           resolve(approved);
+        }
+      }
+      
+      if (data.type === "edit_permission_response") {
+        // User responded to an Edit mode directory permission request
+        const { toolCallId, decision, path: permPath, sessionId: permSessionId } = data;
+        const sid = permSessionId || ws.activeSessionId;
+        sendLog(ws, `[Edit Mode] Permission for "${permPath || "unknown"}": ${decision}`, false);
+        
+        if (decision === "allow_session" && permPath) {
+          // Add to session-level allowed paths
+          if (!sessionAllowedPaths.has(sid)) {
+            sessionAllowedPaths.set(sid, new Set());
+          }
+          sessionAllowedPaths.get(sid).add(resolveTargetPath(permPath));
+          sendLog(ws, `[Edit Mode] Path saved for session: ${resolveTargetPath(permPath)}`, false);
+        }
+        
+        // Resolve any pending approval for this tool call
+        const resolve = pendingApprovals.get(toolCallId);
+        if (resolve) {
+          pendingApprovals.delete(toolCallId);
+          resolve(decision === "allow_once" || decision === "allow_session");
         }
       }
 
@@ -650,6 +1181,23 @@ wss.on("connection", (ws) => {
         }
       }
 
+      if (data.type === "mode_switch") {
+        // User switched mode mid-chat — respawn the agent with new mode
+        const { sessionId, mode } = data;
+        console.log(`[Mode Switch] Switching session ${sessionId || ws.activeSessionId} to mode: ${mode}`);
+        // Kill existing session and spawn new one with the new mode
+        const existing = activeSessions.get(sessionId || ws.activeSessionId);
+        if (existing && existing.piProcess) {
+          try {
+            existing.piProcess.kill("SIGINT");
+          } catch (e) {
+            console.error("Error killing process on mode switch:", e);
+          }
+          activeSessions.delete(sessionId || ws.activeSessionId);
+        }
+        sendLog(ws, `[Mode Switch] Session switched to "${mode || "chat"}". Next prompt will use new behavior.`, false);
+      }
+
       if (data.type === "cancel") {
         const sessionItem = activeSessions.get(data.sessionId || ws.activeSessionId);
         if (sessionItem && sessionItem.piProcess) {
@@ -659,26 +1207,86 @@ wss.on("connection", (ws) => {
           } catch (e) {
             console.error("Error cancelling process:", e);
           }
+          activeSessions.delete(data.sessionId || ws.activeSessionId);
+        }
+      }
+
+      if (data.type === "cancel_session") {
+        // Specifically cancel a session by ID (used when user switches away from a session)
+        const { sessionId } = data;
+        if (!sessionId) {
+          console.warn("[cancel_session] No sessionId provided");
+          return;
+        }
+        const sessionItem = activeSessions.get(sessionId);
+        if (sessionItem && sessionItem.piProcess) {
+          console.log(`[Session Switch] Killing agent process for session ${sessionId}...`);
+          try {
+            sessionItem.piProcess.kill("SIGINT");
+          } catch (e) {
+            console.error(`Error killing session ${sessionId} process:`, e);
+          }
+          activeSessions.delete(sessionId);
+          sendLog(ws, `[Session Switch] Session ${sessionId} process terminated.`, false);
+        } else {
+          console.log(`[Session Switch] No active process for session ${sessionId} to kill.`);
+        }
+      }
+
+      if (data.type === "mode_switch_rerun") {
+        // User clicked "Switch & Re-run" on a mode suggestion
+        // Kill existing session, set new mode, re-send the last prompt
+        const { sessionId, mode, prompt, systemPromptType } = data;
+        const sid = sessionId || ws.activeSessionId;
+        console.log(`[Mode Switch Rerun] Switching session ${sid} to mode: ${mode}`);
+        
+        // Kill existing process
+        const existing = activeSessions.get(sid);
+        if (existing && existing.piProcess) {
+          try { existing.piProcess.kill("SIGINT"); } catch (e) {}
+          activeSessions.delete(sid);
+        }
+        
+        // Re-send prompt with new mode
+        if (prompt) {
+          sendLog(ws, `[Mode Switch Rerun] Re-sending prompt "${prompt.substring(0, 60)}..." with mode "${mode}"`, false);
+          await sendPromptToAgent(ws, prompt, sid, mode, systemPromptType);
+        } else {
+          sendLog(ws, `[Mode Switch Rerun] Mode switched to "${mode || "chat"}" (no prompt to re-run).`, false);
         }
       }
     } catch (err) {
       console.error("WebSocket message error:", err);
-      ws.send(JSON.stringify({ type: "error", message: err.message }));
+      sendWithSession(ws, { type: "error", message: err.message });
     }
   });
 
   ws.on("close", () => {
     console.log("Dashboard client disconnected.");
-    if (ws.activeSessionId) {
-      const sessionItem = activeSessions.get(ws.activeSessionId);
-      if (sessionItem && sessionItem.piProcess) {
-        console.log(`Killing active agent process for session ${ws.activeSessionId} on close...`);
+    // Kill ALL active processes AND persist metrics for each session
+    for (const [sid, session] of activeSessions.entries()) {
+      if (session.ws === ws) {
+        // Persist final metrics to DB
         try {
-          sessionItem.piProcess.kill("SIGINT");
+          const persistable = metricsManager.toPersistable(sid);
+          const existingSession = db.getSession(sid);
+          if (existingSession) {
+            db.saveSession({ ...existingSession, metrics: persistable });
+          }
         } catch (e) {
-          console.error("Error killing agent process on close:", e);
+          console.error(`[Metrics] Error persisting session ${sid} on close:`, e.message);
         }
-        activeSessions.delete(ws.activeSessionId);
+        
+        console.log(`Killing active agent process for session ${sid} on WebSocket close...`);
+        if (session.piProcess) {
+          try {
+            session.piProcess.kill("SIGINT");
+          } catch (e) {
+            console.error(`Error killing agent process for ${sid} on close:`, e);
+          }
+        }
+        activeSessions.delete(sid);
+        metricsManager.releaseSession(sid);
       }
     }
   });

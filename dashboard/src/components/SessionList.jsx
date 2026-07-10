@@ -20,19 +20,31 @@ export default function SessionList({
   sessionsLength
 }) {
   return (
-    <aside style={{
-      width: "240px",
-      borderRight: "1px solid var(--border-color)",
-      background: "rgba(9, 9, 11, 0.4)",
+    <div style={{
+      width: "100%",
+      height: "100%",
       display: "flex",
       flexDirection: "column",
       flexShrink: 0
     }}>
       {/* New Session Button */}
-      <div style={{ padding: "16px" }}>
+      <div style={{ padding: "16px 12px 8px 12px" }}>
         <Button
           onClick={onNewSession}
-          style={{ width: "100%", justifyContent: "flex-start", gap: "8px", height: "36px", fontSize: "0.8rem", borderRadius: "var(--radius-sm)" }}
+          style={{ 
+            width: "100%", 
+            justifyContent: "center", 
+            gap: "8px", 
+            height: "36px", 
+            fontSize: "0.8rem", 
+            fontWeight: "600",
+            borderRadius: "var(--radius-md)",
+            border: "1px solid var(--border-strong)",
+            background: "var(--surface-elevated)",
+            color: "var(--text-primary)",
+            transition: "all 0.2s var(--ease-out-expo)"
+          }}
+          className="interactive-base"
           variant="outline"
         >
           <Plus size={14} /> New Session
@@ -47,38 +59,41 @@ export default function SessionList({
           placeholder="Search sessions..."
           style={{
             width: "100%",
-            height: "30px",
-            fontSize: "0.75rem",
-            borderRadius: "6px",
-            backgroundColor: "var(--input-bg)",
-            color: "var(--text-main)",
-            border: "1px solid var(--border-color)",
-            padding: "4px 10px",
-            outline: "none"
+            height: "34px",
+            fontSize: "0.78rem",
+            borderRadius: "var(--radius-sm)",
+            backgroundColor: "var(--input)",
+            color: "var(--text-primary)",
+            border: "1px solid var(--border-subtle)",
+            padding: "4px 12px",
+            outline: "none",
+            transition: "border-color 0.2s var(--ease-out-expo)"
           }}
+          onFocus={(e) => e.target.style.borderColor = "var(--accent-primary)"}
+          onBlur={(e) => e.target.style.borderColor = "var(--border-subtle)"}
         />
       </div>
 
       {/* Sessions List with Date Grouping */}
-      <div style={{ flex: "1", overflowY: "auto", padding: "0 12px 16px 12px" }}>
+      <div style={{ flex: "1", overflowY: "auto", padding: "0 8px 16px 8px" }}>
         {groupedSessions.length === 0 ? (
-          <div style={{ color: "var(--text-dark)", fontSize: "0.75rem", textAlign: "center", padding: "20px 0" }}>
+          <div style={{ color: "var(--text-secondary)", fontSize: "0.75rem", textAlign: "center", padding: "20px 0" }}>
             {searchQuery ? "No matching sessions." : "No sessions yet."}
           </div>
         ) : (
           groupedSessions.map(([groupName, groupSessions]) => (
-            <div key={groupName} style={{ marginBottom: "8px" }}>
+            <div key={groupName} style={{ marginBottom: "12px" }}>
               <div style={{
-                fontSize: "0.65rem",
+                fontSize: "0.62rem",
                 fontWeight: "700",
-                color: "var(--text-dark)",
+                color: "var(--text-secondary)",
                 textTransform: "uppercase",
-                letterSpacing: "1px",
-                padding: "4px 4px 6px 4px"
+                letterSpacing: "1.2px",
+                padding: "4px 8px 6px 8px"
               }}>
                 {groupName}
               </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
                 {groupSessions.map((s) => {
                   const isActive = s.id === currentSessionId;
                   const preview = getSessionPreview(s);
@@ -92,61 +107,95 @@ export default function SessionList({
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "space-between",
-                        padding: "8px 10px",
-                        borderRadius: "6px",
+                        padding: "8px 12px",
+                        borderRadius: "var(--radius-md)",
                         cursor: "pointer",
-                        fontSize: "0.75rem",
-                        background: isActive ? "var(--input-bg)" : "transparent",
-                        border: isActive ? "1px solid var(--border-color)" : "1px solid transparent",
-                        color: isActive ? "#fff" : "var(--text-muted)",
-                        transition: "all 0.12s ease",
-                        minHeight: "36px",
+                        fontSize: "0.78rem",
+                        background: isActive 
+                          ? "var(--accent-primary-muted)" 
+                          : hoveredSessionId === s.id 
+                            ? "rgba(255, 255, 255, 0.03)" 
+                            : "transparent",
+                        border: "1px solid transparent",
+                        borderColor: isActive ? "rgba(0, 113, 227, 0.15)" : "transparent",
+                        color: isActive ? "var(--text-primary)" : "var(--text-secondary)",
+                        transition: "all 0.15s var(--ease-out-expo)",
+                        minHeight: "40px",
                         position: "relative"
                       }}
                     >
-                      <div style={{ flex: "1", overflow: "hidden" }}>
+                      {/* Active Indicator Line */}
+                      {isActive && (
+                        <div style={{
+                          position: "absolute",
+                          left: "4px",
+                          width: "3px",
+                          height: "18px",
+                          borderRadius: "999px",
+                          background: "var(--accent-primary)"
+                        }} />
+                      )}
+
+                      <div style={{ flex: "1", overflow: "hidden", paddingLeft: isActive ? "6px" : "0" }}>
                         <span style={{
                           overflow: "hidden",
                           textOverflow: "ellipsis",
                           whiteSpace: "nowrap",
                           display: "block",
-                          fontWeight: isActive ? "600" : "400"
+                          fontWeight: isActive ? "600" : "500",
+                          color: isActive ? "var(--text-primary)" : "var(--text-secondary)",
                         }}>
                           {s.title}
                         </span>
-                        {/* Session preview on hover */}
-                        {(isActive || hoveredSessionId === s.id) && preview && (
+                        {/* Session preview */}
+                        {preview && (
                           <span style={{
-                            fontSize: "0.65rem",
-                            color: "var(--text-dark)",
+                            fontSize: "0.68rem",
+                            color: "var(--text-secondary)",
                             overflow: "hidden",
                             textOverflow: "ellipsis",
                             whiteSpace: "nowrap",
                             display: "block",
-                            marginTop: "2px"
+                            marginTop: "2px",
+                            opacity: isActive ? 0.95 : 0.75
                           }}>
                             {preview}
                           </span>
                         )}
                       </div>
+
                       {(isActive || hoveredSessionId === s.id) && sessionsLength > 1 && (
-                        <Trash2
-                          size={12}
+                        <button
                           onClick={(e) => {
                             e.stopPropagation();
                             onDelete(s.id);
                           }}
                           style={{
-                            color: "var(--danger)",
+                            background: "none",
+                            border: "none",
+                            padding: "4px",
+                            borderRadius: "var(--radius-sm)",
                             cursor: "pointer",
-                            opacity: 0.7,
-                            transition: "opacity 0.1s ease",
-                            flexShrink: 0,
-                            marginLeft: "4px"
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            color: "var(--accent-danger)",
+                            opacity: 0.65,
+                            transition: "all 0.15s ease",
+                            marginLeft: "6px",
+                            flexShrink: 0
                           }}
-                          onMouseEnter={(e) => e.target.style.opacity = 1}
-                          onMouseLeave={(e) => e.target.style.opacity = 0.7}
-                        />
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.opacity = "1";
+                            e.currentTarget.style.background = "var(--accent-danger-muted)";
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.opacity = "0.65";
+                            e.currentTarget.style.background = "none";
+                          }}
+                        >
+                          <Trash2 size={12} />
+                        </button>
                       )}
                     </div>
                   );
@@ -156,6 +205,6 @@ export default function SessionList({
           ))
         )}
       </div>
-    </aside>
+    </div>
   );
 }

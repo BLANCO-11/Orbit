@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Settings, Shield, Edit3, Zap } from "lucide-react";
 
 export default function SettingsPanel({
   securityConfig,
@@ -46,6 +46,8 @@ export default function SettingsPanel({
   setNewAllowedPrefix,
   newAutoApprove,
   setNewAutoApprove,
+  sessionMode,
+  onSetSessionMode,
 }) {
   const sectionLabelStyle = {
     fontSize: "0.95rem",
@@ -190,9 +192,12 @@ export default function SettingsPanel({
           color: "var(--text-main)",
           borderBottom: "1px solid var(--border-muted)",
           paddingBottom: "10px",
+          display: "flex",
+          alignItems: "center",
+          gap: "8px"
         }}
       >
-        ⚙️ Agent Settings
+        <Settings size={14} /> Agent Settings
       </div>
 
       {/* ── LiteLLM configurations ── */}
@@ -321,7 +326,7 @@ export default function SettingsPanel({
       </div>
 
       {/* ── Memory & Compaction ── */}
-      <div style={sectionLabelStyle}>🧹 Memory & Compaction</div>
+      <div style={sectionLabelStyle}>Memory & Compaction</div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginBottom: "18px" }}>
         <div style={rowStyle}>
@@ -365,12 +370,57 @@ export default function SettingsPanel({
           onClick={onManualCompact}
           style={{ width: "100%", height: "32px", fontSize: "0.8rem", gap: "6px" }}
         >
-          🧹 Compact Memory Now
+          Compact Memory Now
         </Button>
       </div>
 
+      {/* ── Agent Mode ── */}
+      <div style={sectionLabelStyle}>Agent Mode</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "16px" }}>
+        <div style={{ display: "flex", gap: "6px" }}>
+          {[
+            { id: "plan", label: "Plan", icon: Shield, desc: "Plan then approve", color: "#3b82f6" },
+            { id: "edit", label: "Edit", icon: Edit3, desc: "Read free, write needs ok", color: "#f59e0b" },
+            { id: "yolo", label: "YOLO", icon: Zap, desc: "Full autonomy", color: "#ef4444" }
+          ].map(mode => (
+            <button
+              key={mode.id}
+              onClick={() => onSetSessionMode(mode.id)}
+              style={{
+                flex: "1",
+                padding: "10px 8px",
+                borderRadius: "8px",
+                cursor: "pointer",
+                background: sessionMode === mode.id ? `${mode.color}22` : "rgba(255,255,255,0.03)",
+                border: sessionMode === mode.id ? `1px solid ${mode.color}66` : "1px solid var(--border-color)",
+                color: sessionMode === mode.id ? mode.color : "var(--text-muted)",
+                fontWeight: sessionMode === mode.id ? "700" : "400",
+                fontSize: "0.72rem",
+                transition: "all 0.15s ease",
+                textAlign: "center"
+              }}
+            >
+              <mode.icon size={16} style={{ marginBottom: "2px" }} />
+              <div>{mode.label}</div>
+              <div style={{ fontSize: "0.6rem", opacity: 0.7, marginTop: "2px" }}>{mode.desc}</div>
+            </button>
+          ))}
+        </div>
+        {sessionMode && (
+          <div style={{
+            fontSize: "0.7rem",
+            color: "var(--text-dark)",
+            padding: "4px 8px",
+            background: "rgba(255,255,255,0.03)",
+            borderRadius: "4px"
+          }}>
+            Current session mode: <strong>{sessionMode.toUpperCase()}</strong>
+          </div>
+        )}
+      </div>
+
       {/* ── Security Configurations ── */}
-      <div style={sectionLabelStyle}>🛡️ Security configurations</div>
+      <div style={sectionLabelStyle}>Security configurations</div>
 
       {securityConfig ? (
         <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
