@@ -46,7 +46,7 @@
 - ✅ TTS mute stops playback; blob URLs revoked (pre-existing, confirmed)
 - ✅ TTS streamed through instead of buffered; endpoint/model deduped into constants
 - ✅ README updated to the rebuilt architecture
-- ⬜ Autoplay-blocked UI indicator
+- ✅ Autoplay-blocked indicator (one-time hint when the browser blocks play())
 - ⬜ Accessibility sweep; remove remaining `@ts-nocheck`; delete orphaned components
 
 ## Phase 3 — Remote harness / identity ⬜ (deferred)
