@@ -6,7 +6,7 @@ import { Folder, File, ChevronRight, ChevronDown, RefreshCw, ExternalLink, Eye, 
 /**
  * WorkspaceTab — File tree browser + file preview in a resizable split pane.
  */
-export default function WorkspaceTab({ backendHttpUrl }) {
+export default function WorkspaceTab({ }) {
   const [tree, setTree] = useState([]);
   const [rootPath, setRootPath] = useState('/workspace');
   const [activeFile, setActiveFile] = useState(null);
@@ -18,35 +18,33 @@ export default function WorkspaceTab({ backendHttpUrl }) {
 
   // Fetch file tree
   const fetchTree = useCallback(async () => {
-    if (!backendHttpUrl) return;
     setLoading(true);
     try {
-      const res = await fetch(`${backendHttpUrl}/api/workspace/tree?path=${rootPath}`);
+      const res = await fetch(`/api/workspace/tree?path=${rootPath}`);
       const data = await res.json();
       setTree(data.tree || []);
     } catch { setTree([]); }
     setLoading(false);
-  }, [backendHttpUrl, rootPath]);
+  }, [rootPath]);
 
   useEffect(() => { fetchTree(); }, [fetchTree]);
 
   // Fetch file content
   const openFile = useCallback(async (filePath) => {
-    if (!backendHttpUrl) return;
     setActiveFile(filePath);
     setFileContent(null);
     setPreview(null);
     try {
       const [fileRes, previewRes] = await Promise.all([
-        fetch(`${backendHttpUrl}/api/workspace/file?path=${filePath}`),
-        fetch(`${backendHttpUrl}/api/workspace/preview?path=${filePath}`),
+        fetch(`/api/workspace/file?path=${filePath}`),
+        fetch(`/api/workspace/preview?path=${filePath}`),
       ]);
       const fileData = await fileRes.json();
       const previewData = await previewRes.json();
       setFileContent(fileData);
       setPreview(previewData);
     } catch { setFileContent({ error: true }); }
-  }, [backendHttpUrl]);
+  }, []);
 
   // Toggle directory
   const toggleDir = (dirPath) => {
@@ -60,8 +58,7 @@ export default function WorkspaceTab({ backendHttpUrl }) {
 
   // Open in system editor
   const openInEditor = async (filePath) => {
-    if (!backendHttpUrl) return;
-    await fetch(`${backendHttpUrl}/api/workspace/open`, {
+    await fetch(`/api/workspace/open`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ path: filePath }),
     });

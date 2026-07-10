@@ -9,7 +9,7 @@ import { useAegisDispatch, actions } from '@/providers/AegisProvider';
  * Handles: connect, reconnect, parse, dispatch to reducer.
  * Returns: { sendMessage, connectionState }
  */
-export function useWebSocket(backendWsUrl, backendHttpUrl) {
+export function useWebSocket(backendWsUrl) {
   const dispatch = useAegisDispatch();
   const socketRef = useRef(null);
   const reconnectTimerRef = useRef(null);
@@ -135,7 +135,7 @@ export function useWebSocket(backendWsUrl, backendHttpUrl) {
             break;
             
           case 'screenshot_updated':
-            dispatch(actions.setScreenshot(`${backendHttpUrl}/screenshots/${data.file}?t=${Date.now()}`));
+            dispatch(actions.setScreenshot(`/screenshots/${data.file}?t=${Date.now()}`));
             break;
             
           case 'error':
@@ -165,7 +165,7 @@ export function useWebSocket(backendWsUrl, backendHttpUrl) {
     };
     
     socketRef.current = ws;
-  }, [backendWsUrl, backendHttpUrl, dispatch]);
+  }, [backendWsUrl, dispatch]);
   
   // Connect on mount, disconnect on unmount
   useEffect(() => {

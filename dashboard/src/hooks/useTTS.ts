@@ -8,7 +8,7 @@ import { useAegisState } from '@/providers/AegisProvider';
  *
  * Manages sentence splitting, TTS API fetching, and sequential playback.
  */
-export function useTTS(backendHttpUrl, selectedVoice = 'alba') {
+export function useTTS(selectedVoice = 'alba') {
   const { voiceState } = useAegisState();
   
   const spokenSentencesRef = useRef(new Set());
@@ -42,7 +42,7 @@ export function useTTS(backendHttpUrl, selectedVoice = 'alba') {
     const queueItem = { sentence, audioUrl: null, status: 'pending', session };
     ttsQueueRef.current.push(queueItem);
 
-    fetch(`${backendHttpUrl}/api/tts`, {
+    fetch(`/api/tts`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text: sentence, voice: selectedVoice }),
@@ -61,7 +61,7 @@ export function useTTS(backendHttpUrl, selectedVoice = 'alba') {
           playNext();
         }
       });
-  }, [backendHttpUrl, selectedVoice, voiceState]);
+  }, [selectedVoice, voiceState]);
 
   // Queue multiple sentences from text
   const speakText = useCallback((text) => {

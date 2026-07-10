@@ -44,16 +44,16 @@ function DashboardInner() {
   const { isMobile } = useResponsive();
 
   // ── Backend URLs ──
-  const [backendHttpUrl, setBackendHttpUrl] = useState('');
   const [backendWsUrl, setBackendWsUrl] = useState('');
   useEffect(() => {
     const host = window.location.hostname || 'localhost';
-    setBackendHttpUrl(`http://${host}:6800`);
+    // API calls use relative URLs (proxied by Next.js rewrites → 127.0.0.1:6800)
+    // WebSocket connects directly to backend on localhost:6800
     setBackendWsUrl(`ws://${host}:6800/api/ws`);
   }, []);
 
   // ── WebSocket ──
-  const { sendMessage, connectionState, setSessionId } = useWebSocket(backendWsUrl, backendHttpUrl);
+  const { sendMessage, connectionState, setSessionId } = useWebSocket(backendWsUrl);
 
   // ── Sessions ──
   const {
@@ -61,7 +61,7 @@ function DashboardInner() {
     groupedSessions, hoveredSessionId, setHoveredSessionId,
     createSession, switchSession, deleteSession, renameSession,
     updateCurrentSession, getSessionPreview,
-  } = useSessions(backendHttpUrl);
+  } = useSessions();
 
   // Keep WebSocket session ID in sync
   useEffect(() => {
@@ -90,8 +90,7 @@ function DashboardInner() {
   const [newAutoApprove, setNewAutoApprove] = useState('');
 
   const fetchConfig = useCallback(() => {
-    if (!backendHttpUrl) return;
-    fetch(`${backendHttpUrl}/api/config`)
+    fetch(`/api/config`)
       .then(res => res.json())
       .then(data => {
         setSecurityConfig(data);
@@ -106,19 +105,17 @@ function DashboardInner() {
         fetchModels();
       })
       .catch(err => console.error('Error loading config:', err));
-  }, [backendHttpUrl]);
+  }, []);
 
   const fetchModels = useCallback(() => {
-    if (!backendHttpUrl) return;
-    fetch(`${backendHttpUrl}/api/models`)
+    fetch(`/api/models`)
       .then(res => res.json())
       .then(data => setModels(data))
       .catch(() => {});
-  }, [backendHttpUrl]);
+  }, []);
 
   const fetchVoices = useCallback(() => {
-    if (!backendHttpUrl) return;
-    fetch(`${backendHttpUrl}/api/voices`)
+    fetch(`/api/voices`)
       .then(res => res.json())
       .then(data => {
         setVoices(data);
@@ -128,12 +125,12 @@ function DashboardInner() {
         }
       })
       .catch(() => {});
-  }, [backendHttpUrl]);
+  }, []);
 
   useEffect(() => { fetchConfig(); fetchVoices(); }, [fetchConfig, fetchVoices]);
 
   // ── TTS ──
-  const { speakText, startSession: startTtsSession, stopSpeaking } = useTTS(backendHttpUrl, selectedVoice);
+  const { speakText, startSession: startTtsSession, stopSpeaking } = useTTS(selectedVoice);
 
   // ── STT ──
   const { isListening, isSupported: sttSupported, startListening, stopListening } = useSTT();
@@ -250,8 +247,7 @@ function DashboardInner() {
       systemPromptType,
       litellm: { baseURL, apiKey, selectedNormalModel, selectedReasoningModel, taskMode },
     };
-    if (!backendHttpUrl) return;
-    fetch(`${backendHttpUrl}/api/config`, {
+    fetch(`/api/config`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updatedConfig),
@@ -264,7 +260,7 @@ function DashboardInner() {
         }
       })
       .catch(err => console.error('Error saving settings:', err));
-  }, [securityConfig, systemPromptType, baseURL, apiKey, selectedNormalModel, selectedReasoningModel, taskMode, backendHttpUrl, fetchModels]);
+  }, [securityConfig, systemPromptType, baseURL, apiKey, selectedNormalModel, selectedReasoningModel, taskMode, fetchModels]);
 
   const addConfigItem = useCallback((field, subfield, val, setVal) => {
     if (!val.trim() || !securityConfig) return;
@@ -426,7 +422,7 @@ function DashboardInner() {
             />
           )}
           {rightPanelTab === 'workspace' && (
-            <WorkspaceTab backendHttpUrl={backendHttpUrl} />
+            <WorkspaceTab />
           )}
           {rightPanelTab === 'plan' && (
             <ExecutionPlan executionPlan={state.executionPlan} reasoningHistory={state.reasoningHistory} />
