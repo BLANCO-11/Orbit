@@ -1,38 +1,27 @@
-'use client';
+// dashboard/src/app/ThemeScript.tsx
+// Inline script to prevent FOUC — runs before React hydration.
+// Sets the correct theme class on <html> before any rendering.
 
-import { useEffect } from 'react';
-
-/**
- * ThemeScript — Inline script to prevent FOUC (flash of unstyled content)
- * Runs before React hydration to set the correct theme class.
- *
- * Also re-applies on mount to ensure consistency with localStorage.
- */
 export function ThemeScript() {
-  useEffect(() => {
-    const stored = localStorage.getItem('aegis-theme');
-    const prefersLight = window.matchMedia('(prefers-color-scheme: light)').matches;
-    const theme = stored === 'light' || stored === 'dark'
-      ? stored
-      : prefersLight ? 'light' : 'dark';
-
-    const root = document.documentElement;
-    root.classList.remove('dark', 'light');
-    root.classList.add(theme);
-  }, []);
-
   return (
     <script
       dangerouslySetInnerHTML={{
         __html: `
           (function() {
             try {
-              var theme = localStorage.getItem('aegis-theme');
-              if (!theme) {
-                theme = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+              var id = localStorage.getItem('aegis-active-theme') || 'deep-space';
+              // Map theme ID to mode class
+              var darkThemes = ['deep-space','forest','ocean','high-contrast'];
+              var isDark = darkThemes.indexOf(id) !== -1;
+              // Custom themes: check stored definition
+              if (isDark === false) {
+                try {
+                  var custom = JSON.parse(localStorage.getItem('aegis-custom-themes') || '{}');
+                  if (custom[id]) isDark = custom[id].mode === 'dark';
+                } catch(e) {}
               }
               document.documentElement.classList.remove('dark', 'light');
-              document.documentElement.classList.add(theme);
+              document.documentElement.classList.add(isDark ? 'dark' : 'light');
             } catch(e) {}
           })();
         `,
