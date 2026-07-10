@@ -43,10 +43,10 @@ function DashboardInner() {
   const { theme, mounted, toggleTheme, setTheme } = useTheme();
   const { isMobile } = useResponsive();
 
-  // WebSocket uses same host as the page (works local + remote via SSH tunnel)
+  // WebSocket goes through Next.js custom server proxy → backend:6800
   const backendWsUrl = typeof window !== 'undefined'
-    ? `ws://${window.location.hostname}:6800/api/ws`
-    : 'ws://localhost:6800/api/ws';
+    ? `ws://${window.location.hostname}:${window.location.port || '6801'}/api/ws`
+    : 'ws://localhost:6801/api/ws';
 
   // ── WebSocket ──
   const { sendMessage, connectionState, setSessionId } = useWebSocket(backendWsUrl);

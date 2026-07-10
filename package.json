@@ -8,7 +8,7 @@
     "start:backend": "node agent-backend/server.js",
     "start:frontend": "npm --prefix dashboard run dev -- --port 6801 --hostname 0.0.0.0",
     "build:frontend": "npm --prefix dashboard run build",
-    "start:frontend-prod": "npm --prefix dashboard run start -- --port 6801 --hostname 0.0.0.0",
+    "start:frontend-prod": "npm --prefix dashboard run start",
     "prod": "npm run build:frontend && concurrently \"npm run start:backend\" \"npm run start:frontend-prod\""
   },
   "keywords": [],
