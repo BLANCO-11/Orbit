@@ -43,14 +43,10 @@ function DashboardInner() {
   const { theme, mounted, toggleTheme, setTheme } = useTheme();
   const { isMobile } = useResponsive();
 
-  // ── Backend URLs ──
-  const [backendWsUrl, setBackendWsUrl] = useState('');
-  useEffect(() => {
-    const host = window.location.hostname || 'localhost';
-    // API calls use relative URLs (proxied by Next.js rewrites → 127.0.0.1:6800)
-    // WebSocket connects directly to backend on localhost:6800
-    setBackendWsUrl(`ws://${host}:6800/api/ws`);
-  }, []);
+  // ── Backend WebSocket URL (computed synchronously, no race condition) ──
+  const backendWsUrl = typeof window !== 'undefined'
+    ? `ws://${window.location.hostname || 'localhost'}:6800/api/ws`
+    : 'ws://localhost:6800/api/ws';
 
   // ── WebSocket ──
   const { sendMessage, connectionState, setSessionId } = useWebSocket(backendWsUrl);
@@ -486,6 +482,7 @@ function DashboardInner() {
           }
         },
         theme, mounted, onToggleTheme: toggleTheme,
+        connectionState,
         notificationCenter: <NotificationCenter logs={state.logs} />,
       }}
       bottomNavItems={bottomNavItems}

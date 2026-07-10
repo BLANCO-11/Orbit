@@ -28,6 +28,7 @@ export default function Header({
   isDesktop,
   isMobile,
   notificationCenter,
+  connectionState,
 }) {
   return (
     <header className="app-header">
@@ -88,8 +89,8 @@ export default function Header({
               width: '8px',
               height: '8px',
               borderRadius: '50%',
-              backgroundColor: getStatusColor?.(),
-              boxShadow: `0 0 8px ${getStatusColor?.() || 'var(--text-tertiary)'}`,
+              backgroundColor: connectionState === 'connected' ? 'var(--accent-success)' : connectionState === 'connecting' ? 'var(--accent-warning)' : getStatusColor?.(),
+              boxShadow: `0 0 8px ${connectionState === 'connected' ? 'var(--accent-success)' : getStatusColor?.() || 'var(--text-tertiary)'}`,
               flexShrink: 0,
             }}
           />
