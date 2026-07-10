@@ -17,6 +17,7 @@ export function useWebSocket(backendWsUrl) {
   const [connectionState, setConnectionState] = useState('disconnected');
   
   const connect = useCallback(() => {
+    if (!backendWsUrl) return;
     if (socketRef.current?.readyState === WebSocket.OPEN) return;
     
     setConnectionState('connecting');
@@ -155,13 +156,11 @@ export function useWebSocket(backendWsUrl) {
     ws.onclose = () => {
       console.log('WebSocket closed. Reconnecting...');
       setConnectionState('disconnected');
-      dispatch(actions.setStatus('error'));
       reconnectTimerRef.current = setTimeout(connect, 5000);
     };
     
     ws.onerror = () => {
       setConnectionState('disconnected');
-      dispatch(actions.setStatus('error'));
     };
     
     socketRef.current = ws;
