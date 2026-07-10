@@ -294,18 +294,25 @@ async function handleStartTask(ws, userPrompt, sessionId, mode, systemPromptType
   if (!sessionItem || !sessionItem.harness) {
     sendLog(ws, `Spawning agent session for ${sessionId} (mode=${activeMode})...`, false, sessionId);
     
-    const harness = loadHarness("picode", {
-      events: createHarnessEventEmitter(ws, sessionId, activeMode, subagentTracker),
-      config: getConfig(),
-      sessionId,
-      mode: activeMode,
-      systemPromptType,
-      binaries: { nodePath, piPath },
-    });
-    
-    await harness.connect();
-    sessionItem = { harness, ws, mode: activeMode, subagentTracker };
-    activeSessions.set(sessionId, sessionItem);
+    try {
+      const harness = loadHarness("picode", {
+        events: createHarnessEventEmitter(ws, sessionId, activeMode, subagentTracker),
+        config: getConfig(),
+        sessionId,
+        mode: activeMode,
+        systemPromptType,
+        binaries: { nodePath, piPath },
+      });
+      
+      await harness.connect();
+      sessionItem = { harness, ws, mode: activeMode, subagentTracker };
+      activeSessions.set(sessionId, sessionItem);
+    } catch (err) {
+      console.error(`[handleStartTask] Failed to spawn harness:`, err);
+      sendLog(ws, `Failed to spawn agent: ${err.message}`, false, sessionId);
+      sendStatus(ws, "error", sessionId);
+      return;
+    }
   }
   
   sendStatus(ws, "executing", sessionId);

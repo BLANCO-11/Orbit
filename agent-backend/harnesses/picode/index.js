@@ -77,7 +77,7 @@ class PiCodeHarness extends HarnessInterface {
     const piPath = (this.binaries && this.binaries.piPath) || "pi";
     const spawnArgs = [piPath, ...piArgs];
     
-    console.log(`[PiCodeHarness] Spawning: ${nodePath} ${spawnArgs.join(" ")}`);
+    console.log(`[PiCodeHarness] Spawning: ${nodePath} ${spawnArgs[0]} (mode=${activeMode}, model=${normalModel})`);
     
     this.piProcess = spawn(nodePath, spawnArgs, {
       env: childEnv,
@@ -85,8 +85,10 @@ class PiCodeHarness extends HarnessInterface {
       stdio: ['pipe', 'pipe', 'pipe']
     });
     
+    console.log(`[PiCodeHarness] Process spawned, PID: ${this.piProcess.pid}`);
+    
     this.piProcess.on("error", (err) => {
-      console.error(`[PiCodeHarness] Spawn failed: ${err.message}`);
+      console.error(`[PiCodeHarness] Spawn error: ${err.message}`);
       this.events.emit("error", { message: `Failed to spawn Pi: ${err.message}` });
     });
     
@@ -94,7 +96,7 @@ class PiCodeHarness extends HarnessInterface {
     this._setupStderr();
     
     this.piProcess.on("close", (code) => {
-      console.log(`[PiCodeHarness] Process exited with code ${code}`);
+      console.log(`[PiCodeHarness] Process ${this.piProcess.pid} exited with code ${code}`);
       // Clean up temp prompt file
       fs.unlink(tempPromptPath, () => {});
       this.events.emit("close", { code });
@@ -103,7 +105,8 @@ class PiCodeHarness extends HarnessInterface {
   
   _setupStdout() {
     this.piProcess.stdout.on("data", (data) => {
-      this.stdoutBuffer += data.toString();
+      const str = data.toString();
+      this.stdoutBuffer += str;
       const lines = this.stdoutBuffer.split("\n");
       this.stdoutBuffer = lines.pop();
       
@@ -113,7 +116,7 @@ class PiCodeHarness extends HarnessInterface {
           const item = JSON.parse(line);
           this._handleStdoutItem(item);
         } catch (e) {
-          // Non-JSON line — ignore gracefully
+          console.error(`[PiCodeHarness] Non-JSON stdout: ${line.substring(0, 100)}`);
         }
       }
     });
