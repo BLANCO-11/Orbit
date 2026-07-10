@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useCallback, useEffect } from 'react';
-import { useAegisState } from '@/providers/AegisProvider';
+import { useAegisState, useAegisDispatch, actions } from '@/providers/AegisProvider';
 
 // Releases a queue item's object URL exactly once, so it doesn't linger for the
 // life of the tab (blob URLs are never garbage-collected on their own).
@@ -19,6 +19,10 @@ function revokeItem(item) {
  */
 export function useTTS(selectedVoice = 'alba') {
   const { voiceState } = useAegisState();
+  const dispatch = useAegisDispatch();
+  // Browsers block audio.play() until the user has interacted with the page.
+  // Warn once so a blocked first sentence reads as "needs a click", not broken.
+  const autoplayWarnedRef = useRef(false);
 
   const spokenSentencesRef = useRef(new Set());
   const ttsQueueRef = useRef([]);
@@ -100,12 +104,22 @@ export function useTTS(selectedVoice = 'alba') {
       const audio = new Audio(item.audioUrl);
       audioRef.current = audio;
       audio.play().catch(() => {
+        if (!autoplayWarnedRef.current) {
+          autoplayWarnedRef.current = true;
+          dispatch(actions.addLog({
+            text: '[Voice] Speech is blocked until you interact with the page (browser autoplay policy). Click anywhere, then it will speak.',
+            isSystem: true,
+            timestamp: new Date().toLocaleTimeString(),
+          }));
+        }
         isPlayingRef.current = false;
         revokeItem(item);
         currentPlayingIndexRef.current++;
         playNext();
       });
       audio.onended = () => {
+        // A sentence played through → audio is unblocked; re-arm the warning.
+        autoplayWarnedRef.current = false;
         isPlayingRef.current = false;
         revokeItem(item);
         currentPlayingIndexRef.current++;
