@@ -3,7 +3,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
-import { Mic, Send, XCircle, Volume2, VolumeX, MessageSquare, List, BarChart3, Cog } from 'lucide-react';
+import { MessageSquare, List, BarChart3, Cog } from 'lucide-react';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
+import CommandPalette from '@/components/widgets/CommandPalette';
+import NotificationCenter from '@/components/widgets/NotificationCenter';
 
 // Providers & Hooks
 import { AegisProvider, useAegisState, useAegisDispatch, actions } from '@/providers/AegisProvider';
@@ -140,6 +143,7 @@ function DashboardInner() {
   const [showThinking, setShowThinking] = useState(true);
   const [rightPanelTab, setRightPanelTab] = useState('agent');
   const [activeNavTab, setActiveNavTab] = useState('chat');
+  const [cmdPaletteOpen, setCmdPaletteOpen] = useState(false);
   const inputHistoryRef = useRef([]);
   const inputHistoryIndexRef = useRef(-1);
   const startTimeRef = useRef(null);
@@ -314,6 +318,23 @@ function DashboardInner() {
   }, []);
 
   // ── Status ──
+  // ── Keyboard shortcuts ──
+  useEffect(() => {
+    const handler = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        setCmdPaletteOpen(prev => !prev);
+      }
+      if (e.key === 'Escape' && !cmdPaletteOpen) {
+        if (state.status === 'thinking' || state.status === 'executing') {
+          handleStopAgent();
+        }
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [state.status, cmdPaletteOpen, handleStopAgent]);
+
   const getStatusColor = useCallback(() => {
     switch (state.status) {
       case 'thinking': return 'var(--accent-info)';
@@ -375,6 +396,7 @@ function DashboardInner() {
 
   // ── JSX ──
   return (
+    <ErrorBoundary>
     <AppShell
       sidebar={
         <SessionList
@@ -468,6 +490,7 @@ function DashboardInner() {
           }
         },
         theme, mounted, onToggleTheme: toggleTheme,
+        notificationCenter: <NotificationCenter logs={state.logs} />,
       }}
       bottomNavItems={bottomNavItems}
       activeNavTab={activeNavTab}
@@ -536,5 +559,21 @@ function DashboardInner() {
         showEmptyState={true}
       />
     </AppShell>
+      <CommandPalette
+        isOpen={cmdPaletteOpen}
+        onClose={() => setCmdPaletteOpen(false)}
+        handlers={{
+          onNewSession: createSession,
+          onToggleSidebar: () => {},
+          onTogglePanel: () => setShowThinking(prev => !prev),
+          onStop: handleStopAgent,
+          onCompact: handleManualCompact,
+          onOpenSettings: () => { setRightPanelTab('settings'); setShowThinking(true); },
+          onToggleLogs: () => { setRightPanelTab('logs'); setShowThinking(true); },
+          onToggleWorkspace: () => { setRightPanelTab('workspace'); setShowThinking(true); },
+          onSetTheme: setTheme,
+        }}
+      />
+    </ErrorBoundary>
   );
 }

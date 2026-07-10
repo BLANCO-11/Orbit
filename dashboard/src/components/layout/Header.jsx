@@ -26,6 +26,7 @@ export default function Header({
   rightPanelOpen,
   isDesktop,
   isMobile,
+  notificationCenter,
 }) {
   return (
     <header className="app-header">
@@ -110,7 +111,7 @@ export default function Header({
           <button
             onClick={onToggleTheme}
             className="interactive-base focus-ring"
-            aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
+            aria-label={`Switch to ${theme.mode === 'dark' ? 'light' : 'dark'} theme`}
             style={{
               background: 'none',
               border: '1px solid var(--border-subtle)',
@@ -123,9 +124,12 @@ export default function Header({
               lineHeight: 0,
             }}
           >
-            {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
+            {theme.mode === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
           </button>
         )}
+
+        {/* Notification center */}
+        {notificationCenter}
 
         {/* Right panel toggle (desktop) */}
         {isDesktop && (
