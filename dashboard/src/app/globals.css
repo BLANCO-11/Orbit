@@ -146,34 +146,40 @@
 }
 
 /* ============================================================
-   BASE RESET & GLOBAL STYLES
+   BASE GLOBAL STYLES
+   NOTE: no hand-rolled universal margin/padding reset here —
+   Tailwind's preflight already handles it inside @layer base.
+   An un-layered universal reset beats every layered utility
+   (cascade layers lose to un-layered styles), which zeroes out
+   every padding and margin class app-wide. Keep everything
+   inside @layer base.
    ============================================================ */
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+@layer base {
+  html {
+    height: 100%;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
 
-html {
-  height: 100%;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  text-rendering: optimizeLegibility;
-}
+  body {
+    height: 100%;
+    overflow: hidden;
+    font-size: 14px;
+  }
 
-body {
-  height: 100%;
-  overflow: hidden;
-  font-size: 14px;
-}
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 6px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--faint); }
+  * { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
 
-::-webkit-scrollbar { width: 8px; height: 8px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--border); border-radius: 6px; }
-::-webkit-scrollbar-thumb:hover { background: var(--faint); }
-* { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
-
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
   }
 }
 
@@ -244,7 +250,9 @@ body {
 /* ============================================================
    MARKDOWN RENDERING — the one exception to "Tailwind classes only",
    since marked.js emits raw HTML we don't control the structure of.
+   Lives in @layer components so utilities can still override it.
    ============================================================ */
+@layer components {
 .markdown-content { font-size: 0.9rem; line-height: 1.65; }
 .markdown-content p { margin-bottom: 0.6rem; }
 .markdown-content p:last-child { margin-bottom: 0; }
@@ -294,3 +302,4 @@ body {
 .markdown-content a { color: var(--primary); text-decoration: none; }
 .markdown-content a:hover { text-decoration: underline; }
 .markdown-content hr { border: none; border-top: 1px solid var(--border); margin: 1rem 0; }
+}

@@ -20,17 +20,22 @@ export function useWebSocket(
   const socketRef = useRef(null);
   const reconnectTimerRef = useRef(null);
   const sessionIdRef = useRef('');
+  const failedAttemptsRef = useRef(0);
+  const unmountedRef = useRef(false);
   const [connectionState, setConnectionState] = useState('disconnected');
-  
+
   const connect = useCallback(() => {
     if (!backendWsUrl) return;
     if (socketRef.current?.readyState === WebSocket.OPEN) return;
-    
+
     setConnectionState('connecting');
     const ws = new WebSocket(backendWsUrl);
-    
+
     ws.onopen = () => {
-      console.log('WebSocket connected.');
+      if (failedAttemptsRef.current > 0) {
+        console.info('WebSocket reconnected to backend.');
+      }
+      failedAttemptsRef.current = 0;
       setConnectionState('connected');
     };
     
@@ -164,24 +169,35 @@ export function useWebSocket(
       }
     };
     
-    ws.onclose = (event) => {
-      console.log('WebSocket closed. Code:', event.code, 'Reason:', event.reason, '. Reconnecting...');
+    ws.onclose = () => {
       setConnectionState('disconnected');
-      reconnectTimerRef.current = setTimeout(connect, 5000);
+      if (unmountedRef.current) return; // deliberate close — don't resurrect
+
+      failedAttemptsRef.current++;
+      // Browser WS error events carry no detail by design; the close is the
+      // signal. Warn once per outage instead of spamming console.error (which
+      // trips Next's dev overlay for an expected, self-healing transient like
+      // the backend still booting).
+      if (failedAttemptsRef.current === 1) {
+        console.warn('Backend WebSocket unavailable — retrying in the background…');
+      }
+      const delay = Math.min(1000 * 2 ** (failedAttemptsRef.current - 1), 5000);
+      reconnectTimerRef.current = setTimeout(connect, delay);
     };
-    
-    ws.onerror = (err) => {
-      console.error('WebSocket error:', err);
-      setConnectionState('disconnected');
+
+    ws.onerror = () => {
+      setConnectionState('disconnected'); // onclose follows and handles retry/logging
     };
-    
+
     socketRef.current = ws;
   }, [backendWsUrl, dispatch]);
-  
+
   // Connect on mount, disconnect on unmount
   useEffect(() => {
+    unmountedRef.current = false;
     connect();
     return () => {
+      unmountedRef.current = true;
       if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
       if (socketRef.current) socketRef.current.close();
     };
