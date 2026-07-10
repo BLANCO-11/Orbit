@@ -12,3 +12,6 @@ test_tts.mp3
 *.log
 .DS_Store
 .next-verify/
+
+# runtime user data — session DB snapshots rotate every 5 min
+agent-backend/backups/
