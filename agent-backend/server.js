@@ -39,6 +39,7 @@ const createNotificationsRouter = require("./routes/notifications");
 const createHealthRouter = require("./routes/health");
 const createWorkspaceRouter = require("./routes/workspace");
 const createDevicesRouter = require("./routes/devices");
+const { createPromptsRouter } = require("./routes/prompts");
 
 // WebSocket
 const createWebSocketServer = require("./ws/index");
@@ -86,6 +87,7 @@ app.use("/api/tts", authMiddleware, createTtsRouter(getConfig));
 app.use("/api/voices", authMiddleware, createVoicesRouter());
 app.use("/api/notify", authMiddleware, createNotificationsRouter(getConfig, wss));
 app.use("/api/workspace", authMiddleware, createWorkspaceRouter());
+app.use("/api/prompts", authMiddleware, createPromptsRouter());
 app.use("/api/health", createHealthRouter({ db, mcpClient, getConfig, activeSessions }));
 app.use("/api", createDevicesRouter(db, authMiddleware, () => process.env.DASHBOARD_ORIGIN || "http://localhost:6801"));
 

@@ -481,6 +481,9 @@ function DashboardInner() {
           if (isListening) {
             stopListening();
           } else {
+            // Barge-in: the agent's voice stops the moment the user starts
+            // talking, so STT never transcribes our own TTS output.
+            stopSpeaking();
             startListening((text) => {
               setPrompt(text);
               handleSubmitPrompt(text);

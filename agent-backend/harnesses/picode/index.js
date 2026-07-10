@@ -33,8 +33,11 @@ class PiCodeHarness extends HarnessInterface {
     const normalModel = this.config.litellm.selectedNormalModel;
     const apiKey = this.config.litellm.apiKey;
     
-    // Select and combine prompt files
-    const basePromptFile = (activePromptType === "fable-5") ? "claude-fable-5.md" : "standard.md";
+    // Select and combine prompt files. The base prompt comes from the prompt
+    // library (any prompts/<id>.md, e.g. frontier-style prompts); the mode
+    // directive is appended on top of it.
+    const { resolvePromptFile } = require("../../routes/prompts");
+    const basePromptFile = resolvePromptFile(activePromptType);
     
     let modePromptFile = null;
     if (activeMode === "plan") modePromptFile = "plan-mode.md";
