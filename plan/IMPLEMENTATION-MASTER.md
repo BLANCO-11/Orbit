@@ -1,177 +1,170 @@
 # AegisAgent — Implementation Master Plan
 
-> **Status:** 🔴 Audit Phase — Plans being drafted
+> **Status:** 🟡 Plans Finalized — Awaiting review and implementation
 > **Last Updated:** 2026-07-10
-> **Base Commit:** `aef37b6` — baseline snapshot
+> **Base Commit:** `b34600e` — plans committed
 
 ---
 
 ## Phase Overview
 
-| Phase | Name | Status | Owner |
+| Phase | Name | Status | Plan File |
 |---|---|---|---|
-| 0 | Critical Bug Fixes | ⬜ Not Started | TBD |
-| 1 | Frontend UI/UX Professional Overhaul | 📋 Plan Drafting | Frontend Specialist |
-| 2 | Backend Architecture & Gaps | 📋 Plan Drafting | Backend Specialist |
-| 3 | Architecture & DevOps Hardening | ⬜ Not Started | TBD |
-| 4 | Testing Infrastructure | ⬜ Not Started | TBD |
-| 5 | Documentation & Polish | ⬜ Not Started | TBD |
+| 0 | Critical Bug Fixes | ⬜ Not Started | BACKEND-PLAN.md §0 |
+| 1 | Backend: Code Modularization | ⬜ Not Started | BACKEND-PLAN.md §1 |
+| 2 | Backend: Agent Harness Abstraction | ⬜ Not Started | BACKEND-PLAN.md §2 |
+| 3 | Backend: Metrics System Fix | ⬜ Not Started | BACKEND-PLAN.md §3 |
+| 4 | Backend: Sub-Agent Deep Tracking | ⬜ Not Started | BACKEND-PLAN.md §4 |
+| 5 | Backend: Security Hardening | ⬜ Not Started | BACKEND-PLAN.md §5 |
+| 6 | Backend: Reliability | ⬜ Not Started | BACKEND-PLAN.md §6 |
+| 7 | Backend: Observability | ⬜ Not Started | BACKEND-PLAN.md §7 |
+| 8 | Backend: API Enhancements + Workspace Preview | ⬜ Not Started | BACKEND-PLAN.md §8 |
+| F1 | Frontend: Theme System | ⬜ Not Started | FRONTEND-PLAN.md §2 |
+| F2 | Frontend: State Architecture | ⬜ Not Started | FRONTEND-PLAN.md §7 |
+| F3 | Frontend: Layout + Chat Redesign | ⬜ Not Started | FRONTEND-PLAN.md §3-4 |
+| F4 | Frontend: Detail Panel + Sub-Agent Tracking | ⬜ Not Started | FRONTEND-PLAN.md §5-6 |
+| F5 | Frontend: Polish (Commands, Notif, A11y) | ⬜ Not Started | FRONTEND-PLAN.md §8 |
 
 ---
 
-## Phase 0: Critical Bug Fixes (MUST DO FIRST)
+## Backend Implementation Order
 
-These are confirmed bugs that will cause crashes or security issues.
+### Phase 0 — Critical Fixes (0.5h)
+- [ ] Fix missing `os` import in `server.js`
+- [ ] Remove hardcoded LiteLLM API key from `server.js` and `security-config.json`
+- [ ] Guard `ws.currentPrompt` null reference
+- [ ] Gitignore `security-config.json`
 
-- [ ] Fix missing `os` import in `agent-backend/security-guard.js` (add `const os = require("os");`)
-- [ ] Sanitize markdown output before `dangerouslySetInnerHTML` (add DOMPurify or similar)
-- [ ] Remove hardcoded LiteLLM API key fallback from `agent-backend/server.js:18`
-- [ ] Fix all CSS variable name mismatches (see §1.2 of gap analysis)
-- [ ] Add `os` import to security-guard.js (line 1)
+### Phase 1 — Modularization (6h)
+- [ ] Extract: `env.js`, `config.js`, `ws/session-helpers.js`
+- [ ] Extract: `harnesses/picode/parser.js` (from `ws/pi-parser.js`)
+- [ ] Extract: `services/tts.js`, `services/plan-generator.js`
+- [ ] Extract: `ws/agent-spawner.js` (dependency-injected)
+- [ ] Extract: `ws/handler.js`, `ws/index.js`
+- [ ] Extract: `routes/config.js`, `sessions.js`, `models.js`, `notifications.js`
+- [ ] Create: `middleware/error-handler.js`, `request-id.js`
+- [ ] Rewrite: `server.js` entry point (~100 lines)
 
----
+### Phase 2 — Harness Abstraction (3.5h)
+- [ ] Create: `harnesses/interface.js` (abstract base)
+- [ ] Create: `harnesses/normalizer.js`
+- [ ] Refactor: PiCode into `harnesses/picode/` (index + spawner)
+- [ ] Add: harness config to `security-config.json`
+- [ ] Add: harness selector in SettingsPanel
 
-## Phase 1: Frontend UI/UX Overhaul
+### Phase 3 — Metrics Fix (2h)
+- [ ] Fix: `recordInputTokens` → `recordOutputTokens` in `metrics.js`
+- [ ] Add: `recordInputTokens` call on user prompt
+- [ ] Add: `aggregateSubagentTokens` for proper rollup
+- [ ] Enrich: metrics WebSocket event with input/output/reasoning breakdown
+- [ ] Add: Claude Code-style cost estimation
 
-**Plan File:** `plan/FRONTEND-PLAN.md`
-**Specialist:** Senior Frontend Engineer agent
+### Phase 4 — Sub-Agent Deep Tracking (3h)
+- [ ] Enhance: `SubagentTracker` with `addReasoningDelta`, `addTextDelta`, `getFullDetail`
+- [ ] Wire: sub-agent deep events in `agent-spawner.js`
+- [ ] Add: `GET /api/sessions/:id/subagent/:subagentId` endpoint
 
-### 1.1 Architecture Refactor
-- [ ] Extract `page.js` into domain-specific hooks:
-  - `useWebSocket(sessionId)` — WebSocket lifecycle + message dispatch
-  - `useSessionManager()` — session CRUD + persistence
-  - `useTTS()` — streaming TTS queue
-  - `useSpeechRecognition()` — STT
-  - `useAgentState()` — messages, logs, metrics, execution plan
-- [ ] Create centralized state store (React Context or Zustand)
-- [ ] Add ErrorBoundary wrapper
-- [ ] Resolve all CSS variable mismatches (use only design-token variables)
+### Phase 5 — Security (3.5h)
+- [ ] Add: Zod validation (`middleware/validator.js`)
+- [ ] Add: API key auth (`middleware/auth.js`)
+- [ ] Add: Rate limiting (`middleware/rate-limiter.js`)
+- [ ] Add: CORS restriction
+- [ ] Add: Session encryption in `db.js`
+- [ ] Add: Temp file cleanup
 
-### 1.2 Component Enhancement
-- [ ] Add loading/skeleton states for all async operations
-- [ ] Add proper timestamps on chat messages
-- [ ] Add message actions (copy, retry, edit)
-- [ ] Add confirmation dialogs for destructive actions
-- [ ] Implement message list virtualization (react-window or similar)
+### Phase 6 — Reliability (3h)
+- [ ] Add: Graceful shutdown handler
+- [ ] Add: MCP client reconnection
+- [ ] Add: `GET /api/health`
+- [ ] Add: Backup retention policy
+- [ ] Add: Configurable metrics save interval
 
-### 1.3 UI/UX Professional Polish
-- [ ] Design proper onboarding flow (guided setup)
-- [ ] Add keyboard shortcuts (Ctrl+K command palette, Ctrl+N new session, etc.)
-- [ ] Add smooth theme transition animation
-- [ ] Add responsive font scaling
-- [ ] Add session rename functionality
-- [ ] Add notification center component
-- [ ] Improve screenshot viewer (zoom, pan, fullscreen)
-- [ ] Add offline/connection status indicator
-- [ ] Improve settings panel organization (collapsible sections)
-- [ ] Add estimated time/progress for long operations
+### Phase 7 — Observability (2.5h)
+- [ ] Add: Pino structured logging
+- [ ] Add: Prometheus metrics endpoint
 
-### 1.4 Accessibility
-- [ ] Fix all focus management
-- [ ] Ensure WCAG 2.1 AA contrast for both themes
-- [ ] Add screen reader announcements for dynamic content
-- [ ] Add `aria-*` attributes to all interactive elements
-
----
-
-## Phase 2: Backend Architecture & Gaps
-
-**Plan File:** `plan/BACKEND-PLAN.md`
-**Specialist:** Senior Backend Engineer agent
-
-### 2.1 Code Modularization
-- [ ] Split `server.js` into domain modules:
-  - `routes/config.js`
-  - `routes/sessions.js`
-  - `routes/models.js`
-  - `routes/notifications.js`
-  - `ws/handler.js`
-  - `ws/pi-parser.js`
-  - `middleware/error-handler.js`
-  - `middleware/validator.js`
-- [ ] Add Express error handling middleware
-- [ ] Add input validation (Zod or Joi schemas)
-
-### 2.2 Security Hardening
-- [ ] Add API key authentication middleware
-- [ ] Add rate limiting on HTTP and WebSocket
-- [ ] Restrict CORS to dashboard origin only
-- [ ] Add HTTPS support docs/configuration
-- [ ] Encrypt sensitive session data at rest
-
-### 2.3 Reliability
-- [ ] Add graceful shutdown handling (SIGTERM/SIGINT)
-- [ ] Add MCP client reconnection with exponential backoff
-- [ ] Add health check endpoint (`GET /api/health`)
-- [ ] Add environment validation on startup
-- [ ] Clean up temp prompt files after session ends
-- [ ] Implement backup retention policy (keep last 10 backups)
-- [ ] Make Pi binary paths configurable via env vars
-
-### 2.4 Observability
-- [ ] Add structured logging (pino or winston)
-- [ ] Add Prometheus metrics export endpoint
-- [ ] Add request ID middleware for tracing
-- [ ] Log all API errors with stack traces
-
-### 2.5 Feature Gaps
-- [ ] Hybrid plan prompt configurable
-- [ ] Session TTL enforcement on all query paths
-- [ ] Configurable metrics save interval
-- [ ] Session rename API endpoint
-- [ ] Message-level timestamps in session storage
+### Phase 8 — API + Workspace (2.5h)
+- [ ] Add: `PATCH /api/sessions/:id` (rename)
+- [ ] Add: Enhanced `searchSessions` with pagination
+- [ ] Add: TTS health check
+- [ ] Add: Hybrid plan prompt configurability
+- [ ] **Add: Workspace Preview API** — tree, file, preview, open-in-editor
 
 ---
 
-## Phase 3: Architecture & DevOps
+## Frontend Implementation Order
 
-- [ ] Create `docker-compose.yml` for full stack
-- [ ] Add environment variable validation script
-- [ ] Add npm scripts for common operations
-- [ ] Create `.env.example` with all required vars
-- [ ] Set up CI/CD pipeline (GitHub Actions)
-- [ ] Add pre-commit hooks (linting, formatting)
+### F1 — Theme System (6h)
+- [ ] Create `lib/themes.js` — 6 built-in themes
+- [ ] Rewrite `hooks/useTheme.js` — load/apply/save/custom themes
+- [ ] Rewrite `globals.css` — use only CSS vars from theme system
+- [ ] Create `ThemeEditor.jsx` — color picker UI
+- [ ] Update SettingsPanel with Themes tab
+- [ ] Fix all CSS variable references in ALL components
+
+### F2 — State Architecture (7.5h)
+- [ ] Create `providers/AegisProvider.jsx` — context + reducer
+- [ ] Create `hooks/useWebSocket.js`
+- [ ] Create `hooks/useSessions.js`
+- [ ] Create `hooks/useAgent.js`
+- [ ] Create `hooks/useTTS.js` + `hooks/useSTT.js`
+- [ ] Refactor `page.js` → thin orchestrator (~80 lines)
+
+### F3 — Layout + Chat Redesign (6h)
+- [ ] Redesign `AppShell.jsx` — 4-zone layout
+- [ ] Redesign `Header.jsx` — clean, minimal
+- [ ] Redesign `Sidebar.jsx` — Apple Mail style
+- [ ] Redesign `ChatMessage.jsx` — text-block style, inline tools
+- [ ] Redesign `ChatInput.jsx` — clean input strip
+- [ ] Redesign `ChatArea.jsx`
+
+### F4 — Detail Panel + Sub-Agent Tracking (6h)
+- [ ] Create `panels/DetailPanel.jsx` with tab system
+- [ ] Create `panels/AgentTab.jsx` — sub-agent cards with deep tracking
+- [ ] Wire enriched sub-agent WS events
+- [ ] Create `panels/WorkspaceTab.jsx` — file tree + preview (split pane)
+- [ ] Create `panels/PlanTab.jsx` — enhanced reasoning history
+- [ ] Create `panels/LogsTab.jsx` — filtered log viewer
+
+### F5 — Polish (7.5h)
+- [ ] Command Palette (`Ctrl+K`)
+- [ ] Notification Center
+- [ ] DOMPurify markdown sanitization
+- [ ] Skeleton loading states
+- [ ] Error boundaries
+- [ ] Keyboard shortcuts (full set)
+- [ ] Message virtualization
+- [ ] Accessibility audit + fixes
 
 ---
 
-## Phase 4: Testing Infrastructure
+## Total Estimates
 
-- [ ] Set up Jest/Vitest for backend testing
-- [ ] Set up React Testing Library for frontend
-- [ ] Add API endpoint tests
-- [ ] Add WebSocket protocol tests
-- [ ] Add DB operation tests
-- [ ] Add security guard comprehensive tests
-- [ ] Add Pi RPC parser tests
-- [ ] Add E2E tests (Playwright)
-
----
-
-## Phase 5: Documentation
-
-- [ ] Update README.md (correct framework references)
-- [ ] Create API documentation (OpenAPI spec)
-- [ ] Create architecture overview diagram
-- [ ] Create CONTRIBUTING.md
-- [ ] Create CHANGELOG.md
-- [ ] Document all environment variables
+| Area | Hours |
+|---|---|
+| Backend (Phases 0-8) | ~28h |
+| Frontend (Phases F1-F5) | ~33h |
+| Testing (both) | ~6h |
+| **Grand Total** | **~67h** (2-3 weeks) |
 
 ---
 
 ## Progress Log
 
-| Date | What | Who |
-|---|---|---|
-| 2026-07-10 | Baseline commit `aef37b6` | System |
-| 2026-07-10 | Master gap analysis created | System |
-| 2026-07-10 | Frontend & Backend specialist agents spawned | System |
+| Date | Event |
+|---|---|
+| 2026-07-10 | Baseline commit `aef37b6` |
+| 2026-07-10 | Master gap analysis created |
+| 2026-07-10 | Frontend + Backend plans drafted (v1) |
+| 2026-07-10 | Plans revised: added design vision, harness abstraction, metrics fix, sub-agent deep tracking, workspace preview, custom themes |
+| 2026-07-10 | Plans committed at `b34600e` — awaiting review |
 
 ---
 
-## References
+## Reference Files
 
-- `plan/MASTER-GAP-ANALYSIS.md` — Full deficiency report
-- `plan/UI-UX-OVERHAUL.md` — Existing UI/UX design system plan
-- `plan/FRONTEND-PLAN.md` — (pending) Frontend specialist implementation plan
-- `plan/BACKEND-PLAN.md` — (pending) Backend specialist implementation plan
-- `progress.md` — Previous progress tracking
+- `plan/MASTER-GAP-ANALYSIS.md` — Full deficiency report (19.5KB)
+- `plan/FRONTEND-PLAN.md` — Design vision + implementation (30KB)
+- `plan/BACKEND-PLAN.md` — Architecture + all phases (72KB)
+- `plan/IMPLEMENTATION-MASTER.md` — This file
+- `progress.md` — Older progress tracking

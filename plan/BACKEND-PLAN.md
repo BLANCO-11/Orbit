@@ -10,13 +10,16 @@
 
 1. [Phase 0: Critical Bug Fixes](#phase-0-critical-bug-fixes)
 2. [Phase 1: Code Modularization](#phase-1-code-modularization)
-3. [Phase 2: Security Hardening](#phase-2-security-hardening)
-4. [Phase 3: Reliability](#phase-3-reliability)
-5. [Phase 4: Observability](#phase-4-observability)
-6. [Phase 5: API Enhancements](#phase-5-api-enhancements)
-7. [Testing Strategy](#testing-strategy)
-8. [Proposed File Structure](#proposed-file-structure)
-9. [Implementation Order & Effort Estimates](#implementation-order--effort-estimates)
+3. [Phase 2: Agent Harness Abstraction Layer](#phase-2-agent-harness-abstraction-layer)
+4. [Phase 3: Metrics System Fix](#phase-3-metrics-system-fix)
+5. [Phase 4: Sub-Agent Deep Tracking](#phase-4-sub-agent-deep-tracking)
+6. [Phase 5: Security Hardening](#phase-5-security-hardening)
+7. [Phase 6: Reliability](#phase-6-reliability)
+8. [Phase 7: Observability](#phase-7-observability)
+9. [Phase 8: API Enhancements (incl. Workspace Preview)](#phase-8-api-enhancements-incl-workspace-preview)
+10. [Testing Strategy](#testing-strategy)
+11. [Proposed File Structure](#proposed-file-structure)
+12. [Implementation Order & Effort Estimates](#implementation-order--effort-estimates)
 
 ---
 
@@ -1148,7 +1151,460 @@ module.exports = { app, server }; // exported for tests
 
 ---
 
-## Phase 2: Security Hardening
+## Phase 2: Agent Harness Abstraction Layer
+
+### 2.1 Motivation
+
+Currently everything is hardcoded to PiCode:
+- Binary paths: `/home/blanco/.local/share/pi-node/...`
+- JSON-line stdout parsing specific to Pi's RPC protocol
+- Process spawn args hardcoded for Pi CLI
+
+AegisAgent should be **harness-agnostic**. The user should be able to switch between PiCode, OpenCode, Claude Code, Codex CLI, Copilot, or any future agent harness without changing the dashboard or security layer.
+
+### 2.2 Harness Interface
+
+Every harness implements a standard interface:
+
+```js
+// agent-backend/harnesses/interface.js
+
+/**
+ * HarnessInterface — contract that every agent harness must implement.
+ * 
+ * Lifecycle: connect() → sendPrompt() → [events stream] → disconnect()
+ * Events are emitted via an EventEmitter passed at construction.
+ */
+
+class HarnessInterface {
+  /**
+   * @param {object} options
+   * @param {EventEmitter} events — harness emits events here
+   * @param {object} config — security-config.json
+   * @param {string} sessionId
+   * @param {string} mode — 'chat' | 'plan' | 'edit' | 'yolo'
+   * @param {string} systemPromptType — 'standard' | 'fable-5'
+   */
+  constructor(options) {}
+
+  /** Spawn the agent process. Returns a promise that resolves when ready. */
+  async connect() {}
+
+  /** Send a user prompt to the running agent. */
+  async sendPrompt(prompt) {}
+
+  /** Gracefully interrupt/cancel the current operation. */
+  async cancel() {}
+
+  /** Kill the agent process and clean up. */
+  async disconnect() {}
+
+  /** Returns harness metadata for the dashboard. */
+  getMetadata() { return { name: '', version: '', capabilities: [] }; }
+}
+
+// ── Standard Events (emitted on `events` EventEmitter) ──
+//
+// 'text_delta'          { delta: string }
+// 'thinking_delta'       { delta: string }
+// 'tool_call_start'      { id, name, arguments }
+// 'tool_call_end'        { id, name, result }
+// 'subagent_update'      { subagentId, status, reasoning, tokens }
+// 'agent_end'            {}
+// 'error'                { message }
+// 'close'                { code }
+
+module.exports = HarnessInterface;
+```
+
+### 2.3 Event Normalization
+
+Each harness emits raw events in its own format. A **normalizer** layer sits between the harness and the WebSocket handler:
+
+```js
+// agent-backend/harnesses/normalizer.js
+
+function normalizeEvent(rawEvent, harnessName) {
+  // Harness-specific normalization logic
+  switch (harnessName) {
+    case 'picode':
+      return normalizePiCodeEvent(rawEvent);
+    case 'opencode':
+      return normalizeOpenCodeEvent(rawEvent);
+    case 'claude-code':
+      return normalizeClaudeCodeEvent(rawEvent);
+    default:
+      return rawEvent; // passthrough
+  }
+}
+
+// All harnesses emit the SAME event shape after normalization:
+// { type: 'text_delta' | 'thinking_delta' | 'tool_call_start' | ... , ...fields }
+```
+
+### 2.4 PiCode Harness (Current — Refactored)
+
+Extract the current Pi spawning logic from `server.js` into:
+
+```
+agent-backend/harnesses/
+├── interface.js          # Abstract base (documentation + type reference)
+├── normalizer.js         # Event normalization layer
+├── picode/
+│   ├── index.js          # PiCodeHarness extends HarnessInterface
+│   ├── parser.js         # Pi JSON-line stdout parsing (from ws/pi-parser.js)
+│   └── spawner.js        # Process spawn + lifecycle (from ws/agent-spawner.js)
+└── opencode/
+    └── index.js          # OpenCodeHarness (stub for future)
+```
+
+### 2.5 Harness Configuration
+
+Add to `security-config.json`:
+
+```json
+{
+  "harness": {
+    "active": "picode",
+    "picode": {
+      "nodePath": "/home/blanco/.local/share/pi-node/node-v22.22.3-linux-x64/bin/node",
+      "cliPath": "/home/blanco/.local/share/pi-node/node-v22.22.3-linux-x64/bin/pi",
+      "extraArgs": []
+    },
+    "opencode": {
+      "path": "opencode",
+      "extraArgs": ["--model", "claude-sonnet-4"]
+    },
+    "claude-code": {
+      "path": "claude",
+      "extraArgs": []
+    }
+  }
+}
+```
+
+Dashboard Settings → Harness tab shows a dropdown to select active harness.
+
+### 2.6 Harness-Agnostic Agent Spawner
+
+Refactored `ws/agent-spawner.js` becomes:
+
+```js
+// agent-backend/ws/agent-spawner.js
+
+const { loadHarness } = require('../harnesses');
+const { normalizeEvent } = require('../harnesses/normalizer');
+
+async function spawnAgentSession(ws, sessionId, mode, systemPromptType) {
+  const config = getConfig();
+  const harnessName = config.harness?.active || 'picode';
+  
+  const harness = loadHarness(harnessName, {
+    events: createEventEmitter(ws, sessionId),  // wires to WebSocket
+    config,
+    sessionId,
+    mode,
+    systemPromptType,
+  });
+  
+  await harness.connect();
+  activeSessions.set(sessionId, { harness, ws, mode });
+}
+```
+
+The dashboard, security layer, metrics, and session management never know which harness is active.
+
+---
+
+## Phase 3: Metrics System Fix
+
+### 3.1 The Problem
+
+Current `metrics.js` has several bugs:
+
+1. **`recordInputTokens` is called on `text_delta` events** (line ~550 in server.js):
+   ```js
+   metricsManager.recordInputTokens(sessionId, ev.delta);
+   ```
+   `text_delta` is the agent's **output**, not input. This inflates token counts incorrectly.
+
+2. **Sub-agent tokens are tracked in `SubagentTracker` but may not aggregate** into session totals. The `sessionTokens` field is updated by `metrics.js` but `subagent-tracker.js` updates its own separate counters. These need to reconcile.
+
+3. **No distinction between input, output, and reasoning tokens** at the session aggregate level. Claude Code shows: `Input: 1.2k | Output: 450 | Reasoning: 2.1k | Total: 3.75k`.
+
+### 3.2 Fix: Token Tracking Architecture
+
+```
+SessionMetrics (aggregate)
+├── tokens.input        ← sum of all user prompts sent to any agent
+├── tokens.output       ← sum of all text_delta from any agent  
+├── tokens.reasoning    ← sum of all thinking_delta from any agent
+├── tokens.total        ← input + output + reasoning
+│
+├── mainAgent:
+│   ├── tokens.input
+│   ├── tokens.output
+│   └── tokens.reasoning
+│
+└── subAgents[]:
+    ├── id, name, parentId
+    ├── tokens.input
+    ├── tokens.output
+    └── tokens.reasoning
+```
+
+**Key rule:** Every agent (main or sub) tracks its own tokens. The session aggregate is the sum of all agents. No double-counting.
+
+### 3.3 Code Changes
+
+**`metrics.js` — `recordInputTokens` rename and fix:**
+
+```diff
+- recordInputTokens(sessionId, text) {
++ recordOutputTokens(sessionId, text) {
+    const metrics = this._metrics.get(sessionId);
+    if (!metrics) return;
+    const tok = estimateTokens(text);
+-   metrics.tokens.input += tok;
++   metrics.tokens.output += tok;
+    metrics.tokens.total += tok;
+    metrics.sessionTokens = metrics.tokens.total;
+    return tok;
+  }
+
++ // New: record actual input tokens (called when user sends prompt)
++ recordInputTokens(sessionId, promptText) {
++   const metrics = this._metrics.get(sessionId);
++   if (!metrics) return;
++   const tok = estimateTokens(promptText);
++   metrics.tokens.input += tok;
++   metrics.tokens.total += tok;
++   return tok;
++ }
+```
+
+**In `ws/agent-spawner.js` — call correct method:**
+
+```diff
+- metricsManager.recordInputTokens(sessionId, ev.delta);  // BUG: this is output
++ metricsManager.recordOutputTokens(sessionId, ev.delta);  // FIX: text from agent is output
+```
+
+**Add `recordInputTokens` call when user prompt is received:**
+
+```js
+// In sendPromptToAgent, before spawning:
+metricsManager.recordInputTokens(sessionId, userPrompt);
+```
+
+### 3.4 Sub-Agent Token Aggregation
+
+When a sub-agent completes (`tool_call_end` with `name === 'subagent'`):
+
+```js
+// In ws/agent-spawner.js, tool_call_end handler for subagent:
+if (toolName === 'subagent') {
+  const subTokens = subagentTracker.getAgent(toolCallId)?.tokens;
+  if (subTokens) {
+    metricsManager.aggregateSubagentTokens(sessionId, {
+      input: subTokens.input || 0,
+      output: subTokens.output || 0,
+      reasoning: subTokens.reasoning || 0,
+    });
+  }
+}
+```
+
+Add to `metrics.js`:
+
+```js
+aggregateSubagentTokens(sessionId, { input, output, reasoning }) {
+  const metrics = this._metrics.get(sessionId);
+  if (!metrics) return;
+  metrics.tokens.input += input;
+  metrics.tokens.output += output;
+  metrics.tokens.reasoning += reasoning;
+  metrics.tokens.total += (input + output + reasoning);
+  metrics.sessionTokens = metrics.tokens.total;
+}
+```
+
+### 3.5 Claude Code-Style Cost Display
+
+Frontend shows token breakdown like Claude Code:
+
+```
+Tokens: Input 1.2k · Output 450 · Reasoning 2.1k = Total 3.75k
+Cost: ~$0.018 (at current rates)
+```
+
+Backend sends enriched metrics event:
+
+```json
+{
+  "type": "metrics_update",
+  "tokens": { "input": 1200, "output": 450, "reasoning": 2100, "total": 3750 },
+  "cost": { "estimated": 0.018, "currency": "USD" },
+  "toolCalls": 12,
+  "latency": { "totalMs": 45000, "perTool": { "read_file": { "avgMs": 300 } } }
+}
+```
+
+---
+
+## Phase 4: Sub-Agent Deep Tracking
+
+### 4.1 The Problem
+
+Currently sub-agents are tracked at a surface level:
+- `SubagentTracker` tracks status, tool call count, token count
+- Frontend shows a card with "WORKING · 2 tools · 450 tokens"
+- No visibility into what the sub-agent is **actually doing**
+
+The user needs the SAME level of visibility as the main agent: reasoning stream, tool-by-tool calls with results, chat output, full audit trail.
+
+### 4.2 Enhanced Sub-Agent WebSocket Protocol
+
+New event types for sub-agent deep tracking:
+
+```json
+// Sub-agent reasoning (streaming)
+{ "type": "subagent_reasoning", "subagentId": "sa-123", "delta": "I need to..." }
+
+// Sub-agent tool call started
+{ "type": "subagent_tool_start", "subagentId": "sa-123", "toolCallId": "tc-1", "name": "read_file", "arguments": {...} }
+
+// Sub-agent tool call completed
+{ "type": "subagent_tool_end", "subagentId": "sa-123", "toolCallId": "tc-1", "name": "read_file", "result": "...", "latencyMs": 300 }
+
+// Sub-agent text output (chat messages from sub-agent)
+{ "type": "subagent_text", "subagentId": "sa-123", "delta": "The file contains..." }
+
+// Sub-agent metrics update
+{ "type": "subagent_metrics", "subagents": [{ "id": "sa-123", "tokens": {...}, "toolCalls": [...], "reasoning": "...", "currentAction": "read_file" }] }
+
+// Sub-agent completed (with full summary)
+{ "type": "subagent_completed", "subagentId": "sa-123", "summary": "Completed security audit. Found 3 issues.", "results": "..." }
+```
+
+### 4.3 SubagentTracker Enhancement
+
+Add to `subagent-tracker.js`:
+
+```js
+class SubagentTracker {
+  // ... existing methods ...
+
+  /** Record streaming reasoning delta for a sub-agent */
+  addReasoningDelta(agentId, delta, tokens) {
+    const agent = this._agents.get(agentId);
+    if (!agent) return;
+    // Append to the last reasoning entry or create new one
+    if (agent.reasoning.length === 0 || agent.reasoning[agent.reasoning.length - 1].complete) {
+      agent.reasoning.push({ content: delta, timestamp: new Date().toISOString(), tokens: tokens || 0, complete: false });
+    } else {
+      const last = agent.reasoning[agent.reasoning.length - 1];
+      last.content += delta;
+      last.tokens += (tokens || 0);
+    }
+    agent.tokens.reasoning += (tokens || 0);
+    agent.tokens.total += (tokens || 0);
+    
+    this._emit('subagent_reasoning', { agentId, delta, tokens });
+  }
+
+  /** Finalize the current reasoning entry */
+  finalizeReasoning(agentId) {
+    const agent = this._agents.get(agentId);
+    if (!agent || agent.reasoning.length === 0) return;
+    agent.reasoning[agent.reasoning.length - 1].complete = true;
+  }
+
+  /** Record a text output delta from a sub-agent */
+  addTextDelta(agentId, delta) {
+    const agent = this._agents.get(agentId);
+    if (!agent) return;
+    agent.textOutput = (agent.textOutput || '') + delta;
+    this._emit('subagent_text', { agentId, delta });
+  }
+
+  /** Get full detail for a sub-agent (for "Expand Full View") */
+  getFullDetail(agentId) {
+    const agent = this._agents.get(agentId);
+    if (!agent) return null;
+    return {
+      id: agent.id,
+      name: agent.name,
+      status: agent.status,
+      mode: agent.mode,
+      task: agent.task,
+      timeStart: agent.timeStart,
+      timeEnd: agent.timeEnd,
+      tokens: agent.tokens,
+      reasoning: agent.reasoning,
+      textOutput: agent.textOutput || '',
+      toolCalls: agent.toolCalls.map(tc => ({
+        name: tc.name,
+        args: tc.args,
+        result: tc.result,
+        latencyMs: tc.latencyMs,
+        startTime: tc.startTime,
+        endTime: tc.endTime,
+      })),
+      results: agent.results,
+    };
+  }
+}
+```
+
+### 4.4 Wiring in PiCode Harness
+
+When the main agent's Pi process emits stdout events that reference a subagentId:
+
+```js
+// In ws/agent-spawner.js, piProcess.stdout.on('data', ...):
+
+if (item.subagentId) {
+  const tracker = activeSessions.get(sessionId)?.subagentTracker;
+  if (!tracker) continue;
+
+  if (item.type === 'subagent_reasoning') {
+    tracker.addReasoningDelta(item.subagentId, item.delta, item.tokens);
+    sendWithSession(ws, { type: 'subagent_reasoning', subagentId: item.subagentId, delta: item.delta, tokens: item.tokens });
+  }
+  
+  if (item.type === 'subagent_text') {
+    tracker.addTextDelta(item.subagentId, item.delta);
+    sendWithSession(ws, { type: 'subagent_text', subagentId: item.subagentId, delta: item.delta });
+  }
+  
+  // tool_call_start / tool_call_end with subagentId
+  if (item.type === 'tool_call_start' && item.subagentId) {
+    tracker.startToolCall(item.subagentId, item.toolCallId, item.name, item.arguments);
+    sendWithSession(ws, { type: 'subagent_tool_start', subagentId: item.subagentId, toolCallId: item.toolCallId, name: item.name, arguments: item.arguments });
+  }
+  
+  if (item.type === 'tool_call_end' && item.subagentId) {
+    tracker.endToolCall(item.subagentId, item.toolCallId, item.result);
+    sendWithSession(ws, { type: 'subagent_tool_end', subagentId: item.subagentId, toolCallId: item.toolCallId, name: item.name, result: item.result });
+  }
+}
+```
+
+### 4.5 "Expand Full View" API
+
+Backend endpoint to retrieve a sub-agent's complete session:
+
+```
+GET /api/sessions/:sessionId/subagent/:subagentId
+→ { subagent: { id, name, status, tokens, reasoning: [...], toolCalls: [...], textOutput, results } }
+```
+
+This lets the frontend open a read-only modal showing the sub-agent's full conversation.
+
+---
+
+## Phase 5: Security Hardening
 
 ### 2.1 API Key Authentication
 
@@ -1699,6 +2155,185 @@ Used by `services/plan-generator.js` as shown in Phase 1.
 
 ---
 
+## Phase 8: API Enhancements (incl. Workspace Preview)
+
+### 8.1 Session Rename Endpoint
+
+Already included in `routes/sessions.js`:
+```
+PATCH /api/sessions/:id
+Body: { "title": "New Name", "mode": "edit" }
+```
+
+### 8.2 Message-Level Timestamps
+
+Ensure each message in session storage includes a `timestamp` field. Backend passes through whatever the agent emits.
+
+### 8.3 Session Search Improvements
+
+Enhance `searchSessions()` with logs search and pagination (limit/offset).
+
+### 8.4 TTS Service Health Check
+
+Add TTS connectivity check to `/api/health`.
+
+### 8.5 Hybrid Plan Prompt Configurability
+
+Expose in `security-config.json` under `litellm.hybridPlanPrompt`.
+
+### 8.6 Workspace Preview API
+
+**Motivation:** The dashboard needs to show the agent's workspace — file tree, file contents, and rendered markdown previews.
+
+**Endpoints:**
+
+```
+GET /api/workspace/tree?path=/workspace
+→ {
+    tree: [
+      { name: "src", type: "directory", path: "/workspace/src" },
+      { name: "src/components", type: "directory", path: "/workspace/src/components" },
+      { name: "src/app.tsx", type: "file", path: "/workspace/src/app.tsx", size: 1234, modified: "2026-07-10T..." },
+      { name: "README.md", type: "file", path: "/workspace/README.md", size: 567, modified: "..." }
+    ]
+  }
+
+GET /api/workspace/file?path=/workspace/src/app.tsx
+→ {
+    content: "import React from 'react'...",
+    language: "typescript",
+    size: 1234,
+    modified: "2026-07-10T..."
+  }
+
+GET /api/workspace/preview?path=/workspace/README.md
+→ {
+    html: "<h1>My Project</h1><p>A description...</p>",
+    raw: "# My Project\n\nA description...",
+    language: "markdown"
+  }
+
+POST /api/workspace/open
+Body: { path: "/workspace/src/app.tsx" }
+→ Opens the file in the system's default editor (xdg-open on Linux, open on macOS).
+→ { success: true, message: "Opened in default editor." }
+```
+
+**Implementation — `routes/workspace.js`:**
+
+```js
+// agent-backend/routes/workspace.js
+const { Router } = require("express");
+const fs = require("fs");
+const path = require("path");
+const { exec } = require("child_process");
+const { marked } = require("marked");
+
+const WORKSPACE_ROOT = path.resolve(__dirname, "../../workspace");
+
+function createWorkspaceRouter() {
+  const router = Router();
+
+  // File tree
+  router.get("/tree", (req, res, next) => {
+    try {
+      const dirPath = req.query.path || WORKSPACE_ROOT;
+      const resolved = path.resolve(dirPath);
+      if (!resolved.startsWith(WORKSPACE_ROOT)) {
+        return res.status(403).json({ success: false, message: "Access denied." });
+      }
+      const entries = fs.readdirSync(resolved, { withFileTypes: true });
+      const tree = entries
+        .filter(e => !e.name.startsWith(".") && e.name !== "node_modules" && e.name !== "screenshots" && e.name !== "temp")
+        .map(e => ({
+          name: e.name,
+          type: e.isDirectory() ? "directory" : "file",
+          path: path.join(dirPath, e.name),
+          ...(e.isFile() ? {
+            size: fs.statSync(path.join(resolved, e.name)).size,
+            modified: fs.statSync(path.join(resolved, e.name)).mtime.toISOString(),
+          } : {}),
+        }))
+        .sort((a, b) => {
+          if (a.type !== b.type) return a.type === "directory" ? -1 : 1;
+          return a.name.localeCompare(b.name);
+        });
+      res.json({ tree });
+    } catch (err) { next(err); }
+  });
+
+  // File content
+  router.get("/file", (req, res, next) => {
+    try {
+      const filePath = path.resolve(req.query.path || "");
+      if (!filePath.startsWith(WORKSPACE_ROOT)) {
+        return res.status(403).json({ success: false, message: "Access denied." });
+      }
+      if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
+        return res.status(404).json({ success: false, message: "File not found." });
+      }
+      const content = fs.readFileSync(filePath, "utf-8");
+      const ext = path.extname(filePath).toLowerCase();
+      const languageMap = { ".js": "javascript", ".ts": "typescript", ".jsx": "jsx", ".tsx": "tsx", ".json": "json", ".md": "markdown", ".css": "css", ".html": "html", ".py": "python", ".sh": "bash" };
+      res.json({ content, language: languageMap[ext] || "text", size: content.length, modified: fs.statSync(filePath).mtime.toISOString() });
+    } catch (err) { next(err); }
+  });
+
+  // Markdown preview
+  router.get("/preview", (req, res, next) => {
+    try {
+      const filePath = path.resolve(req.query.path || "");
+      if (!filePath.startsWith(WORKSPACE_ROOT) || !fs.existsSync(filePath)) {
+        return res.status(404).json({ success: false, message: "File not found." });
+      }
+      const content = fs.readFileSync(filePath, "utf-8");
+      const ext = path.extname(filePath).toLowerCase();
+      let html = "";
+      if (ext === ".md") {
+        html = marked.parse(content);
+      } else if (ext === ".json") {
+        html = `<pre><code>${JSON.stringify(JSON.parse(content), null, 2)}</code></pre>`;
+      } else {
+        html = `<pre><code>${escapeHtml(content)}</code></pre>`;
+      }
+      res.json({ html, raw: content, language: ext.replace(".", "") });
+    } catch (err) { next(err); }
+  });
+
+  // Open in system editor
+  router.post("/open", (req, res, next) => {
+    try {
+      const filePath = path.resolve(req.body.path || "");
+      if (!filePath.startsWith(WORKSPACE_ROOT) || !fs.existsSync(filePath)) {
+        return res.status(404).json({ success: false, message: "File not found." });
+      }
+      const platform = process.platform;
+      const cmd = platform === "darwin" ? `open "${filePath}"` : platform === "win32" ? `start "" "${filePath}"` : `xdg-open "${filePath}"`;
+      exec(cmd, (err) => {
+        if (err) return res.status(500).json({ success: false, message: err.message });
+        res.json({ success: true, message: "Opened in default editor." });
+      });
+    } catch (err) { next(err); }
+  });
+
+  return router;
+}
+
+function escapeHtml(text) {
+  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+module.exports = createWorkspaceRouter;
+```
+
+**Wire in `server.js`:**
+```js
+const createWorkspaceRouter = require("./routes/workspace");
+app.use("/api/workspace", authMiddleware, createWorkspaceRouter());
+```
+
+---
+
 ## Testing Strategy
 
 ### Framework Setup
@@ -1811,26 +2446,35 @@ agent-backend/
 ├── server.js                        # Entry point (~100 lines)
 ├── app.js                           # Express app factory (for testing)
 ├── config.js                        # Load/save security-config.json
-├── env.js                           # Startup environment validation + Pi discovery
+├── env.js                           # Startup environment validation
 ├── logger.js                        # Pino logger instance
 ├── db.js                            # SQLite persistence (enhanced)
 ├── security-guard.js                # Path/command validation (bug-fixed)
-├── security-config.json             # Security config (no hardcoded keys)
-├── metrics.js                       # Session metrics manager
-├── subagent-tracker.js              # Subagent lifecycle tracker
+├── security-config.json             # Security + harness config (no hardcoded keys)
+├── metrics.js                       # Session metrics manager (fixed token tracking)
+├── subagent-tracker.js              # Sub-agent lifecycle + deep tracking
 ├── mcp-client.js                    # Lightpanda MCP client (with reconnect)
 ├── aegis.db                         # SQLite database
+├── harnesses/
+│   ├── interface.js                 # HarnessInterface (abstract base)
+│   ├── normalizer.js                # Event normalization per harness
+│   ├── picode/
+│   │   ├── index.js                 # PiCodeHarness
+│   │   ├── parser.js                # Pi JSON-line parsing
+│   │   └── spawner.js               # Process spawn + lifecycle
+│   └── opencode/
+│       └── index.js                 # OpenCodeHarness (stub)
 ├── routes/
 │   ├── config.js                    # GET/POST /api/config
 │   ├── sessions.js                  # CRUD /api/sessions, search, export, import, backups
 │   ├── models.js                    # GET /api/models, POST /api/tts, GET /api/voices
 │   ├── notifications.js             # POST /api/notify
+│   ├── workspace.js                 # GET /api/workspace/tree, /file, /preview; POST /open
 │   └── health.js                    # GET /api/health
 ├── ws/
 │   ├── index.js                     # WebSocket server creation
 │   ├── handler.js                   # Message dispatch
-│   ├── agent-spawner.js             # spawnAgentSession, sendPromptToAgent
-│   ├── pi-parser.js                 # Stdout parsing, TUI stripping
+│   ├── agent-spawner.js             # spawnAgentSession, sendPromptToAgent (harness-agnostic)
 │   └── session-helpers.js           # sendLog, sendStatus, path helpers
 ├── middleware/
 │   ├── auth.js                      # API key authentication
@@ -1842,7 +2486,7 @@ agent-backend/
 ├── services/
 │   ├── tts.js                       # TTS summary generation
 │   └── plan-generator.js            # Hybrid plan generation
-└── backups/                         # SQLite JSON backups
+└── backups/                         # SQLite JSON backups (auto-pruned)
 ```
 
 ---
@@ -1855,48 +2499,61 @@ agent-backend/
 | 2 | 0 | Remove hardcoded API key, validate LITELLM_KEY | 0.2 | None |
 | 3 | 0 | Guard `ws.currentPrompt` null ref | 0.1 | None |
 | 4 | 0 | Gitignore security-config.json | 0.05 | None |
-| 5 | 1 | Create directory structure (mkdir routes/, ws/, middleware/, services/) | 0.1 | None |
+| 5 | 1 | Create directory structure | 0.1 | None |
 | 6 | 1 | Extract `env.js` + `config.js` | 0.5 | Seq 2 |
 | 7 | 1 | Extract `ws/session-helpers.js` | 0.5 | Seq 1 |
-| 8 | 1 | Extract `ws/pi-parser.js` (pure functions) | 0.5 | None |
+| 8 | 1 | Extract `ws/pi-parser.js` (to harnesses/picode/parser.js) | 0.5 | None |
 | 9 | 1 | Extract `services/tts.js` | 0.3 | Seq 2 |
 | 10 | 1 | Extract `services/plan-generator.js` | 0.3 | Seq 8 |
 | 11 | 1 | Extract `ws/agent-spawner.js` (dep-injected) | 2.0 | Seq 6-10 |
 | 12 | 1 | Extract `ws/handler.js` | 0.5 | Seq 11 |
-| 13 | 1 | Extract `routes/config.js`, `sessions.js`, `models.js`, `notifications.js` | 1.0 | Seq 6 |
+| 13 | 1 | Extract routes | 1.0 | Seq 6 |
 | 14 | 1 | Create `middleware/error-handler.js`, `request-id.js` | 0.3 | None |
 | 15 | 1 | Create `ws/index.js` | 0.2 | None |
-| 16 | 1 | Rewrite `server.js` entry point (wire everything) | 1.0 | Seq 5-15 |
-| 17 | 2 | Install `zod`, create `middleware/validator.js` | 0.5 | Seq 13 |
-| 18 | 2 | Implement `middleware/auth.js` + WebSocket auth | 1.0 | Seq 16 |
-| 19 | 2 | Implement `middleware/rate-limiter.js` | 0.5 | Seq 16 |
-| 20 | 2 | CORS restriction in server.js | 0.1 | Seq 16 |
-| 21 | 2 | Session encryption in `db.js` | 1.0 | None |
-| 22 | 2 | Temp file cleanup in agent-spawner | 0.3 | Seq 11 |
-| 23 | 3 | Graceful shutdown handler | 1.0 | Seq 16 |
-| 24 | 3 | MCP client reconnection + healthCheck | 1.0 | None |
-| 25 | 3 | `routes/health.js` with DB/MCP/TTS checks | 0.5 | Seq 24 |
-| 26 | 3 | Backup retention in `db.js` | 0.5 | None |
-| 27 | 3 | Configurable metrics save interval | 0.3 | Seq 11 |
-| 28 | 3 | Pi binary discovery via env vars | 0.3 | Seq 6 |
-| 29 | 4 | Install `pino`, create `logger.js` | 0.3 | None |
-| 30 | 4 | Replace console.log → logger in all modules | 1.0 | Seq 29 |
-| 31 | 4 | Install `prom-client`, create `middleware/prometheus.js` | 1.0 | Seq 16 |
-| 32 | 4 | Wire Prometheus counters in agent-spawner | 0.5 | Seq 11, 31 |
-| 33 | 4 | Pi stderr ring buffer | 0.3 | Seq 11 |
-| 34 | 5 | `PATCH /api/sessions/:id` (already in Phase 1 sessions router) | 0.0 | Seq 13 |
-| 35 | 5 | Enhance `searchSessions` with logs + pagination | 0.5 | None |
-| 36 | 5 | TTS health in health check | 0.2 | Seq 25 |
-| 37 | 5 | Hybrid plan prompt configurability | 0.2 | Seq 10 |
-| 38 | Test | Install `jest`, create config | 0.3 | None |
-| 39 | Test | `tests/security-guard.test.js` | 0.5 | Seq 1 |
-| 40 | Test | `tests/pi-parser.test.js` | 0.5 | Seq 8 |
-| 41 | Test | `tests/metrics.test.js` | 1.0 | None |
-| 42 | Test | `tests/db.test.js` | 1.0 | Seq 21 |
-| 43 | Test | `tests/routes.test.js` | 1.5 | Seq 13-15 |
-| 44 | Test | `tests/websocket.test.js` | 1.5 | Seq 11-12 |
+| 16 | 1 | Rewrite `server.js` entry point | 1.0 | Seq 5-15 |
+| 17 | 2 | Create `harnesses/interface.js` (abstract base) | 0.5 | None |
+| 18 | 2 | Create `harnesses/normalizer.js` | 0.5 | Seq 17 |
+| 19 | 2 | Refactor PiCode into `harnesses/picode/` (index + spawner) | 2.0 | Seq 8, 11, 17 |
+| 20 | 2 | Add harness config to security-config.json | 0.3 | Seq 19 |
+| 21 | 2 | Harness selector in dashboard Settings | 0.5 | Seq 20 |
+| 22 | 3 | Fix `recordInputTokens` → `recordOutputTokens` in metrics.js | 0.3 | None |
+| 23 | 3 | Add `recordInputTokens` call when user sends prompt | 0.3 | Seq 11 |
+| 24 | 3 | Add `aggregateSubagentTokens` for proper rollup | 0.5 | Seq 22 |
+| 25 | 3 | Enrich metrics WebSocket event with input/output/reasoning breakdown | 0.3 | Seq 24 |
+| 26 | 3 | Claude Code-style cost estimation in metrics | 0.5 | Seq 24 |
+| 27 | 4 | Enhance `SubagentTracker` with `addReasoningDelta`, `addTextDelta`, `getFullDetail` | 1.5 | None |
+| 28 | 4 | Wire sub-agent deep events in `agent-spawner.js` | 1.0 | Seq 11, 27 |
+| 29 | 4 | Add `GET /api/sessions/:id/subagent/:subagentId` endpoint | 0.5 | Seq 13 |
+| 30 | 4 | Frontend sub-agent card with expandable full view (see FRONTEND-PLAN §5) | — | Frontend |
+| 31 | 5 | Install `zod`, create `middleware/validator.js` | 0.5 | Seq 13 |
+| 32 | 5 | Implement `middleware/auth.js` + WebSocket auth | 1.0 | Seq 16 |
+| 33 | 5 | Implement `middleware/rate-limiter.js` | 0.5 | Seq 16 |
+| 34 | 5 | CORS restriction | 0.1 | Seq 16 |
+| 35 | 5 | Session encryption in `db.js` | 1.0 | None |
+| 36 | 5 | Temp file cleanup | 0.3 | Seq 11 |
+| 37 | 6 | Graceful shutdown handler | 1.0 | Seq 16 |
+| 38 | 6 | MCP client reconnection + healthCheck | 1.0 | None |
+| 39 | 6 | `routes/health.js` | 0.5 | Seq 38 |
+| 40 | 6 | Backup retention in `db.js` | 0.5 | None |
+| 41 | 6 | Configurable metrics save interval | 0.3 | Seq 11 |
+| 42 | 7 | Install `pino`, create `logger.js` | 0.3 | None |
+| 43 | 7 | Replace console.log → logger | 1.0 | Seq 42 |
+| 44 | 7 | Prometheus metrics endpoint | 1.0 | Seq 16 |
+| 45 | 8 | `PATCH /api/sessions/:id` (rename) | 0.0 | Seq 13 |
+| 46 | 8 | Enhance `searchSessions` | 0.5 | None |
+| 47 | 8 | TTS health check | 0.2 | Seq 39 |
+| 48 | 8 | Hybrid plan prompt configurability | 0.2 | Seq 10 |
+| 49 | 8 | **Workspace Preview API** — `routes/workspace.js` (tree, file, preview, open) | 1.5 | Seq 13 |
+| 50 | 8 | Wire workspace router in `server.js` | 0.2 | Seq 49 |
+| 51 | Test | Install `jest` | 0.3 | None |
+| 52 | Test | `tests/security-guard.test.js` | 0.5 | Seq 1 |
+| 53 | Test | `tests/harnesses.test.js` (interface compliance) | 0.5 | Seq 19 |
+| 54 | Test | `tests/metrics.test.js` (token aggregation) | 1.0 | Seq 22-26 |
+| 55 | Test | `tests/db.test.js` | 1.0 | Seq 35 |
+| 56 | Test | `tests/routes.test.js` (incl. workspace) | 2.0 | Seq 13, 49 |
+| 57 | Test | `tests/websocket.test.js` | 1.5 | Seq 11-12 |
 
-**Total estimated: ~19.3 hours**
+**Total estimated: ~28 hours**
 **Critical path: 1→2→6→7→8→9→10→11→12→16 → then parallel phases**
 
 ---
