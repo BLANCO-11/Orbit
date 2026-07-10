@@ -93,8 +93,8 @@ export default function ExecutionPlan({ executionPlan, reasoningHistory = [] }) 
                   } ${isCurrentGroup && !isCollapsed ? 'bg-primary/5' : ''}`}
                 >
                   <div className="flex items-center gap-1.5 overflow-hidden">
-                    <span className={`size-1 shrink-0 rounded-full ${isCurrentGroup ? 'bg-chart-3' : 'bg-muted-foreground'}`} />
-                    <span className={`max-w-[240px] overflow-hidden text-ellipsis whitespace-nowrap text-[0.7rem] ${isCurrentGroup ? 'font-semibold text-chart-3' : 'text-muted-foreground'}`}>
+                    <span className={`size-1 shrink-0 rounded-full ${isCurrentGroup ? 'bg-info' : 'bg-muted-foreground'}`} />
+                    <span className={`max-w-[240px] overflow-hidden text-ellipsis whitespace-nowrap text-[0.7rem] ${isCurrentGroup ? 'font-semibold text-info' : 'text-muted-foreground'}`}>
                       {isCurrentGroup ? 'Current' : `Query ${gIdx + 1}`}
                     </span>
                     {group.query && (
@@ -141,7 +141,7 @@ export default function ExecutionPlan({ executionPlan, reasoningHistory = [] }) 
                             className="flex cursor-pointer select-none items-center justify-between bg-muted/30 px-2 py-1"
                           >
                             <div className="flex items-center gap-1">
-                              <span className={`size-[3px] shrink-0 rounded-full ${isLastEntry ? 'bg-chart-3' : 'bg-muted-foreground'}`} />
+                              <span className={`size-[3px] shrink-0 rounded-full ${isLastEntry ? 'bg-info' : 'bg-muted-foreground'}`} />
                               <span className="text-[0.65rem] text-muted-foreground">Step {eIdx + 1}</span>
                               {entry.timestamp && <span className="text-[0.55rem] text-muted-foreground">{entry.timestamp}</span>}
                             </div>
@@ -161,7 +161,7 @@ export default function ExecutionPlan({ executionPlan, reasoningHistory = [] }) 
                     })}
 
                     {isCurrentGroup && executionPlan && entries.length > 0 && executionPlan !== entries[entries.length - 1].content && (
-                      <div className="max-h-[160px] overflow-y-auto rounded border border-chart-3/10 bg-chart-3/5 p-2 font-mono text-[0.73rem] leading-relaxed whitespace-pre-wrap text-chart-3">
+                      <div className="max-h-[160px] overflow-y-auto rounded border border-info/10 bg-info/5 p-2 font-mono text-[0.73rem] leading-relaxed whitespace-pre-wrap text-info">
                         {executionPlan}
                       </div>
                     )}

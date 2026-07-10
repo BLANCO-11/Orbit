@@ -2,67 +2,79 @@
 "use client";
 
 import React from "react";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { AlertTriangle, ShieldCheck, Shield, ShieldOff, ExternalLink } from "lucide-react";
 
+/**
+ * ApprovalBanner — HITL approval cards (command execution / edit-mode path access).
+ */
 export default function ApprovalBanner({ approvalRequest, onApprove, onDeny }) {
   if (!approvalRequest) return null;
 
-  // Edit mode directory permission request
+  // Edit-mode directory permission request
   if (approvalRequest.type === "edit_permission") {
     return (
-      <Card className="mb-4 border-warning bg-warning/5">
-        <CardContent className="p-4">
-          <h4 className="mb-2 flex items-center gap-1.5 text-[0.95rem] text-warning">
-            <Shield size={16} /> Directory Access Outside Safe Zone
-          </h4>
-          <p className="mb-2 text-[0.85rem] text-muted-foreground">
-            The agent is in <strong className="text-warning">Edit</strong> mode and wants to access a path outside the project directory.
-          </p>
-          <div className="mb-2 rounded-md border border-border bg-black/30 p-2.5 font-mono text-[0.85rem] dark:bg-black/50">
-            <div className="mb-1 flex items-center gap-1 text-warning">
-              <ExternalLink size={12} />
-              Tool: {approvalRequest.toolName}
-            </div>
-            <div>Path(s): {(approvalRequest.paths || []).join(", ")}</div>
-            <div className="mt-1 text-xs text-muted-foreground">Safe zone: {approvalRequest.safeZone}</div>
+      <div className="rounded-[11px] border border-warning/40 bg-warning/8 p-4 shadow-card">
+        <h4 className="mb-1.5 flex items-center gap-1.5 text-[13.5px] font-semibold text-warning">
+          <Shield size={15} /> Path outside the safe zone
+        </h4>
+        <p className="mb-2.5 text-[13px] text-muted-foreground">
+          The agent is in <strong className="font-semibold text-warning">Edit</strong> mode and wants to touch a path outside the project directory.
+        </p>
+        <div className="mb-3 rounded-lg border border-border bg-background p-2.5 font-mono text-xs">
+          <div className="mb-1 flex items-center gap-1.5 text-warning">
+            <ExternalLink size={11} />
+            {approvalRequest.toolName}
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Button onClick={() => onApprove("allow_once")} size="sm">
-              <ShieldCheck size={14} /> Allow Once
-            </Button>
-            <Button onClick={() => onApprove("allow_session")} size="sm" className="bg-success text-success-foreground hover:bg-success/80">
-              <Shield size={14} /> Allow for Session
-            </Button>
-            <Button onClick={() => onApprove("deny")} size="sm" variant="destructive">
-              <ShieldOff size={14} /> Deny
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+          <div className="break-all">{(approvalRequest.paths || []).join(", ")}</div>
+          <div className="mt-1 text-[11px] text-faint">Safe zone: {approvalRequest.safeZone}</div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => onApprove("allow_once")}
+            className="flex items-center gap-1.5 rounded-[9px] bg-primary px-3.5 py-[7px] text-[13px] font-semibold text-primary-foreground hover:opacity-90"
+          >
+            <ShieldCheck size={14} /> Allow once
+          </button>
+          <button
+            onClick={() => onApprove("allow_session")}
+            className="flex items-center gap-1.5 rounded-[9px] bg-success px-3.5 py-[7px] text-[13px] font-semibold text-success-foreground hover:opacity-90"
+          >
+            <Shield size={14} /> Allow for session
+          </button>
+          <button
+            onClick={() => onApprove("deny")}
+            className="flex items-center gap-1.5 rounded-[9px] border border-destructive/40 bg-destructive/10 px-3.5 py-[7px] text-[13px] font-semibold text-destructive hover:bg-destructive/20"
+          >
+            <ShieldOff size={14} /> Deny
+          </button>
+        </div>
+      </div>
     );
   }
 
-  // Standard approval (plan mode command execution)
+  // Standard command approval
   return (
-    <Card className="mb-4 border-warning bg-warning/5">
-      <CardContent className="p-4">
-        <h4 className="mb-2 flex items-center gap-1.5 text-[0.95rem] text-warning">
-          <AlertTriangle size={16} /> Command Execution Requested
-        </h4>
-        <p className="mb-3 rounded-md border border-border bg-black/30 p-2.5 font-mono text-[0.85rem] dark:bg-black/50">
-          {approvalRequest.command}
-        </p>
-        <div className="flex gap-2">
-          <Button onClick={() => onApprove(true)} size="sm" className="bg-success text-success-foreground hover:bg-success/80">
-            <ShieldCheck size={14} /> Approve
-          </Button>
-          <Button onClick={() => onDeny()} variant="destructive" size="sm">
-            Deny
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+    <div className="rounded-[11px] border border-warning/40 bg-warning/8 p-4 shadow-card">
+      <h4 className="mb-2 flex items-center gap-1.5 text-[13.5px] font-semibold text-warning">
+        <AlertTriangle size={15} /> Command needs your approval
+      </h4>
+      <pre className="mb-3 overflow-x-auto rounded-lg border border-border bg-background p-2.5 font-mono text-xs">
+        {approvalRequest.command}
+      </pre>
+      <div className="flex gap-2">
+        <button
+          onClick={() => onApprove(true)}
+          className="flex items-center gap-1.5 rounded-[9px] bg-success px-3.5 py-[7px] text-[13px] font-semibold text-success-foreground hover:opacity-90"
+        >
+          <ShieldCheck size={14} /> Approve
+        </button>
+        <button
+          onClick={() => onDeny()}
+          className="flex items-center gap-1.5 rounded-[9px] border border-destructive/40 bg-destructive/10 px-3.5 py-[7px] text-[13px] font-semibold text-destructive hover:bg-destructive/20"
+        >
+          Deny
+        </button>
+      </div>
+    </div>
   );
 }

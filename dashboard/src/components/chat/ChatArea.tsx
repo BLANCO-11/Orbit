@@ -10,14 +10,8 @@ import ModeSelector from './ModeSelector';
 import PromptTypeSelector from './PromptTypeSelector';
 
 /**
- * ChatArea — The central chat column.
- *
- * Composes:
- *   Approval banner (HITL overlay)
- *   Mode badge or mode prompt
- *   Chat message list
- *   Live progress banner
- *   Chat input bar (with mic, TTS, mode selector, textarea, send/stop)
+ * ChatArea — the central conversation column.
+ * Messages scroll under a floating, frosted input dock.
  */
 export default function ChatArea({
   messages,
@@ -43,7 +37,7 @@ export default function ChatArea({
   onSetSessionMode,
   onSetSessionModeAndReRun,
 
-  // Prompt Type
+  // Prompt type
   systemPromptType,
   onSetSystemPromptType,
 
@@ -59,7 +53,6 @@ export default function ChatArea({
   inputHistoryRef,
   inputHistoryIndexRef,
 
-  // Empty state
   showEmptyState,
 }) {
   const containerRef = useRef(null);
@@ -71,39 +64,37 @@ export default function ChatArea({
     }
   };
 
-  const currentTool = metrics?.actionFeed?.[metrics.actionFeed.length - 1]?.toolName;
+  const isProcessing = status === 'thinking' || status === 'executing';
+  const lastAction = metrics?.actionFeed?.[metrics.actionFeed.length - 1]?.toolName;
 
   return (
-    <div className="flex flex-1 flex-col overflow-hidden p-4 sm:p-5">
-      <ApprovalBanner
-        approvalRequest={approvalRequest}
-        onApprove={(decision) => onApprove(decision !== undefined ? decision : true)}
-        onDeny={() => onDeny(approvalRequest?.type === 'edit_permission' ? 'deny' : false)}
-      />
+    <>
+      {/* ── Scrolling conversation ── */}
+      <div ref={containerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-6 pb-40 pt-7">
+        <div className="mx-auto flex w-full max-w-[720px] flex-col gap-6">
+          <ApprovalBanner
+            approvalRequest={approvalRequest}
+            onApprove={(decision) => onApprove(decision !== undefined ? decision : true)}
+            onDeny={() => onDeny(approvalRequest?.type === 'edit_permission' ? 'deny' : false)}
+          />
 
-      {sessionMode && !showModePrompt && <ModeBadge sessionMode={sessionMode} />}
-      {showModePrompt && <ModePrompt onSetMode={onSetSessionMode} />}
+          {sessionMode && !showModePrompt && <ModeBadge sessionMode={sessionMode} />}
+          {showModePrompt && <ModePrompt onSetMode={onSetSessionMode} />}
 
-      {/* ── Chat Messages ── */}
-      <div
-        ref={containerRef}
-        onScroll={handleScroll}
-        className="relative mx-auto flex w-full min-h-0 max-w-3xl flex-1 flex-col overflow-y-auto pb-5"
-      >
-        <div className="flex flex-col gap-4">
           {hasMoreMessages && (
-            <div className="mb-1.5 border-b border-dashed border-border pb-1.5 text-center text-[0.72rem] text-muted-foreground">
-              Scroll up or click{' '}
+            <div className="border-b border-dashed border-border pb-2 text-center text-xs text-faint">
+              Scroll up or{' '}
               <button
                 onClick={() => onLoadOlder && onLoadOlder(containerRef.current)}
-                className="font-semibold text-primary underline"
+                className="font-semibold text-primary hover:underline"
               >
-                here
-              </button>{' '}
-              to load older messages
+                load older messages
+              </button>
             </div>
           )}
+
           {messages.length === 0 && showEmptyState && <ChatEmptyState />}
+
           {messages.map((msg, i) => (
             <ChatMessage
               key={i}
@@ -122,35 +113,38 @@ export default function ChatArea({
         </div>
       </div>
 
-      {/* ── Live Progress Banner ── */}
-      {(status === 'thinking' || status === 'executing') && (
-        <div className="mx-auto mb-3 flex w-full max-w-3xl animate-in fade-in items-center gap-2.5 rounded-lg border border-primary/25 bg-accent px-4 py-2.5 text-sm text-accent-foreground">
-          <div className="size-2 shrink-0 animate-pulse rounded-full bg-primary" />
-          <span className="overflow-hidden text-ellipsis whitespace-nowrap font-medium">
-            {status === 'thinking' ? 'Agent is thinking and planning...' : 'Working on your task...'}
-            {currentTool ? ` (${currentTool})` : ''}
-          </span>
-        </div>
-      )}
+      {/* ── Floating dock ── */}
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 px-6 pb-5">
+        <div className="mx-auto w-full max-w-[720px]">
+          {isProcessing && (
+            <div className="pointer-events-auto mb-2.5 flex items-center gap-2.5 rounded-xl border border-primary/25 bg-accent px-4 py-2.5 text-[13px] font-medium text-accent-foreground shadow-card">
+              <span className="size-2 shrink-0 animate-pulse rounded-full bg-primary" />
+              <span className="overflow-hidden text-ellipsis whitespace-nowrap">
+                {status === 'thinking' ? 'Thinking through the task…' : 'Working on it…'}
+                {lastAction ? ` (${lastAction})` : ''}
+              </span>
+            </div>
+          )}
 
-      {/* ── Chat Input ── */}
-      <ChatInput
-        prompt={prompt}
-        setPrompt={setPrompt}
-        status={status}
-        voiceState={voiceState}
-        onVoiceStateToggle={onVoiceStateToggle}
-        onToggleListening={onToggleListening}
-        isListening={isListening}
-        onSubmit={onSubmit}
-        onStop={onStop}
-        inputHistoryRef={inputHistoryRef}
-        inputHistoryIndexRef={inputHistoryIndexRef}
-        modeButton={<ModeSelector sessionMode={sessionMode} onSetSessionMode={onSetSessionMode} />}
-        promptTypeButton={
-          <PromptTypeSelector systemPromptType={systemPromptType} onSetSystemPromptType={onSetSystemPromptType} />
-        }
-      />
-    </div>
+          <ChatInput
+            prompt={prompt}
+            setPrompt={setPrompt}
+            status={status}
+            voiceState={voiceState}
+            onVoiceStateToggle={onVoiceStateToggle}
+            onToggleListening={onToggleListening}
+            isListening={isListening}
+            onSubmit={onSubmit}
+            onStop={onStop}
+            inputHistoryRef={inputHistoryRef}
+            inputHistoryIndexRef={inputHistoryIndexRef}
+            modeButton={<ModeSelector sessionMode={sessionMode} onSetSessionMode={onSetSessionMode} />}
+            promptTypeButton={
+              <PromptTypeSelector systemPromptType={systemPromptType} onSetSystemPromptType={onSetSystemPromptType} />
+            }
+          />
+        </div>
+      </div>
+    </>
   );
 }

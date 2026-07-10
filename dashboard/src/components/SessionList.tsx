@@ -2,9 +2,8 @@
 "use client";
 
 import React from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Search, Trash2, Smartphone } from "lucide-react";
+import { useDevices } from "@/hooks/useDevices";
 
 export default function SessionList({
   sessions,
@@ -21,30 +20,49 @@ export default function SessionList({
   getSessionPreview,
   sessionsLength,
 }) {
+  const { devices } = useDevices();
+  const activeDevices = devices.filter((d) => !d.revoked);
+
   return (
     <div className="flex h-full w-full flex-col">
-      <div className="px-3 pt-4 pb-2">
-        <Button onClick={onNewSession} variant="outline" className="w-full justify-center gap-2 font-semibold">
-          <Plus size={14} /> New Session
-        </Button>
+      {/* ── Top: new session + search ── */}
+      <div className="flex flex-col gap-2.5 px-3 pb-2.5 pt-3.5">
+        <button
+          onClick={onNewSession}
+          className="flex items-center justify-between rounded-[9px] border border-border bg-card px-3 py-[9px] text-[13px] font-semibold shadow-card transition-colors hover:border-ring/40"
+        >
+          <span className="flex items-center gap-2">
+            <Plus size={15} className="text-primary" strokeWidth={2.4} />
+            New session
+          </span>
+          <span className="rounded border border-border px-[5px] py-px text-[10px] text-faint">⌘N</span>
+        </button>
+
+        <div className="flex items-center gap-2 rounded-[9px] border border-transparent bg-muted px-[11px] py-2 text-faint focus-within:border-ring/40 focus-within:bg-card">
+          <Search size={14} className="shrink-0" />
+          <input
+            value={searchQuery}
+            onChange={(e) => onSearchChange(e.target.value)}
+            placeholder="Search sessions…"
+            aria-label="Search sessions"
+            className="w-full bg-transparent text-[13px] text-foreground outline-none placeholder:text-faint"
+          />
+        </div>
       </div>
 
-      <div className="px-3 pb-2">
-        <Input value={searchQuery} onChange={(e) => onSearchChange(e.target.value)} placeholder="Search sessions..." className="h-[34px] text-[0.78rem]" />
-      </div>
-
+      {/* ── Session groups ── */}
       <div className="flex-1 overflow-y-auto px-2 pb-4">
         {groupedSessions.length === 0 ? (
-          <div className="py-5 text-center text-xs text-muted-foreground">
+          <div className="py-5 text-center text-xs text-faint">
             {searchQuery ? "No matching sessions." : "No sessions yet."}
           </div>
         ) : (
           groupedSessions.map(([groupName, groupSessions]) => (
-            <div key={groupName} className="mb-3">
-              <div className="px-2 pt-1 pb-1.5 text-[0.62rem] font-bold uppercase tracking-wider text-muted-foreground">
+            <div key={groupName}>
+              <div className="px-2 pb-1.5 pt-2.5 text-[10px] font-bold uppercase tracking-[0.08em] text-faint">
                 {groupName}
               </div>
-              <div className="flex flex-col gap-0.5">
+              <div className="flex flex-col gap-px">
                 {groupSessions.map((s) => {
                   const isActive = s.id === currentSessionId;
                   const preview = getSessionPreview(s);
@@ -58,29 +76,34 @@ export default function SessionList({
                       role="button"
                       tabIndex={0}
                       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSwitch(s.id); } }}
-                      className={`relative flex min-h-10 cursor-pointer items-center justify-between rounded-md px-3 py-2 text-[0.78rem] ${
-                        isActive ? "bg-accent" : hoveredSessionId === s.id ? "bg-muted/50" : ""
+                      className={`group relative flex cursor-pointer items-center rounded-[9px] px-2.5 py-2 transition-colors ${
+                        isActive ? "bg-accent" : "hover:bg-muted"
                       }`}
                     >
-                      {isActive && <div className="absolute left-1 h-[18px] w-[3px] rounded-full bg-primary" />}
-
-                      <div className={`flex-1 overflow-hidden ${isActive ? "pl-1.5" : ""}`}>
-                        <span className={`block overflow-hidden text-ellipsis whitespace-nowrap ${isActive ? "font-semibold" : "font-medium text-muted-foreground"}`}>
+                      {isActive && (
+                        <span className="absolute left-[3px] top-2.5 bottom-2.5 w-[2.5px] rounded-full bg-primary" />
+                      )}
+                      <div className="min-w-0 flex-1 pl-1.5">
+                        <div
+                          className={`overflow-hidden text-ellipsis whitespace-nowrap text-[13px] ${
+                            isActive ? "font-semibold text-foreground" : "font-medium text-muted-foreground"
+                          }`}
+                        >
                           {s.title}
-                        </span>
+                        </div>
                         {preview && (
-                          <span className={`mt-0.5 block overflow-hidden text-ellipsis whitespace-nowrap text-[0.68rem] text-muted-foreground ${isActive ? "opacity-95" : "opacity-75"}`}>
+                          <div className="overflow-hidden text-ellipsis whitespace-nowrap text-[11.5px] text-faint">
                             {preview}
-                          </span>
+                          </div>
                         )}
                       </div>
-
                       {showDelete && (
                         <button
                           onClick={(e) => { e.stopPropagation(); onDelete(s.id); }}
-                          className="ml-1.5 shrink-0 rounded p-1 text-destructive/65 hover:bg-destructive/10 hover:text-destructive"
+                          aria-label={`Delete session ${s.title}`}
+                          className="ml-1 shrink-0 rounded-md p-1 text-destructive/60 hover:bg-destructive/10 hover:text-destructive"
                         >
-                          <Trash2 size={12} />
+                          <Trash2 size={13} />
                         </button>
                       )}
                     </div>
@@ -90,6 +113,17 @@ export default function SessionList({
             </div>
           ))
         )}
+      </div>
+
+      {/* ── Footer: paired devices ── */}
+      <div className="border-t border-border-soft px-3.5 py-2.5">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <Smartphone size={14} className="text-faint" />
+          Paired devices
+          <span className="ml-auto rounded-full bg-muted px-2 py-px text-[11px] text-faint">
+            {activeDevices.length}
+          </span>
+        </div>
       </div>
     </div>
   );

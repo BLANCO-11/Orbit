@@ -2,16 +2,16 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { Check } from 'lucide-react';
 
 const MODES = [
-  { id: 'plan', label: 'Plan', desc: 'All actions require approval', color: 'text-chart-3' },
-  { id: 'edit', label: 'Edit', desc: 'Reads free, writes need approval', color: 'text-warning' },
-  { id: 'yolo', label: 'YOLO', desc: 'Full autonomous execution', color: 'text-destructive' },
+  { id: 'plan', label: 'Plan', desc: 'All actions require approval', dot: 'bg-info' },
+  { id: 'edit', label: 'Edit', desc: 'Reads free, writes need approval', dot: 'bg-warning' },
+  { id: 'yolo', label: 'YOLO', desc: 'Full autonomous execution', dot: 'bg-destructive' },
 ];
 
 /**
- * ModeSelector — Dropdown button for Plan / Edit / YOLO modes.
+ * ModeSelector — chip + popover for Plan / Edit / YOLO.
  */
 export default function ModeSelector({ sessionMode, onSetSessionMode }) {
   const [open, setOpen] = useState(false);
@@ -25,38 +25,39 @@ export default function ModeSelector({ sessionMode, onSetSessionMode }) {
     return () => document.removeEventListener('mousedown', handleClick);
   }, [open]);
 
-  const activeMeta = MODES.find((m) => m.id === sessionMode);
+  const active = MODES.find((m) => m.id === sessionMode);
 
   return (
     <div ref={ref} className="relative shrink-0">
       <button
         onClick={() => setOpen((prev) => !prev)}
-        title="Switch agent mode"
-        className="flex h-8 items-center gap-1.5 whitespace-nowrap rounded-md border border-border bg-transparent px-2.5 text-[0.72rem] font-semibold hover:bg-muted"
+        title="Agent mode"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className="flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-[5px] text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted"
       >
-        <span className={activeMeta ? activeMeta.color : 'text-muted-foreground'}>
-          {sessionMode ? sessionMode.toUpperCase() : 'CHAT'}
-        </span>
-        <ChevronDown size={12} className="opacity-50" />
+        <span className={`size-1.5 rounded-full ${active ? active.dot : 'bg-faint'}`} />
+        {active ? active.label.toUpperCase() : 'CHAT'}
       </button>
 
       {open && (
-        <div className="absolute bottom-[38px] left-0 z-40 min-w-[200px] animate-in zoom-in-95 overflow-hidden rounded-md border border-border bg-popover p-1 shadow-lg">
+        <div className="absolute bottom-[calc(100%+8px)] left-0 z-40 w-56 overflow-hidden rounded-xl border border-border bg-popover p-1 shadow-float">
           {MODES.map((m) => {
             const isActive = (sessionMode || '') === m.id;
             return (
               <button
                 key={m.id}
                 onClick={() => { onSetSessionMode(isActive ? '' : m.id); setOpen(false); }}
-                className={`flex w-full items-center justify-between gap-2 rounded px-3 py-2 text-left text-[0.78rem] ${
-                  isActive ? `bg-accent ${m.color}` : 'text-muted-foreground hover:bg-muted'
+                className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors ${
+                  isActive ? 'bg-accent' : 'hover:bg-muted'
                 }`}
               >
-                <div className="flex flex-col gap-0.5">
-                  <span className="font-semibold">{m.label}</span>
-                  <span className="text-[0.65rem] text-muted-foreground">{m.desc}</span>
-                </div>
-                {isActive && <ChevronRight size={14} className="shrink-0 opacity-50" />}
+                <span className={`size-1.5 shrink-0 rounded-full ${m.dot}`} />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[13px] font-semibold">{m.label}</span>
+                  <span className="block text-[11px] text-faint">{m.desc}</span>
+                </span>
+                {isActive && <Check size={14} className="shrink-0 text-primary" />}
               </button>
             );
           })}

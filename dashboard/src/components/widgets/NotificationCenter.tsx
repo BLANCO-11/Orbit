@@ -1,12 +1,11 @@
+// @ts-nocheck
 'use client';
 
 import React, { useState, useCallback } from 'react';
 import { Bell, X, AlertTriangle, CheckCircle2, Info, Cpu } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 
 /**
- * NotificationCenter — Bell icon with dropdown showing recent notifications.
- * Notifications arrive via WebSocket log events with the notification prefix.
+ * NotificationCenter — bell + dropdown of recent notification-flavored logs.
  */
 export default function NotificationCenter({ logs = [] }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -33,34 +32,39 @@ export default function NotificationCenter({ logs = [] }) {
   }, [notifications]);
 
   const getIcon = (text) => {
-    if (text.includes('[ERROR]') || text.includes('error')) return <AlertTriangle size={12} className="text-destructive" />;
-    if (text.includes('[WARN]') || text.includes('warning')) return <AlertTriangle size={12} className="text-warning" />;
-    if (text.includes('completed') || text.includes('success')) return <CheckCircle2 size={12} className="text-success" />;
-    if (text.includes('token') || text.includes('metric')) return <Cpu size={12} className="text-chart-3" />;
-    return <Info size={12} className="text-muted-foreground" />;
+    if (text.includes('[ERROR]') || text.includes('error')) return <AlertTriangle size={13} className="text-destructive" />;
+    if (text.includes('[WARN]') || text.includes('warning')) return <AlertTriangle size={13} className="text-warning" />;
+    if (text.includes('completed') || text.includes('success')) return <CheckCircle2 size={13} className="text-success" />;
+    if (text.includes('token') || text.includes('metric')) return <Cpu size={13} className="text-info" />;
+    return <Info size={13} className="text-faint" />;
   };
 
   return (
     <div className="relative">
-      <Button variant="outline" size="icon" onClick={() => setIsOpen(!isOpen)} className="relative">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        aria-label="Notifications"
+        title="Notifications"
+        className="relative grid size-8 place-items-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+      >
         <Bell size={15} />
         {unreadCount > 0 && (
-          <span className="absolute -right-1 -top-1 flex size-4 items-center justify-center rounded-full bg-primary text-[0.58rem] font-bold text-primary-foreground">
+          <span className="absolute -right-1 -top-1 grid size-4 place-items-center rounded-full bg-primary text-[9.5px] font-bold text-primary-foreground">
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}
-      </Button>
+      </button>
 
       {isOpen && (
         <>
           <div onClick={() => setIsOpen(false)} className="fixed inset-0 z-50" />
-          <div className="absolute right-0 top-full z-[55] mt-2 w-80 animate-in zoom-in-95 overflow-hidden rounded-lg border border-border bg-popover shadow-xl backdrop-blur-2xl">
-            <div className="flex items-center justify-between border-b border-border px-3.5 py-2.5">
-              <span className="text-[0.8rem] font-semibold">
-                Notifications {unreadCount > 0 && `(${unreadCount})`}
+          <div className="absolute right-0 top-[calc(100%+8px)] z-[55] w-80 overflow-hidden rounded-xl border border-border bg-popover shadow-float">
+            <div className="flex items-center justify-between border-b border-border-soft px-3.5 py-2.5">
+              <span className="text-[13px] font-semibold">
+                Notifications {unreadCount > 0 && <span className="text-faint">({unreadCount})</span>}
               </span>
               {unreadCount > 0 && (
-                <button onClick={dismissAll} className="text-[0.68rem] text-muted-foreground hover:text-foreground">
+                <button onClick={dismissAll} className="text-[11.5px] font-medium text-faint hover:text-foreground">
                   Clear all
                 </button>
               )}
@@ -68,19 +72,23 @@ export default function NotificationCenter({ logs = [] }) {
 
             <div className="max-h-80 overflow-y-auto">
               {notifications.length === 0 ? (
-                <div className="p-5 text-center text-[0.75rem] text-muted-foreground">No notifications</div>
+                <div className="p-6 text-center text-xs text-faint">You're all caught up.</div>
               ) : (
                 notifications.map((notif, i) => (
-                  <div key={i} className="flex items-start gap-2 border-b border-border px-3 py-2 text-[0.72rem] last:border-b-0">
+                  <div key={i} className="flex items-start gap-2.5 border-b border-border-soft px-3.5 py-2.5 last:border-b-0">
                     <div className="mt-0.5 shrink-0">{getIcon(notif.text)}</div>
-                    <div className="flex-1 overflow-hidden">
-                      <div className="overflow-hidden text-ellipsis whitespace-nowrap leading-normal">
+                    <div className="min-w-0 flex-1">
+                      <div className="overflow-hidden text-ellipsis whitespace-nowrap text-xs leading-normal">
                         {notif.text.replace('[Proactive Notify] ', '')}
                       </div>
-                      {notif.timestamp && <div className="mt-0.5 text-[0.62rem] text-muted-foreground">{notif.timestamp}</div>}
+                      {notif.timestamp && <div className="mt-0.5 text-[11px] text-faint">{notif.timestamp}</div>}
                     </div>
-                    <button onClick={() => dismiss(notif.text + (notif.timestamp || ''))} className="shrink-0 p-0.5 text-muted-foreground hover:text-foreground">
-                      <X size={10} />
+                    <button
+                      onClick={() => dismiss(notif.text + (notif.timestamp || ''))}
+                      aria-label="Dismiss notification"
+                      className="shrink-0 rounded p-0.5 text-faint hover:text-foreground"
+                    >
+                      <X size={11} />
                     </button>
                   </div>
                 ))
