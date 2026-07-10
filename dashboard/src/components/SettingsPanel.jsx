@@ -52,8 +52,8 @@ export default function SettingsPanel({
   const sectionLabelStyle = {
     fontSize: "0.95rem",
     fontWeight: "700",
-    color: "var(--text-main)",
-    borderBottom: "1px solid var(--border-muted)",
+    color: "var(--text-primary)",
+    borderBottom: "1px solid var(--border-subtle)",
     paddingBottom: "10px",
     marginTop: "10px",
     marginBottom: "10px",
@@ -62,7 +62,7 @@ export default function SettingsPanel({
   const fieldLabelStyle = {
     display: "block",
     fontSize: "0.75rem",
-    color: "var(--text-muted)",
+    color: "var(--text-secondary)",
     marginBottom: "4px",
     fontWeight: "600",
   };
@@ -74,7 +74,7 @@ export default function SettingsPanel({
     background: "rgba(255,255,255,0.02)",
     padding: "8px",
     borderRadius: "var(--radius-sm)",
-    border: "1px solid var(--border-color)",
+    border: "1px solid var(--border-default)",
   };
 
   const tagStyle = {
@@ -102,7 +102,7 @@ export default function SettingsPanel({
     padding: "3px 6px",
     borderRadius: "6px",
     fontSize: "0.7rem",
-    border: "1px solid var(--border-color)",
+    border: "1px solid var(--border-default)",
   };
 
   const blockedPathRowStyle = {
@@ -189,8 +189,8 @@ export default function SettingsPanel({
         style={{
           fontSize: "0.95rem",
           fontWeight: "700",
-          color: "var(--text-main)",
-          borderBottom: "1px solid var(--border-muted)",
+          color: "var(--text-primary)",
+          borderBottom: "1px solid var(--border-subtle)",
           paddingBottom: "10px",
           display: "flex",
           alignItems: "center",
@@ -319,7 +319,7 @@ export default function SettingsPanel({
 
       {/* ── Voice Response Toggle ── */}
       <div style={rowStyle}>
-        <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", fontWeight: "600" }}>
+        <span style={{ fontSize: "0.75rem", color: "var(--text-secondary)", fontWeight: "600" }}>
           VOICE RESPONSES (TTS)
         </span>
         <Switch checked={voiceResponse} onCheckedChange={setVoiceResponse} />
@@ -330,7 +330,7 @@ export default function SettingsPanel({
 
       <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginBottom: "18px" }}>
         <div style={rowStyle}>
-          <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", fontWeight: "600" }}>
+          <span style={{ fontSize: "0.75rem", color: "var(--text-secondary)", fontWeight: "600" }}>
             AUTO COMPACTION
           </span>
           <Switch
@@ -345,13 +345,13 @@ export default function SettingsPanel({
               display: "flex",
               justifyContent: "space-between",
               fontSize: "0.75rem",
-              color: "var(--text-muted)",
+              color: "var(--text-secondary)",
               marginBottom: "6px",
               fontWeight: "600",
             }}
           >
             <span>COMPACTION THRESHOLD</span>
-            <span style={{ color: "var(--primary-foreground)" }}>{autoCompactThreshold}%</span>
+            <span style={{ color: "var(--text-inverse)" }}>{autoCompactThreshold}%</span>
           </div>
           <input
             type="range"
@@ -360,7 +360,7 @@ export default function SettingsPanel({
             step="5"
             value={autoCompactThreshold}
             onChange={(e) => setAutoCompactThreshold(parseInt(e.target.value))}
-            style={{ width: "100%", accentColor: "var(--primary)", cursor: "pointer" }}
+            style={{ width: "100%", accentColor: "var(--accent-primary)", cursor: "pointer" }}
             disabled={!autoCompactEnabled}
           />
         </div>
@@ -392,8 +392,8 @@ export default function SettingsPanel({
                 borderRadius: "8px",
                 cursor: "pointer",
                 background: sessionMode === mode.id ? `${mode.color}22` : "rgba(255,255,255,0.03)",
-                border: sessionMode === mode.id ? `1px solid ${mode.color}66` : "1px solid var(--border-color)",
-                color: sessionMode === mode.id ? mode.color : "var(--text-muted)",
+                border: sessionMode === mode.id ? `1px solid ${mode.color}66` : "1px solid var(--border-default)",
+                color: sessionMode === mode.id ? mode.color : "var(--text-secondary)",
                 fontWeight: sessionMode === mode.id ? "700" : "400",
                 fontSize: "0.72rem",
                 transition: "all 0.15s ease",
@@ -409,7 +409,7 @@ export default function SettingsPanel({
         {sessionMode && (
           <div style={{
             fontSize: "0.7rem",
-            color: "var(--text-dark)",
+            color: "var(--text-tertiary)",
             padding: "4px 8px",
             background: "rgba(255,255,255,0.03)",
             borderRadius: "4px"
@@ -426,7 +426,7 @@ export default function SettingsPanel({
         <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
           {/* HITL Toggle */}
           <div style={rowStyle}>
-            <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
+            <span style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>
               Require Approval (HITL)
             </span>
             <Switch
@@ -442,7 +442,7 @@ export default function SettingsPanel({
 
           {/* Allowed Utilities */}
           <div>
-            <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", fontWeight: "600" }}>
+            <span style={{ fontSize: "0.75rem", color: "var(--text-secondary)", fontWeight: "600" }}>
               Allowed Utilities list:
             </span>
             {renderTagList(
@@ -459,7 +459,7 @@ export default function SettingsPanel({
 
           {/* Auto-Approve Commands */}
           <div>
-            <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", fontWeight: "600" }}>
+            <span style={{ fontSize: "0.75rem", color: "var(--text-secondary)", fontWeight: "600" }}>
               Auto-Approve commands:
             </span>
             {renderTagList(
@@ -478,7 +478,7 @@ export default function SettingsPanel({
           {/* Allowed Read Paths */}
           <div>
             <span
-              style={{ fontSize: "0.75rem", color: "var(--text-muted)", fontWeight: "600", display: "block", marginBottom: "3px" }}
+              style={{ fontSize: "0.75rem", color: "var(--text-secondary)", fontWeight: "600", display: "block", marginBottom: "3px" }}
             >
               Allowed Read Directories:
             </span>
@@ -497,7 +497,7 @@ export default function SettingsPanel({
           {/* Allowed Write Paths */}
           <div>
             <span
-              style={{ fontSize: "0.75rem", color: "var(--text-muted)", fontWeight: "600", display: "block", marginBottom: "3px" }}
+              style={{ fontSize: "0.75rem", color: "var(--text-secondary)", fontWeight: "600", display: "block", marginBottom: "3px" }}
             >
               Allowed Write Directories:
             </span>
@@ -516,7 +516,7 @@ export default function SettingsPanel({
           {/* Blocked Paths */}
           <div>
             <span
-              style={{ fontSize: "0.75rem", color: "var(--text-muted)", fontWeight: "600", display: "block", marginBottom: "3px" }}
+              style={{ fontSize: "0.75rem", color: "var(--text-secondary)", fontWeight: "600", display: "block", marginBottom: "3px" }}
             >
               Explicitly Blocked Directories:
             </span>
@@ -542,7 +542,7 @@ export default function SettingsPanel({
           </Button>
         </div>
       ) : (
-        <div style={{ color: "var(--text-muted)", fontSize: "0.8rem" }}>Loading settings...</div>
+        <div style={{ color: "var(--text-secondary)", fontSize: "0.8rem" }}>Loading settings...</div>
       )}
     </aside>
   );

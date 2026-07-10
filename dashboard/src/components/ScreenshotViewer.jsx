@@ -11,21 +11,21 @@ export default function ScreenshotViewer({ screenshotFile }) {
       style={{
         display: "flex",
         flexDirection: "column",
-        background: "var(--panel-bg)",
-        borderColor: "var(--border-color)",
+        background: "var(--surface-primary)",
+        borderColor: "var(--border-default)",
       }}
     >
       <CardHeader
         style={{
           padding: "10px 16px",
-          borderBottom: "1px solid var(--border-muted)",
+          borderBottom: "1px solid var(--border-subtle)",
         }}
       >
         <CardTitle
           style={{
             fontSize: "0.75rem",
             fontWeight: "600",
-            color: "var(--text-muted)",
+            color: "var(--text-secondary)",
           }}
         >
           🌐 Browser Preview (Lightpanda)

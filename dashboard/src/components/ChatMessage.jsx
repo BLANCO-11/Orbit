@@ -78,7 +78,7 @@ function ToolGroupAccordion({ tools, expandedTools, toggleTool, getToolSummary, 
     <div style={{
       width: "100%",
       maxWidth: "600px",
-      border: "1px solid var(--border-color)",
+      border: "1px solid var(--border-default)",
       borderRadius: "8px",
       background: "rgba(0, 0, 0, 0.15)",
       marginTop: "8px",
@@ -104,24 +104,24 @@ function ToolGroupAccordion({ tools, expandedTools, toggleTool, getToolSummary, 
       >
         <div style={{ display: "flex", alignItems: "center", gap: "8px", flex: "1", overflow: "hidden" }}>
           {isRunning ? (
-            <Loader2 className="animate-spin" style={{ width: "13px", height: "13px", color: "var(--warning)", flexShrink: 0 }} />
+            <Loader2 className="animate-spin" style={{ width: "13px", height: "13px", color: "var(--accent-warning)", flexShrink: 0 }} />
           ) : (
-            <CheckCircle2 style={{ width: "13px", height: "13px", color: "var(--success)", flexShrink: 0 }} />
+            <CheckCircle2 style={{ width: "13px", height: "13px", color: "var(--accent-success)", flexShrink: 0 }} />
           )}
           
-          <span style={{ fontWeight: "600", color: "var(--text-main)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <span style={{ fontWeight: "600", color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {isRunning 
               ? getAgentActivityText(runningTools[runningTools.length - 1])
               : `Ran ${totalCalls} command${totalCalls > 1 ? "s" : ""}`
             }
           </span>
 
-          <span style={{ fontSize: "0.7rem", color: "var(--text-dark)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <span style={{ fontSize: "0.7rem", color: "var(--text-tertiary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             ({uniqueNames})
           </span>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: "4px", color: "var(--text-muted)", marginLeft: "8px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "4px", color: "var(--text-secondary)", marginLeft: "8px" }}>
           <span style={{ fontSize: "0.7rem" }}>{isExpanded ? "Collapse" : "Details"}</span>
           {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
         </div>
@@ -131,7 +131,7 @@ function ToolGroupAccordion({ tools, expandedTools, toggleTool, getToolSummary, 
       {isExpanded && (
         <div style={{
           padding: "10px",
-          borderTop: "1px solid var(--border-color)",
+          borderTop: "1px solid var(--border-default)",
           background: "rgba(0, 0, 0, 0.2)",
           display: "flex",
           flexDirection: "column",
@@ -202,7 +202,7 @@ function ModeSuggestionAccordion({ message, currentMode, onSetSessionMode, onSet
           <Shield size={16} />
           <span>Action Paused: Mode Change Suggested</span>
         </div>
-        <div style={{ color: "var(--text-muted)", display: "flex", alignItems: "center", gap: "4px" }}>
+        <div style={{ color: "var(--text-secondary)", display: "flex", alignItems: "center", gap: "4px" }}>
           <span style={{ fontSize: "0.7rem" }}>{isExpanded ? "Collapse" : "Expand"}</span>
           {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
         </div>
@@ -211,7 +211,7 @@ function ModeSuggestionAccordion({ message, currentMode, onSetSessionMode, onSet
       {/* Content */}
       {isExpanded && (
         <div style={{ padding: "14px", display: "flex", flexDirection: "column", gap: "12px" }}>
-          <div style={{ color: "var(--text-main)", lineHeight: "1.45" }}>
+          <div style={{ color: "var(--text-primary)", lineHeight: "1.45" }}>
             {message.reason || "The agent needs a different mode to perform this action."}
           </div>
           
@@ -219,16 +219,16 @@ function ModeSuggestionAccordion({ message, currentMode, onSetSessionMode, onSet
             background: "rgba(0,0,0,0.2)",
             padding: "8px 12px",
             borderRadius: "6px",
-            border: "1px solid var(--border-color)",
+            border: "1px solid var(--border-default)",
             display: "flex",
             flexDirection: "column",
             gap: "2px"
           }}>
-            <div style={{ fontSize: "0.68rem", color: "var(--text-dark)", fontWeight: "700", letterSpacing: "0.5px" }}>CURRENT MODE</div>
+            <div style={{ fontSize: "0.68rem", color: "var(--text-tertiary)", fontWeight: "700", letterSpacing: "0.5px" }}>CURRENT MODE</div>
             <div style={{ fontWeight: "700", color: current.color, display: "flex", alignItems: "center", gap: "6px" }}>
               {React.createElement(current.icon, { size: 14 })}
               <span>{current.label.toUpperCase()}</span>
-              <span style={{ fontWeight: "400", color: "var(--text-muted)", fontSize: "0.75rem" }}>— {current.desc}</span>
+              <span style={{ fontWeight: "400", color: "var(--text-secondary)", fontSize: "0.75rem" }}>— {current.desc}</span>
             </div>
           </div>
           
@@ -238,7 +238,7 @@ function ModeSuggestionAccordion({ message, currentMode, onSetSessionMode, onSet
             gap: "8px",
             marginTop: "4px"
           }}>
-            <div style={{ fontSize: "0.7rem", fontWeight: "600", color: "var(--text-muted)" }}>SELECT NEW MODE TO PROCEED:</div>
+            <div style={{ fontSize: "0.7rem", fontWeight: "600", color: "var(--text-secondary)" }}>SELECT NEW MODE TO PROCEED:</div>
             <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
               {Object.entries(modesInfo).map(([key, mInfo]) => {
                 const isCurrent = currentKey === key;
@@ -262,24 +262,24 @@ function ModeSuggestionAccordion({ message, currentMode, onSetSessionMode, onSet
                         ? "1px solid rgba(255,255,255,0.1)"
                         : isSuggested
                           ? "1px solid rgba(245, 158, 11, 0.3)"
-                          : "1px solid var(--border-color)",
+                          : "1px solid var(--border-default)",
                       opacity: isCurrent ? 0.6 : 1,
                     }}
                   >
                     <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                       {React.createElement(mInfo.icon, { size: 16, style: { color: mInfo.color } })}
                       <div>
-                        <div style={{ fontWeight: "700", color: isCurrent ? "var(--text-muted)" : "var(--text-main)" }}>
+                        <div style={{ fontWeight: "700", color: isCurrent ? "var(--text-secondary)" : "var(--text-primary)" }}>
                           {mInfo.label} {isSuggested && <span style={{ fontSize: "0.65rem", color: "#fbbf24", background: "rgba(245,158,11,0.15)", padding: "1px 4px", borderRadius: "4px", marginLeft: "4px" }}>SUGGESTED</span>}
                         </div>
-                        <div style={{ fontSize: "0.68rem", color: "var(--text-muted)" }}>{mInfo.desc}</div>
+                        <div style={{ fontSize: "0.68rem", color: "var(--text-secondary)" }}>{mInfo.desc}</div>
                       </div>
                     </div>
                     
                     <div style={{ display: "flex", gap: "6px" }}>
                       {isCurrent ? (
-                        <div style={{ display: "flex", alignItems: "center", gap: "4px", color: "var(--text-muted)", fontSize: "0.75rem", fontWeight: "600" }}>
-                          <Check size={14} style={{ color: "var(--success)" }} /> Active
+                        <div style={{ display: "flex", alignItems: "center", gap: "4px", color: "var(--text-secondary)", fontSize: "0.75rem", fontWeight: "600" }}>
+                          <Check size={14} style={{ color: "var(--accent-success)" }} /> Active
                         </div>
                       ) : (
                         <>
@@ -288,9 +288,9 @@ function ModeSuggestionAccordion({ message, currentMode, onSetSessionMode, onSet
                             style={{
                               padding: "4px 8px",
                               borderRadius: "4px",
-                              border: "1px solid var(--border-color)",
+                              border: "1px solid var(--border-default)",
                               background: "rgba(255,255,255,0.05)",
-                              color: "var(--text-main)",
+                              color: "var(--text-primary)",
                               fontSize: "0.72rem",
                               cursor: "pointer",
                               transition: "all 0.1s ease"
@@ -306,9 +306,9 @@ function ModeSuggestionAccordion({ message, currentMode, onSetSessionMode, onSet
                               style={{
                                 padding: "4px 10px",
                                 borderRadius: "4px",
-                                border: isSuggested ? "1px solid #fbbf24" : "1px solid var(--primary)",
-                                background: isSuggested ? "rgba(245, 158, 11, 0.25)" : "var(--primary)",
-                                color: isSuggested ? "#fbbf24" : "var(--primary-foreground)",
+                                border: isSuggested ? "1px solid #fbbf24" : "1px solid var(--accent-primary)",
+                                background: isSuggested ? "rgba(245, 158, 11, 0.25)" : "var(--accent-primary)",
+                                color: isSuggested ? "#fbbf24" : "var(--text-inverse)",
                                 fontSize: "0.72rem",
                                 fontWeight: "600",
                                 cursor: "pointer",
@@ -317,8 +317,8 @@ function ModeSuggestionAccordion({ message, currentMode, onSetSessionMode, onSet
                                 gap: "4px",
                                 transition: "all 0.1s ease"
                               }}
-                              onMouseEnter={e => e.currentTarget.style.background = isSuggested ? "rgba(245, 158, 11, 0.35)" : "var(--primary-hover)"}
-                              onMouseLeave={e => e.currentTarget.style.background = isSuggested ? "rgba(245, 158, 11, 0.25)" : "var(--primary)"}
+                              onMouseEnter={e => e.currentTarget.style.background = isSuggested ? "rgba(245, 158, 11, 0.35)" : "var(--accent-primary-hover)"}
+                              onMouseLeave={e => e.currentTarget.style.background = isSuggested ? "rgba(245, 158, 11, 0.25)" : "var(--accent-primary)"}
                             >
                               <Play size={10} fill="currentColor" /> Switch & Re-run
                             </button>
@@ -374,14 +374,14 @@ export default function ChatMessage({ message, renderMarkdown, expandedTools, to
       }}
     >
       <div style={{
-        background: isUser ? "var(--primary)" : "var(--input-bg)",
+        background: isUser ? "var(--accent-primary)" : "var(--surface-secondary)",
         padding: "10px 14px",
         borderRadius: isUser ? "14px 14px 2px 14px" : "14px 14px 14px 2px",
         maxWidth: "85%",
         fontSize: "0.9rem",
-        border: isUser ? "none" : "1px solid var(--border-color)",
-        color: isUser ? "var(--primary-foreground)" : "var(--text-main)",
-        boxShadow: isUser ? "0 4px 12px var(--primary-glow)" : "none",
+        border: isUser ? "none" : "1px solid var(--border-default)",
+        color: isUser ? "var(--text-inverse)" : "var(--text-primary)",
+        boxShadow: isUser ? "0 4px 12px var(--accent-primary-glow)" : "none",
         width: "fit-content"
       }}>
         {isUser ? (
@@ -398,7 +398,7 @@ export default function ChatMessage({ message, renderMarkdown, expandedTools, to
       {!isUser && message.latency && (
         <div style={{
           fontSize: "0.72rem",
-          color: "var(--text-muted)",
+          color: "var(--text-secondary)",
           marginTop: "4px",
           marginLeft: "8px",
           fontStyle: "italic",
@@ -429,7 +429,7 @@ export default function ChatMessage({ message, renderMarkdown, expandedTools, to
  */
 export function ChatEmptyState() {
   return (
-    <div style={{ margin: "100px auto", textAlign: "center", color: "var(--text-muted)", maxWidth: "380px" }}>
+    <div style={{ margin: "100px auto", textAlign: "center", color: "var(--text-secondary)", maxWidth: "380px" }}>
       <h3 style={{ color: "#fff", marginBottom: "8px", fontWeight: "600" }}>AegisAgent Active</h3>
       <p style={{ fontSize: "0.85rem" }}>
         Speak or type to delegate OS operations, write code, run audits, or browse web applications.

@@ -65,7 +65,7 @@ export default function ExecutionPlan({ executionPlan, reasoningHistory = [] }) 
       return (
         <div style={{
           display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-          height: "100%", color: "var(--text-muted)", gap: "10px", minHeight: "150px",
+          height: "100%", color: "var(--text-secondary)", gap: "10px", minHeight: "150px",
         }}>
           <Loader2 className="animate-spin" style={{ width: "16px", height: "16px" }} />
           <span style={{ fontSize: "0.75rem" }}>
@@ -78,11 +78,11 @@ export default function ExecutionPlan({ executionPlan, reasoningHistory = [] }) 
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: "10px", height: "100%" }}>
         <div style={{
-          fontSize: "0.7rem", fontWeight: "600", color: "var(--text-muted)",
+          fontSize: "0.7rem", fontWeight: "600", color: "var(--text-secondary)",
           textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "4px",
           display: "flex", alignItems: "center", gap: "6px"
         }}>
-          <span style={{ width: "4px", height: "4px", borderRadius: "50%", background: "var(--text-muted)" }} />
+          <span style={{ width: "4px", height: "4px", borderRadius: "50%", background: "var(--text-secondary)" }} />
           Reasoning Trail
           <span style={{ fontSize: "0.6rem", opacity: 0.6 }}>({groupsWithContent.length} queries)</span>
         </div>
@@ -110,7 +110,7 @@ export default function ExecutionPlan({ executionPlan, reasoningHistory = [] }) 
               <div
                 key={gIdx}
                 style={{
-                  border: "1px solid var(--border-color)",
+                  border: "1px solid var(--border-default)",
                   borderRadius: "6px",
                   background: "rgba(255,255,255,0.02)",
                   overflow: "hidden",
@@ -123,19 +123,19 @@ export default function ExecutionPlan({ executionPlan, reasoningHistory = [] }) 
                   style={{
                     display: "flex", alignItems: "center", justifyContent: "space-between",
                     padding: "7px 10px", cursor: "pointer", userSelect: "none",
-                    borderBottom: !isCollapsed ? "1px solid var(--border-color)" : "none",
+                    borderBottom: !isCollapsed ? "1px solid var(--border-default)" : "none",
                     background: isCurrentGroup && !isCollapsed ? "rgba(59, 130, 246, 0.04)" : "transparent"
                   }}
                 >
                   <div style={{ display: "flex", alignItems: "center", gap: "6px", overflow: "hidden" }}>
                     <span style={{
                       width: "4px", height: "4px", borderRadius: "50%",
-                      background: isCurrentGroup ? "var(--info)" : "var(--text-dark)",
+                      background: isCurrentGroup ? "var(--accent-info)" : "var(--text-tertiary)",
                       flexShrink: 0
                     }} />
                     <span style={{
                       fontSize: "0.7rem", fontWeight: isCurrentGroup ? "600" : "400",
-                      color: isCurrentGroup ? "var(--info)" : "var(--text-muted)",
+                      color: isCurrentGroup ? "var(--accent-info)" : "var(--text-secondary)",
                       overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                       maxWidth: "240px"
                     }}>
@@ -143,7 +143,7 @@ export default function ExecutionPlan({ executionPlan, reasoningHistory = [] }) 
                     </span>
                     {group.query && (
                       <span style={{
-                        fontSize: "0.6rem", color: "var(--text-dark)",
+                        fontSize: "0.6rem", color: "var(--text-tertiary)",
                         overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                         maxWidth: "120px"
                       }}>
@@ -151,14 +151,14 @@ export default function ExecutionPlan({ executionPlan, reasoningHistory = [] }) 
                       </span>
                     )}
                     {group.queryTimestamp && (
-                      <span style={{ fontSize: "0.55rem", color: "var(--text-dark)", flexShrink: 0 }}>
+                      <span style={{ fontSize: "0.55rem", color: "var(--text-tertiary)", flexShrink: 0 }}>
                         {group.queryTimestamp}
                       </span>
                     )}
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: "6px", flexShrink: 0 }}>
                     {entryCount > 0 && (
-                      <span style={{ fontSize: "0.6rem", color: "var(--text-dark)" }}>
+                      <span style={{ fontSize: "0.6rem", color: "var(--text-tertiary)" }}>
                         {entryCount} step{entryCount !== 1 ? "s" : ""}
                       </span>
                     )}
@@ -172,7 +172,7 @@ export default function ExecutionPlan({ executionPlan, reasoningHistory = [] }) 
                     {/* If no entries but has live executionPlan, show it inline */}
                     {entryCount === 0 && isCurrentGroup && executionPlan && (
                       <div style={{
-                        padding: "6px 8px", fontSize: "0.75rem", color: "var(--text-main)",
+                        padding: "6px 8px", fontSize: "0.75rem", color: "var(--text-primary)",
                         whiteSpace: "pre-wrap", lineHeight: "1.5", maxHeight: "320px",
                         overflowY: "auto", fontFamily: "ui-monospace, monospace",
                         background: "rgba(0,0,0,0.1)", borderRadius: "4px"
@@ -184,7 +184,7 @@ export default function ExecutionPlan({ executionPlan, reasoningHistory = [] }) 
                     {/* Individual reasoning entries */}
                     {entryCount === 1 && (
                       <div style={{
-                        padding: "6px 8px", fontSize: "0.73rem", color: "var(--text-main)",
+                        padding: "6px 8px", fontSize: "0.73rem", color: "var(--text-primary)",
                         whiteSpace: "pre-wrap", lineHeight: "1.5", maxHeight: "320px",
                         overflowY: "auto", fontFamily: "ui-monospace, monospace",
                         background: "rgba(0,0,0,0.1)", borderRadius: "4px",
@@ -219,14 +219,14 @@ export default function ExecutionPlan({ executionPlan, reasoningHistory = [] }) 
                             <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
                               <span style={{
                                 width: "3px", height: "3px", borderRadius: "50%",
-                                background: isLastEntry ? "var(--info)" : "var(--text-dark)",
+                                background: isLastEntry ? "var(--accent-info)" : "var(--text-tertiary)",
                                 flexShrink: 0
                               }} />
-                              <span style={{ fontSize: "0.65rem", color: "var(--text-dark)" }}>
+                              <span style={{ fontSize: "0.65rem", color: "var(--text-tertiary)" }}>
                                 Step {eIdx + 1}
                               </span>
                               {entry.timestamp && (
-                                <span style={{ fontSize: "0.55rem", color: "var(--text-dark)" }}>
+                                <span style={{ fontSize: "0.55rem", color: "var(--text-tertiary)" }}>
                                   {entry.timestamp}
                                 </span>
                               )}
@@ -238,7 +238,7 @@ export default function ExecutionPlan({ executionPlan, reasoningHistory = [] }) 
                           {!isEntryCollapsed && (
                             <div style={{
                               padding: "4px 8px 6px 8px", fontSize: "0.73rem",
-                              color: "var(--text-main)", whiteSpace: "pre-wrap",
+                              color: "var(--text-primary)", whiteSpace: "pre-wrap",
                               lineHeight: "1.5", maxHeight: isLastEntry ? "320px" : "100px",
                               overflowY: "auto", fontFamily: "ui-monospace, monospace",
                               opacity: isLastEntry ? 1 : 0.7
@@ -255,7 +255,7 @@ export default function ExecutionPlan({ executionPlan, reasoningHistory = [] }) 
                       entries.length > 0 && 
                       executionPlan !== entries[entries.length - 1].content && (
                       <div style={{
-                        padding: "6px 8px", fontSize: "0.73rem", color: "var(--info)",
+                        padding: "6px 8px", fontSize: "0.73rem", color: "var(--accent-info)",
                         whiteSpace: "pre-wrap", lineHeight: "1.5", maxHeight: "160px",
                         overflowY: "auto", fontFamily: "ui-monospace, monospace",
                         background: "rgba(59, 130, 246, 0.04)", borderRadius: "4px",
@@ -279,7 +279,7 @@ export default function ExecutionPlan({ executionPlan, reasoningHistory = [] }) 
     return (
       <div style={{
         display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-        height: "100%", color: "var(--text-muted)", gap: "10px", minHeight: "150px",
+        height: "100%", color: "var(--text-secondary)", gap: "10px", minHeight: "150px",
       }}>
         <Loader2 className="animate-spin" style={{ width: "16px", height: "16px" }} />
         <span style={{ fontSize: "0.75rem" }}>Waiting for reasoning...</span>
@@ -290,19 +290,19 @@ export default function ExecutionPlan({ executionPlan, reasoningHistory = [] }) 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "10px", height: "100%" }}>
       <div style={{
-        fontSize: "0.7rem", fontWeight: "600", color: "var(--text-muted)",
+        fontSize: "0.7rem", fontWeight: "600", color: "var(--text-secondary)",
         textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "4px",
         display: "flex", alignItems: "center", gap: "6px"
       }}>
-        <span style={{ width: "4px", height: "4px", borderRadius: "50%", background: "var(--text-muted)" }} />
+        <span style={{ width: "4px", height: "4px", borderRadius: "50%", background: "var(--text-secondary)" }} />
         Current Reasoning
       </div>
       <div
         ref={scrollRef}
         style={{
-          flex: "1", fontSize: "0.75rem", color: "var(--text-main)",
+          flex: "1", fontSize: "0.75rem", color: "var(--text-primary)",
           whiteSpace: "pre-wrap", lineHeight: "1.5", padding: "10px",
-          background: "rgba(255,255,255,0.02)", border: "1px solid var(--border-color)",
+          background: "rgba(255,255,255,0.02)", border: "1px solid var(--border-default)",
           borderRadius: "6px", minHeight: 0, overflowY: "auto",
           fontFamily: "ui-monospace, monospace", scrollBehavior: "smooth"
         }}

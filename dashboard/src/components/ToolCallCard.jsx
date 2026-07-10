@@ -26,7 +26,7 @@ export default function ToolCallCard({ tool, isExpanded, onToggle, getToolSummar
 
   return (
     <div style={{
-      border: "1px solid var(--border-color)",
+      border: "1px solid var(--border-default)",
       borderRadius: "6px",
       background: "rgba(0,0,0,0.2)",
       overflow: "hidden"
@@ -47,16 +47,16 @@ export default function ToolCallCard({ tool, isExpanded, onToggle, getToolSummar
       >
         <div style={{ display: "flex", alignItems: "center", gap: "8px", flex: "1", overflow: "hidden" }}>
           {tool.status === "running" ? (
-            <Loader2 className="animate-spin" style={{ width: "12px", height: "12px", color: "var(--warning)", flexShrink: 0 }} />
+            <Loader2 className="animate-spin" style={{ width: "12px", height: "12px", color: "var(--accent-warning)", flexShrink: 0 }} />
           ) : (
-            <CheckCircle2 style={{ width: "12px", height: "12px", color: "var(--success)", flexShrink: 0 }} />
+            <CheckCircle2 style={{ width: "12px", height: "12px", color: "var(--accent-success)", flexShrink: 0 }} />
           )}
-          <ToolIcon style={{ width: "12px", height: "12px", color: "var(--text-muted)", flexShrink: 0 }} />
-          <span style={{ color: "var(--text-main)", fontWeight: "500", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <ToolIcon style={{ width: "12px", height: "12px", color: "var(--text-secondary)", flexShrink: 0 }} />
+          <span style={{ color: "var(--text-primary)", fontWeight: "500", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {getToolSummary(tool)}
           </span>
         </div>
-        <div style={{ color: "var(--text-muted)", display: "flex", alignItems: "center", marginLeft: "8px" }}>
+        <div style={{ color: "var(--text-secondary)", display: "flex", alignItems: "center", marginLeft: "8px" }}>
           {isExpanded ? <ChevronDown style={{ width: "14px", height: "14px" }} /> : <ChevronRight style={{ width: "14px", height: "14px" }} />}
         </div>
       </div>
@@ -65,7 +65,7 @@ export default function ToolCallCard({ tool, isExpanded, onToggle, getToolSummar
       {isExpanded && (
         <div style={{
           padding: "8px 10px",
-          borderTop: "1px solid var(--border-color)",
+          borderTop: "1px solid var(--border-default)",
           background: "#0c0c0e",
           fontSize: "0.75rem",
           fontFamily: "ui-monospace, monospace"
@@ -73,7 +73,7 @@ export default function ToolCallCard({ tool, isExpanded, onToggle, getToolSummar
           {/* Arguments Block */}
           {tool.arguments && Object.keys(tool.arguments).length > 0 && (
             <div style={{ marginBottom: "6px" }}>
-              <div style={{ color: "var(--text-dark)", marginBottom: "2px", fontSize: "0.65rem", textTransform: "uppercase" }}>Arguments:</div>
+              <div style={{ color: "var(--text-tertiary)", marginBottom: "2px", fontSize: "0.65rem", textTransform: "uppercase" }}>Arguments:</div>
               <pre style={{
                 background: "rgba(255,255,255,0.03)",
                 padding: "5px",
@@ -86,7 +86,7 @@ export default function ToolCallCard({ tool, isExpanded, onToggle, getToolSummar
 
           {/* Output Block */}
           <div>
-            <div style={{ color: "var(--text-dark)", marginBottom: "2px", fontSize: "0.65rem", textTransform: "uppercase" }}>Output:</div>
+            <div style={{ color: "var(--text-tertiary)", marginBottom: "2px", fontSize: "0.65rem", textTransform: "uppercase" }}>Output:</div>
             <pre style={{
               background: "rgba(0,0,0,0.4)",
               padding: "6px",

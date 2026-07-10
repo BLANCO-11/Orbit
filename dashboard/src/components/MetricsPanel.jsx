@@ -8,7 +8,7 @@ function MetricCard({ label, value, color }) {
     <div
       style={{
         background: "rgba(255,255,255,0.02)",
-        border: "1px solid var(--border-color)",
+        border: "1px solid var(--border-default)",
         padding: "8px 12px",
         borderRadius: "6px",
       }}
@@ -16,7 +16,7 @@ function MetricCard({ label, value, color }) {
       <div
         style={{
           fontSize: "0.65rem",
-          color: "var(--text-muted)",
+          color: "var(--text-secondary)",
           marginBottom: "2px",
         }}
       >
@@ -41,7 +41,7 @@ function SectionHeader({ icon, title }) {
       style={{
         fontSize: "0.75rem",
         fontWeight: "700",
-        color: "var(--text-muted)",
+        color: "var(--text-secondary)",
         textTransform: "uppercase",
         letterSpacing: "1px",
         marginBottom: "8px",
@@ -97,7 +97,7 @@ function SubagentPanel({ subagent }) {
   return (
     <div
       style={{
-        border: isActive ? `1px solid ${stateColor}44` : "1px solid var(--border-color)",
+        border: isActive ? `1px solid ${stateColor}44` : "1px solid var(--border-default)",
         borderRadius: "8px",
         background: isActive ? `${stateColor}08` : "rgba(255,255,255,0.01)",
         overflow: "hidden",
@@ -126,13 +126,13 @@ function SubagentPanel({ subagent }) {
             flexShrink: 0,
             transition: "all 0.3s ease"
           }} />
-          <Bot size={12} style={{ flexShrink: 0, color: "var(--text-muted)" }} />
+          <Bot size={12} style={{ flexShrink: 0, color: "var(--text-secondary)" }} />
           
           <div style={{ display: "flex", flexDirection: "column", gap: "1px", overflow: "hidden", flex: "1" }}>
             {/* Name */}
             <span style={{
               fontWeight: isActive ? "600" : "400",
-              color: isActive ? "#fff" : "var(--text-main)",
+              color: isActive ? "#fff" : "var(--text-primary)",
               fontSize: "0.75rem",
               overflow: "hidden",
               textOverflow: "ellipsis",
@@ -169,7 +169,7 @@ function SubagentPanel({ subagent }) {
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "4px", flexShrink: 0 }}>
           {subagent.toolCalls > 0 && (
-            <span style={{ fontSize: "0.6rem", color: "var(--text-dark)" }}>
+            <span style={{ fontSize: "0.6rem", color: "var(--text-tertiary)" }}>
               {subagent.toolCalls} t
             </span>
           )}
@@ -181,7 +181,7 @@ function SubagentPanel({ subagent }) {
       {expanded && (
         <div style={{
           padding: "8px 10px",
-          borderTop: "1px solid var(--border-color)",
+          borderTop: "1px solid var(--border-default)",
           background: "rgba(0,0,0,0.15)",
           fontSize: "0.7rem",
           display: "flex",
@@ -199,7 +199,7 @@ function SubagentPanel({ subagent }) {
               alignItems: "center",
               justifyContent: "space-between"
             }}>
-              <span style={{ color: "var(--text-muted)", fontSize: "0.65rem" }}>Current Action</span>
+              <span style={{ color: "var(--text-secondary)", fontSize: "0.65rem" }}>Current Action</span>
               <span style={{ color: stateColor, fontWeight: "600", fontSize: "0.7rem" }}>{actionLabel}</span>
             </div>
           )}
@@ -207,7 +207,7 @@ function SubagentPanel({ subagent }) {
           {/* Inherited permissions */}
           {subagent.inheritedMode && (
             <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span style={{ color: "var(--text-muted)" }}>Permissions</span>
+              <span style={{ color: "var(--text-secondary)" }}>Permissions</span>
               <span style={{
                 color: subagent.inheritedMode === "edit" ? "#fbbf24" :
                        subagent.inheritedMode === "yolo" ? "#f87171" :
@@ -222,19 +222,19 @@ function SubagentPanel({ subagent }) {
           {/* Timeline */}
           {subagent.time && (
             <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span style={{ color: "var(--text-muted)" }}>Started</span>
-              <span style={{ color: "var(--text-main)" }}>{subagent.time}</span>
+              <span style={{ color: "var(--text-secondary)" }}>Started</span>
+              <span style={{ color: "var(--text-primary)" }}>{subagent.time}</span>
             </div>
           )}
           {subagent.timeEnd && (
             <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span style={{ color: "var(--text-muted)" }}>Completed</span>
-              <span style={{ color: "var(--text-main)" }}>{subagent.timeEnd}</span>
+              <span style={{ color: "var(--text-secondary)" }}>Completed</span>
+              <span style={{ color: "var(--text-primary)" }}>{subagent.timeEnd}</span>
             </div>
           )}
           {subagent.tokens > 0 && (
             <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span style={{ color: "var(--text-muted)" }}>Token Usage</span>
+              <span style={{ color: "var(--text-secondary)" }}>Token Usage</span>
               <span style={{ color: "#a78bfa" }}>{(subagent.tokens || 0).toLocaleString()} tkn</span>
             </div>
           )}
@@ -248,10 +248,10 @@ function SubagentPanel({ subagent }) {
               borderRadius: "4px",
               border: "1px solid rgba(59, 130, 246, 0.12)"
             }}>
-              <div style={{ color: "var(--text-muted)", marginBottom: "3px", fontSize: "0.65rem" }}>
+              <div style={{ color: "var(--text-secondary)", marginBottom: "3px", fontSize: "0.65rem" }}>
                 Recent Reasoning
               </div>
-              <div style={{ color: "var(--text-main)", whiteSpace: "pre-wrap", fontSize: "0.7rem" }}>
+              <div style={{ color: "var(--text-primary)", whiteSpace: "pre-wrap", fontSize: "0.7rem" }}>
                 {subagent.reasoning.substring(0, 200)}{subagent.reasoning.length > 200 ? "..." : ""}
               </div>
             </div>
@@ -265,7 +265,7 @@ function SubagentPanel({ subagent }) {
               background: "rgba(0,0,0,0.2)",
               borderRadius: "4px"
             }}>
-              <div style={{ color: "var(--text-muted)", marginBottom: "3px", fontSize: "0.65rem" }}>
+              <div style={{ color: "var(--text-secondary)", marginBottom: "3px", fontSize: "0.65rem" }}>
                 Tool Calls ({subagent.toolCalls})
               </div>
               {(subagent.recentToolCalls || []).length > 0 ? (
@@ -275,15 +275,15 @@ function SubagentPanel({ subagent }) {
                     justifyContent: "space-between",
                     fontSize: "0.65rem",
                     padding: "2px 0",
-                    color: "var(--text-main)",
+                    color: "var(--text-primary)",
                     borderBottom: i < (subagent.recentToolCalls || []).length - 1 ? "1px solid rgba(255,255,255,0.04)" : "none"
                   }}>
                     <span>{tc.name}</span>
-                    <span style={{ color: "var(--text-dark)" }}>{tc.status}</span>
+                    <span style={{ color: "var(--text-tertiary)" }}>{tc.status}</span>
                   </div>
                 ))
               ) : (
-                <span style={{ color: "var(--text-dark)", fontSize: "0.65rem" }}>
+                <span style={{ color: "var(--text-tertiary)", fontSize: "0.65rem" }}>
                   {subagent.toolCalls} total (tracked internally)
                 </span>
               )}
@@ -368,8 +368,8 @@ export default function MetricsPanel({ metrics, status, approvalsHistory }) {
                 fontWeight: "600",
                 borderRadius: "6px",
                 background: activeSubagentTab === "all" ? "rgba(59, 130, 246, 0.15)" : "rgba(255,255,255,0.03)",
-                border: activeSubagentTab === "all" ? "1px solid rgba(59, 130, 246, 0.3)" : "1px solid var(--border-color)",
-                color: activeSubagentTab === "all" ? "#60a5fa" : "var(--text-muted)",
+                border: activeSubagentTab === "all" ? "1px solid rgba(59, 130, 246, 0.3)" : "1px solid var(--border-default)",
+                color: activeSubagentTab === "all" ? "#60a5fa" : "var(--text-secondary)",
                 cursor: "pointer",
                 transition: "all 0.12s ease"
               }}
@@ -396,10 +396,10 @@ export default function MetricsPanel({ metrics, status, approvalsHistory }) {
                       "rgba(255,255,255,0.03)",
                     border: activeSubagentTab === sa.name ? 
                       `1px solid ${saStateColor}50` :
-                      "1px solid var(--border-color)",
+                      "1px solid var(--border-default)",
                     color: activeSubagentTab === sa.name ? 
                       saStateColor : 
-                      "var(--text-muted)",
+                      "var(--text-secondary)",
                     cursor: "pointer",
                     transition: "all 0.12s ease",
                     display: "flex",
@@ -428,7 +428,7 @@ export default function MetricsPanel({ metrics, status, approvalsHistory }) {
             paddingRight: "4px",
           }}>
             {displayedSubagents.length === 0 ? (
-              <div style={{ fontSize: "0.75rem", color: "var(--text-dark)", fontStyle: "italic" }}>
+              <div style={{ fontSize: "0.75rem", color: "var(--text-tertiary)", fontStyle: "italic" }}>
                 No subagents match this filter.
               </div>
             ) : (
@@ -457,7 +457,7 @@ export default function MetricsPanel({ metrics, status, approvalsHistory }) {
             <div
               style={{
                 fontSize: "0.75rem",
-                color: "var(--text-dark)",
+                color: "var(--text-tertiary)",
                 fontStyle: "italic",
               }}
             >
@@ -473,8 +473,8 @@ export default function MetricsPanel({ metrics, status, approvalsHistory }) {
                   background: "rgba(0,0,0,0.15)",
                   borderLeft:
                     feed.type === "start"
-                      ? "2px solid var(--warning)"
-                      : "2px solid var(--success)",
+                      ? "2px solid var(--accent-warning)"
+                      : "2px solid var(--accent-success)",
                   padding: "6px 10px",
                   borderRadius: "0 6px 6px 0",
                   fontSize: "0.75rem",
@@ -487,17 +487,17 @@ export default function MetricsPanel({ metrics, status, approvalsHistory }) {
                     marginBottom: "2px",
                   }}
                 >
-                  <span style={{ color: "var(--text-main)", fontWeight: "500" }}>
+                  <span style={{ color: "var(--text-primary)", fontWeight: "500" }}>
                     {feed.text}
                   </span>
-                  <span style={{ fontSize: "0.65rem", color: "var(--text-dark)" }}>
+                  <span style={{ fontSize: "0.65rem", color: "var(--text-tertiary)" }}>
                     {feed.timestamp}
                   </span>
                 </div>
                 <div
                   style={{
                     fontSize: "0.65rem",
-                    color: feed.type === "start" ? "var(--warning)" : "var(--success)",
+                    color: feed.type === "start" ? "var(--accent-warning)" : "var(--accent-success)",
                   }}
                 >
                   {feed.type === "start"
@@ -526,13 +526,13 @@ export default function MetricsPanel({ metrics, status, approvalsHistory }) {
             <div
               style={{
                 fontSize: "0.75rem",
-                color: "var(--text-dark)",
+                color: "var(--text-tertiary)",
                 fontStyle: "italic",
                 padding: "12px",
                 textAlign: "center",
                 background: "rgba(0,0,0,0.1)",
                 borderRadius: "8px",
-                border: "1px dashed var(--border-color)"
+                border: "1px dashed var(--border-default)"
               }}
             >
               <UserCheck size={16} style={{ marginBottom: "4px", opacity: 0.5 }} />
@@ -597,12 +597,12 @@ export default function MetricsPanel({ metrics, status, approvalsHistory }) {
                         {app.status === "pending" ? "⏳ Pending" : app.status === "approved" ? "✅ Approved" : "❌ Denied"}
                       </span>
                       {app.resolvedBy && (
-                        <span style={{ fontSize: "0.6rem", color: "var(--text-dark)" }}>
+                        <span style={{ fontSize: "0.6rem", color: "var(--text-tertiary)" }}>
                           by {app.resolvedBy}
                         </span>
                       )}
                     </div>
-                    <span style={{ fontSize: "0.65rem", color: "var(--text-dark)" }}>
+                    <span style={{ fontSize: "0.65rem", color: "var(--text-tertiary)" }}>
                       {app.time}
                     </span>
                   </div>
@@ -614,7 +614,7 @@ export default function MetricsPanel({ metrics, status, approvalsHistory }) {
                       padding: "5px 8px",
                       borderRadius: "4px",
                       overflowX: "auto",
-                      color: app.status === "denied" ? "#f87171" : "var(--text-main)"
+                      color: app.status === "denied" ? "#f87171" : "var(--text-primary)"
                     }}
                   >
                     {app.command}

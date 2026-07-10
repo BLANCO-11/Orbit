@@ -21,7 +21,7 @@ export default function LogViewer({ logs, logEndRef }) {
         {logs.length === 0 && (
           <span
             style={{
-              color: "var(--text-dark)",
+              color: "var(--text-tertiary)",
               fontSize: "0.75rem",
               fontFamily: "monospace",
             }}
@@ -37,15 +37,15 @@ export default function LogViewer({ logs, logEndRef }) {
               fontSize: "0.75rem",
               padding: "1px 4px",
               color: log.isError
-                ? "var(--danger)"
+                ? "var(--accent-danger)"
                 : log.isSystem
-                ? "var(--text-muted)"
-                : "var(--text-main)",
+                ? "var(--text-secondary)"
+                : "var(--text-primary)",
               whiteSpace: "pre-wrap",
               wordBreak: "break-word",
             }}
           >
-            <span style={{ color: "var(--text-dark)", marginRight: "6px" }}>
+            <span style={{ color: "var(--text-tertiary)", marginRight: "6px" }}>
               [{log.timestamp}]
             </span>
             {log.text}
