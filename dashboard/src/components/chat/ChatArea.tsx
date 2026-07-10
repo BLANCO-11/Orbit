@@ -9,6 +9,7 @@ import { ModeBadge, ModePrompt } from './ModePrompt';
 import ChatInput from './ChatInput';
 import ModeSelector from './ModeSelector';
 import PromptTypeSelector from './PromptTypeSelector';
+import SkillSelector from './SkillSelector';
 
 /**
  * ChatArea — the central conversation column.
@@ -42,6 +43,10 @@ export default function ChatArea({
   // Prompt type
   systemPromptType,
   onSetSystemPromptType,
+
+  // Skills
+  attachedSkills,
+  onSetAttachedSkills,
 
   // Input
   prompt,
@@ -164,6 +169,9 @@ export default function ChatArea({
             modeButton={<ModeSelector sessionMode={sessionMode} onSetSessionMode={onSetSessionMode} />}
             promptTypeButton={
               <PromptTypeSelector systemPromptType={systemPromptType} onSetSystemPromptType={onSetSystemPromptType} />
+            }
+            skillButton={
+              <SkillSelector attachedSkills={attachedSkills || []} onSetAttachedSkills={onSetAttachedSkills} />
             }
           />
         </div>

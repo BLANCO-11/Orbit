@@ -56,7 +56,8 @@ class HarnessInterface {
    * @param {object} options.config — the full security-config.json
    * @param {string} options.sessionId
    * @param {string} options.mode — 'chat' | 'plan' | 'edit' | 'yolo'
-   * @param {string} options.systemPromptType — 'standard' | 'fable-5'
+   * @param {string} options.systemPromptType — prompt library id (e.g. 'standard', 'claude-fable-5')
+   * @param {string[]} [options.skills] — attached skill ids, appended to the system prompt
    * @param {object} [options.binaries] — { nodePath, piPath } from env discovery
    */
   constructor(options) {
@@ -65,6 +66,7 @@ class HarnessInterface {
     this.sessionId = options.sessionId;
     this.mode = options.mode;
     this.systemPromptType = options.systemPromptType;
+    this.skills = options.skills || [];
     this.binaries = options.binaries || {};
   }
 

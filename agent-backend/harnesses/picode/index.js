@@ -52,6 +52,16 @@ class PiCodeHarness extends HarnessInterface {
       const modePrompt = fs.readFileSync(path.join(promptsDir, modePromptFile), "utf-8");
       combinedPrompt = combinedPrompt + "\n\n" + modePrompt;
     }
+
+    // Append attached skills (reusable instruction packs). Inherited by
+    // sub-agents because they share this session's system prompt.
+    try {
+      const { resolveSkills } = require("../../routes/skills");
+      const skillsText = resolveSkills(this.skills || this.config.skills || []);
+      if (skillsText) combinedPrompt = combinedPrompt + skillsText;
+    } catch (e) {
+      console.error("[PiCodeHarness] Skill resolution failed:", e.message);
+    }
     
     // Write combined prompt to temp file
     const tempPromptDir = path.join(__dirname, "../../../workspace/temp");

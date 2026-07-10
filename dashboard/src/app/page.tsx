@@ -111,6 +111,7 @@ function DashboardInner() {
 
   // ── UI State (local) ──
   const [prompt, setPrompt] = useState('');
+  const [attachedSkills, setAttachedSkills] = useState<string[]>([]);
   const [showThinking, setShowThinking] = useState(true);
   const [rightPanelTab, setRightPanelTab] = useState('agent');
   const [activeView, setActiveView] = useState<'console' | 'fleet' | 'connectors' | 'policies' | 'settings'>('console');
@@ -153,10 +154,11 @@ function DashboardInner() {
       type: 'start_task',
       prompt: finalPrompt,
       systemPromptType,
+      skills: attachedSkills,
       sessionId: state.currentSessionId,
       mode: state.sessionMode,
     });
-  }, [sendMessage, stopSpeaking, startTtsSession, dispatch, state.messages, state.currentSessionId, state.sessionMode, systemPromptType, updateCurrentSession]);
+  }, [sendMessage, stopSpeaking, startTtsSession, dispatch, state.messages, state.currentSessionId, state.sessionMode, systemPromptType, attachedSkills, updateCurrentSession]);
 
   const handleStopAgent = useCallback(() => {
     if (sendMessage) {
@@ -438,6 +440,8 @@ function DashboardInner() {
         onLoadOlder={handleLoadOlderMessages}
         systemPromptType={systemPromptType}
         onSetSystemPromptType={setSystemPromptType}
+        attachedSkills={attachedSkills}
+        onSetAttachedSkills={setAttachedSkills}
         status={state.status}
         renderMarkdown={renderMarkdown}
         expandedTools={state.expandedTools}
@@ -466,6 +470,7 @@ function DashboardInner() {
               mode,
               prompt: lastPrompt,
               systemPromptType,
+              skills: attachedSkills,
             });
           }
         }}

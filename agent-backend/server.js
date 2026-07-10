@@ -40,6 +40,7 @@ const createHealthRouter = require("./routes/health");
 const createWorkspaceRouter = require("./routes/workspace");
 const createDevicesRouter = require("./routes/devices");
 const { createPromptsRouter } = require("./routes/prompts");
+const { createSkillsRouter } = require("./routes/skills");
 
 // WebSocket
 const createWebSocketServer = require("./ws/index");
@@ -92,6 +93,7 @@ app.use("/api/voices", authMiddleware, createVoicesRouter());
 app.use("/api/notify", authMiddleware, createNotificationsRouter(getConfig, wss));
 app.use("/api/workspace", authMiddleware, createWorkspaceRouter());
 app.use("/api/prompts", authMiddleware, createPromptsRouter());
+app.use("/api/skills", authMiddleware, createSkillsRouter());
 app.use("/api/health", createHealthRouter({ db, mcpClient, getConfig, activeSessions }));
 app.use("/api", createDevicesRouter(db, authMiddleware, () => process.env.DASHBOARD_ORIGIN || "http://localhost:6801"));
 
@@ -108,7 +110,7 @@ wss.on("connection", (ws) => {
       
       // ── start_task ──────────────────────────────────────────
       if (data.type === "start_task") {
-        const { prompt, sessionId: sid, mode, systemPromptType } = data;
+        const { prompt, sessionId: sid, mode, systemPromptType, skills } = data;
         const sessionId = sid || "default-session";
         
         // Session isolation: kill other sessions on this WS
@@ -120,7 +122,7 @@ wss.on("connection", (ws) => {
           }
         }
         
-        await handleStartTask(ws, prompt, sessionId, mode, systemPromptType);
+        await handleStartTask(ws, prompt, sessionId, mode, systemPromptType, skills);
       }
       
       // ── approval_response ───────────────────────────────────
@@ -203,16 +205,16 @@ wss.on("connection", (ws) => {
       
       // ── mode_switch_rerun ───────────────────────────────────
       else if (data.type === "mode_switch_rerun") {
-        const { sessionId, mode, prompt: rerunPrompt, systemPromptType: st } = data;
+        const { sessionId, mode, prompt: rerunPrompt, systemPromptType: st, skills: rerunSkills } = data;
         const sid = sessionId || ws.activeSessionId;
-        
+
         const ses = activeSessions.get(sid);
         if (ses?.harness) { try { ses.harness.disconnect(); } catch {} }
         activeSessions.delete(sid);
-        
+
         if (rerunPrompt) {
           sendLog(ws, `[Mode Switch Rerun] Re-sending prompt with mode "${mode}"`, false);
-          await handleStartTask(ws, rerunPrompt, sid, mode, st);
+          await handleStartTask(ws, rerunPrompt, sid, mode, st, rerunSkills);
         }
       }
     } catch (err) {
@@ -251,7 +253,7 @@ wss.on("connection", (ws) => {
 });
 
 // ── Agent Task Handler ──────────────────────────────────────────────
-async function handleStartTask(ws, userPrompt, sessionId, mode, systemPromptType) {
+async function handleStartTask(ws, userPrompt, sessionId, mode, systemPromptType, skills) {
   ws.activeSessionId = sessionId;
   ws.currentPrompt = userPrompt;
   
@@ -357,6 +359,7 @@ async function handleStartTask(ws, userPrompt, sessionId, mode, systemPromptType
         sessionId,
         mode: activeMode,
         systemPromptType,
+        skills: skills || [],
         binaries: { nodePath, piPath },
       });
       
