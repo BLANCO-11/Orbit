@@ -1,0 +1,1308 @@
+<title>AegisAgent — Console Redesign Mock</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  /* ————— tokens — dark-committed ops console (deliberate single theme) ————— */
+  :root {
+    --bg: #0f0f13;
+    --panel: #15151b;
+    --raised: #1b1b23;
+    --hover: #20202a;
+    --line: #262631;
+    --line-soft: #1e1e28;
+    --ink: #e9e9f1;
+    --ink-2: #9d9db0;
+    --ink-3: #64647c;
+    --accent: #8781ec;
+    --accent-ink: #b3aef7;
+    --accent-dim: rgba(135,129,236,.14);
+    --ok: #3fbf87;
+    --warn: #d9a44a;
+    --danger: #e06666;
+    --s-in: #8781ec;   /* chart series: tokens in  (validated) */
+    --s-out: #1baf7a;  /* chart series: tokens out (validated) */
+    --lane-1: #1baf7a; /* sub-agent lineage 1 */
+    --lane-2: #d98f4a; /* sub-agent lineage 2 */
+    --mono: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Menlo, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 13px/1.5 var(--sans); overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: #2b2b38; border-radius: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+  button:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+  .mono { font-family: var(--mono); }
+  .num { font-variant-numeric: tabular-nums; }
+
+  /* ————— app frame ————— */
+  .app { display: flex; height: 100dvh; }
+
+  /* ————— icon rail ————— */
+  .rail {
+    width: 56px; flex: none; display: flex; flex-direction: column; align-items: center;
+    padding: 10px 0; gap: 4px; background: var(--panel); border-right: 1px solid var(--line-soft);
+  }
+  .rail .logo {
+    width: 32px; height: 32px; border-radius: 9px; margin-bottom: 10px;
+    background: linear-gradient(135deg, #8781ec, #5d55c9);
+    display: grid; place-items: center; color: #fff; font-weight: 700; font-size: 15px;
+  }
+  .rail button {
+    width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center;
+    color: var(--ink-3); position: relative;
+  }
+  .rail button:hover { background: var(--hover); color: var(--ink-2); }
+  .rail button.active { background: var(--accent-dim); color: var(--accent-ink); }
+  .rail button svg { width: 19px; height: 19px; }
+  .rail .spacer { flex: 1; }
+  .rail .voice-dot {
+    position: absolute; right: 7px; top: 7px; width: 7px; height: 7px; border-radius: 50%;
+    background: var(--ok); border: 2px solid var(--panel);
+  }
+  .rail .tip {
+    position: absolute; left: 50px; top: 50%; transform: translateY(-50%);
+    background: var(--raised); border: 1px solid var(--line); border-radius: 6px;
+    padding: 3px 8px; font-size: 11px; white-space: nowrap; color: var(--ink-2);
+    opacity: 0; pointer-events: none; transition: opacity .12s; z-index: 50;
+  }
+  .rail button:hover .tip { opacity: 1; }
+
+  /* ————— views ————— */
+  .view { display: none; flex: 1; min-width: 0; }
+  .view.on { display: flex; }
+
+  /* ============ CONSOLE VIEW ============ */
+  #v-console { display: none; }
+  #v-console.on { display: flex; }
+
+  .sessions {
+    width: 236px; flex: none; background: var(--panel); border-right: 1px solid var(--line-soft);
+    display: flex; flex-direction: column;
+  }
+  .sessions .top { padding: 12px 12px 8px; display: flex; flex-direction: column; gap: 8px; }
+  .btn-new {
+    display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 8px;
+    background: var(--raised); border: 1px solid var(--line); font-weight: 600; font-size: 12.5px;
+  }
+  .btn-new:hover { border-color: var(--accent); }
+  .btn-new .k { margin-left: auto; font-family: var(--mono); font-size: 10px; color: var(--ink-3); }
+  .search {
+    display: flex; align-items: center; gap: 7px; padding: 6px 10px; border-radius: 8px;
+    background: var(--bg); border: 1px solid var(--line-soft); color: var(--ink-3); font-size: 12px;
+  }
+  .sess-group { padding: 10px 8px 4px; }
+  .sess-group h4 {
+    margin: 0 0 4px 6px; font-size: 10px; font-weight: 600; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--ink-3);
+  }
+  .sess {
+    width: 100%; text-align: left; padding: 7px 9px; border-radius: 8px; display: flex;
+    flex-direction: column; gap: 2px;
+  }
+  .sess:hover { background: var(--hover); }
+  .sess.active { background: var(--accent-dim); }
+  .sess .t { font-size: 12.5px; font-weight: 500; color: var(--ink); display: flex; align-items: center; gap: 6px; }
+  .sess .m { font-size: 11px; color: var(--ink-3); font-family: var(--mono); }
+  .sess .live { width: 6px; height: 6px; border-radius: 50%; background: var(--ok); animation: pulse 1.6s infinite; flex: none; }
+  .sessions .foot { margin-top: auto; padding: 10px; border-top: 1px solid var(--line-soft); }
+
+  /* center column */
+  .center { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .chead {
+    height: 48px; flex: none; display: flex; align-items: center; gap: 10px; padding: 0 16px;
+    border-bottom: 1px solid var(--line-soft); background: var(--panel);
+  }
+  .chead h1 { font-size: 13.5px; font-weight: 600; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border-radius: 999px;
+    border: 1px solid var(--line); background: var(--raised); font-size: 11px; color: var(--ink-2);
+    white-space: nowrap;
+  }
+  .chip .dot { width: 6px; height: 6px; border-radius: 50%; }
+  .chip.harness .dot { background: var(--ok); }
+  .chip.mode { border-color: rgba(217,164,74,.4); color: var(--warn); }
+  .chip.cost { font-family: var(--mono); color: var(--ink); }
+  .chip.cost b { color: var(--ok); font-weight: 600; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+
+  /* timeline */
+  .tl { flex: 1; overflow-y: auto; padding: 20px 0 28px; }
+  .tl-inner { max-width: 780px; margin: 0 auto; padding: 0 24px; position: relative; }
+  .tl-inner::before {
+    content: ""; position: absolute; left: 87px; top: 8px; bottom: 8px; width: 1px;
+    background: var(--line-soft);
+  }
+  .entry { display: flex; gap: 14px; margin-bottom: 14px; position: relative; }
+  .entry .when {
+    width: 52px; flex: none; text-align: right; font-family: var(--mono); font-size: 10px;
+    color: var(--ink-3); padding-top: 7px;
+  }
+  .entry .node {
+    width: 22px; flex: none; display: flex; justify-content: center; padding-top: 7px; z-index: 1;
+  }
+  .entry .node i {
+    width: 9px; height: 9px; border-radius: 50%; background: var(--ink-3); border: 2px solid var(--bg);
+    display: block;
+  }
+  .entry.user .node i { background: var(--accent); }
+  .entry.sub1 .node i { background: var(--lane-1); }
+  .entry.sub2 .node i { background: var(--lane-2); }
+  .entry.gate .node i { background: var(--warn); }
+  .entry .body { flex: 1; min-width: 0; }
+
+  .card {
+    background: var(--panel); border: 1px solid var(--line-soft); border-radius: 10px;
+    overflow: hidden;
+  }
+  .card .hd {
+    display: flex; align-items: center; gap: 8px; padding: 8px 12px; font-size: 12px;
+    color: var(--ink-2); cursor: pointer; user-select: none;
+  }
+  .card .hd:hover { background: var(--hover); }
+  .card .hd .name { font-family: var(--mono); font-size: 11.5px; color: var(--ink); }
+  .card .hd .meta { margin-left: auto; font-family: var(--mono); font-size: 10.5px; color: var(--ink-3); display: flex; gap: 10px; align-items: center; }
+  .card .bd { border-top: 1px solid var(--line-soft); padding: 10px 12px; display: none; }
+  .card.open .bd { display: block; }
+  .caret { transition: transform .15s; color: var(--ink-3); flex: none; }
+  .card.open .caret { transform: rotate(90deg); }
+
+  .msg-user {
+    background: var(--accent-dim); border: 1px solid rgba(135,129,236,.25);
+    border-radius: 10px; padding: 10px 14px; font-size: 13px;
+  }
+  .msg-user .who { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--accent-ink); margin-bottom: 3px; font-weight: 600; }
+
+  .msg-assist { padding: 2px 2px 0; font-size: 13px; color: var(--ink); }
+  .tts-chip {
+    display: inline-flex; align-items: center; gap: 5px; margin-top: 6px; padding: 2px 8px;
+    border-radius: 999px; background: var(--raised); border: 1px solid var(--line);
+    font-size: 10.5px; color: var(--ink-3); font-family: var(--mono);
+  }
+  .tts-chip svg { width: 11px; height: 11px; color: var(--accent-ink); }
+
+  /* plan card */
+  .plan-steps { display: flex; flex-direction: column; gap: 0; }
+  .pstep { display: flex; gap: 10px; padding: 5px 0; align-items: baseline; font-size: 12.5px; }
+  .pstep .st { font-family: var(--mono); font-size: 10px; width: 40px; flex: none; }
+  .pstep.done .st { color: var(--ok); } .pstep.done { color: var(--ink-3); text-decoration: line-through; text-decoration-color: #3a3a4a; }
+  .pstep.now .st { color: var(--accent-ink); } .pstep.now { color: var(--ink); font-weight: 500; }
+  .pstep.todo .st { color: var(--ink-3); } .pstep.todo { color: var(--ink-2); }
+
+  /* tool rows */
+  .tool-line { display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 11.5px; }
+  .tool-line .verb { color: var(--accent-ink); font-weight: 600; }
+  .tool-out {
+    margin-top: 8px; background: var(--bg); border: 1px solid var(--line-soft); border-radius: 7px;
+    padding: 8px 10px; font-family: var(--mono); font-size: 11px; color: var(--ink-2);
+    white-space: pre; overflow-x: auto;
+  }
+  .ok-txt { color: var(--ok); } .warn-txt { color: var(--warn); } .dang-txt { color: var(--danger); }
+
+  /* diff card */
+  .diffstat { display: inline-flex; gap: 6px; font-family: var(--mono); font-size: 10.5px; }
+  .diffstat .a { color: var(--ok); } .diffstat .d { color: var(--danger); }
+  .difflines { font-family: var(--mono); font-size: 11px; line-height: 1.7; overflow-x: auto; }
+  .dl { display: flex; white-space: pre; }
+  .dl .ln { width: 34px; flex: none; text-align: right; padding-right: 10px; color: var(--ink-3); user-select: none; }
+  .dl.add { background: rgba(27,175,122,.10); color: #8fd9b6; }
+  .dl.del { background: rgba(224,102,102,.09); color: #e29b9b; }
+  .dl.ctx { color: var(--ink-2); }
+
+  /* sub-agent card */
+  .sub-card { border-left: 3px solid var(--lane-1); }
+  .sub-card.lane2 { border-left-color: var(--lane-2); }
+  .sub-card .hd .name { color: var(--ink); font-weight: 600; }
+  .badge {
+    font-size: 10px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase;
+    padding: 2px 7px; border-radius: 999px;
+  }
+  .badge.done { background: rgba(63,191,135,.12); color: var(--ok); }
+  .badge.run { background: rgba(217,164,74,.12); color: var(--warn); }
+  .badge.run i { display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: var(--warn); margin-right: 4px; animation: pulse 1.2s infinite; }
+  .sub-usage { display: flex; gap: 14px; font-family: var(--mono); font-size: 10.5px; color: var(--ink-3); padding: 6px 12px 8px; border-top: 1px dashed var(--line-soft); }
+  .sub-usage b { color: var(--ink-2); font-weight: 500; }
+  .sub-tl { display: flex; flex-direction: column; gap: 6px; padding-left: 8px; border-left: 1px solid var(--line-soft); margin-left: 2px; }
+
+  /* approval gate */
+  .gate-card { border: 1px solid rgba(217,164,74,.35); }
+  .gate-card .hd { cursor: default; }
+  .gate-card .hd:hover { background: none; }
+  .gate-actions { display: flex; gap: 8px; padding: 0 12px 11px; }
+  .btn {
+    padding: 5px 14px; border-radius: 7px; font-size: 12px; font-weight: 600;
+    border: 1px solid var(--line);
+  }
+  .btn.approve { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.approve:hover { background: #9690f0; }
+  .btn.deny:hover { border-color: var(--danger); color: var(--danger); }
+  .gate-why { padding: 0 12px 10px; font-size: 11.5px; color: var(--ink-2); }
+  .gate-why code { font-family: var(--mono); font-size: 10.5px; background: var(--bg); padding: 1px 5px; border-radius: 4px; }
+
+  /* composer */
+  .composer { flex: none; padding: 8px 24px 12px; }
+  .composer .box {
+    max-width: 780px; margin: 0 auto; background: var(--raised); border: 1px solid var(--line);
+    border-radius: 12px; padding: 8px 10px 6px;
+  }
+  .composer .box:focus-within { border-color: var(--accent); }
+  .composer textarea {
+    width: 100%; background: none; border: 0; resize: none; color: var(--ink);
+    font: 13px/1.5 var(--sans); outline: none; height: 24px;
+  }
+  .composer textarea::placeholder { color: var(--ink-3); }
+  .composer .row { display: flex; align-items: center; gap: 8px; margin-top: 2px; }
+  .modes { display: inline-flex; background: var(--bg); border: 1px solid var(--line-soft); border-radius: 8px; padding: 2px; gap: 1px; }
+  .modes button { padding: 3px 11px; border-radius: 6px; font-size: 11px; font-weight: 600; color: var(--ink-3); }
+  .modes button.on { background: var(--raised); color: var(--ink); box-shadow: 0 0 0 1px var(--line); }
+  .modes button.yolo.on { color: var(--danger); }
+  .composer .h-chip { font-family: var(--mono); font-size: 10.5px; }
+  .icon-btn { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; color: var(--ink-3); }
+  .icon-btn:hover { background: var(--hover); color: var(--ink-2); }
+  .icon-btn.on { color: var(--accent-ink); background: var(--accent-dim); }
+  .icon-btn svg { width: 16px; height: 16px; }
+  .send { margin-left: 2px; display: inline-flex; align-items: center; gap: 6px; background: var(--accent); color: #fff; padding: 6px 16px; border-radius: 9px; font-weight: 600; font-size: 12.5px; }
+  .send:hover { background: #9690f0; }
+
+  /* ————— inspector ————— */
+  .inspector {
+    width: 348px; flex: none; background: var(--panel); border-left: 1px solid var(--line-soft);
+    display: flex; flex-direction: column; min-height: 0;
+  }
+  .seg-row { display: flex; gap: 2px; padding: 10px 12px 0; border-bottom: 1px solid var(--line-soft); }
+  .seg-row button {
+    padding: 6px 12px 9px; font-size: 12px; font-weight: 600; color: var(--ink-3);
+    border-bottom: 2px solid transparent; margin-bottom: -1px;
+  }
+  .seg-row button.on { color: var(--ink); border-bottom-color: var(--accent); }
+  .ins-body { flex: 1; overflow-y: auto; padding: 14px; display: none; }
+  .ins-body.on { display: block; }
+  .ins-sec { margin-bottom: 18px; }
+  .ins-sec > h4 {
+    margin: 0 0 8px; font-size: 10px; font-weight: 600; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--ink-3);
+  }
+  .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .tile { background: var(--raised); border: 1px solid var(--line-soft); border-radius: 9px; padding: 9px 11px; }
+  .tile .l { font-size: 10.5px; color: var(--ink-3); display: flex; align-items: center; gap: 5px; }
+  .tile .v { font-family: var(--mono); font-size: 17px; font-weight: 600; margin-top: 2px; }
+  .tile .s { font-size: 10px; color: var(--ink-3); margin-top: 1px; }
+  .tile .v .u { font-size: 11px; color: var(--ink-3); font-weight: 400; }
+  .src-tag {
+    font-size: 9px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase;
+    padding: 1px 5px; border-radius: 4px; background: rgba(63,191,135,.12); color: var(--ok);
+  }
+
+  /* token chart */
+  .chart-card { background: var(--raised); border: 1px solid var(--line-soft); border-radius: 9px; padding: 10px 12px; }
+  .chart-card .cap { display: flex; align-items: center; gap: 10px; font-size: 10.5px; color: var(--ink-3); margin-bottom: 8px; }
+  .lgd { display: inline-flex; align-items: center; gap: 4px; }
+  .lgd i { width: 7px; height: 7px; border-radius: 2px; display: inline-block; }
+  .tok-bars { display: flex; align-items: flex-end; gap: 7px; height: 52px; }
+  .tok-turn { flex: 1; display: flex; gap: 2px; align-items: flex-end; height: 100%; }
+  .tok-turn i { flex: 1; border-radius: 3px 3px 0 0; display: block; min-height: 2px; }
+  .tok-turn .in { background: var(--s-in); }
+  .tok-turn .out { background: var(--s-out); }
+  .meter { height: 6px; background: var(--bg); border-radius: 3px; overflow: hidden; margin-top: 7px; }
+  .meter i { display: block; height: 100%; border-radius: 3px; background: var(--accent); }
+  .meter.warn i { background: var(--warn); }
+  .m-cap { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 10px; color: var(--ink-3); margin-top: 4px; }
+
+  /* latency sparkline */
+  .spark { width: 100%; height: 44px; display: block; }
+
+  .sub-row { display: flex; align-items: center; gap: 8px; padding: 7px 9px; border-radius: 8px; background: var(--raised); border: 1px solid var(--line-soft); margin-bottom: 6px; }
+  .sub-row .lane { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+  .sub-row .n { font-family: var(--mono); font-size: 11.5px; }
+  .sub-row .r { margin-left: auto; font-family: var(--mono); font-size: 10px; color: var(--ink-3); }
+
+  .lat-row { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; font-family: var(--mono); font-size: 10.5px; color: var(--ink-2); }
+  .lat-row .n { width: 52px; flex: none; }
+  .lat-row .bar { flex: 1; height: 5px; background: var(--bg); border-radius: 3px; overflow: hidden; }
+  .lat-row .bar i { display: block; height: 100%; background: var(--s-in); border-radius: 3px; }
+  .lat-row .t { width: 44px; text-align: right; color: var(--ink-3); }
+
+  /* files tree */
+  .ftree { font-family: var(--mono); font-size: 11.5px; }
+  .fnode { display: flex; align-items: center; gap: 7px; padding: 4px 8px; border-radius: 6px; width: 100%; text-align: left; color: var(--ink-2); }
+  .fnode:hover { background: var(--hover); }
+  .fnode.dir { color: var(--ink-3); }
+  .fnode .fb { margin-left: auto; font-size: 9px; font-weight: 700; padding: 0 5px; border-radius: 4px; }
+  .fb.M { background: rgba(217,164,74,.15); color: var(--warn); }
+  .fb.A { background: rgba(63,191,135,.15); color: var(--ok); }
+  .indent1 { padding-left: 22px; } .indent2 { padding-left: 38px; } .indent3 { padding-left: 54px; }
+
+  /* preview */
+  .prev-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-family: var(--mono); font-size: 11px; color: var(--ink-2); flex-wrap: wrap; }
+  .prev-frame { background: var(--bg); border: 1px solid var(--line-soft); border-radius: 9px; overflow: hidden; }
+  .empty-hint { color: var(--ink-3); font-size: 12px; text-align: center; padding: 40px 20px; line-height: 1.7; }
+  .empty-hint b { color: var(--ink-2); }
+
+  /* ============ FLEET VIEW ============ */
+  .page { flex: 1; overflow-y: auto; }
+  .page-inner { max-width: 880px; margin: 0 auto; padding: 28px 32px 60px; }
+  .page h2 { font-size: 18px; margin: 0 0 4px; }
+  .page .sub { color: var(--ink-2); font-size: 13px; margin: 0 0 24px; }
+  .fleet-grid { display: grid; grid-template-columns: 380px 1fr; gap: 16px; align-items: start; }
+  @media (max-width: 980px) { .fleet-grid { grid-template-columns: 1fr; } }
+
+  .pair-card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 22px;
+    display: flex; flex-direction: column; align-items: center; text-align: center;
+  }
+  .pair-card h3 { margin: 0 0 2px; font-size: 14px; }
+  .pair-card .d { color: var(--ink-2); font-size: 12px; margin-bottom: 16px; }
+  .otp {
+    font-family: var(--mono); font-size: 34px; font-weight: 700; letter-spacing: .18em;
+    color: var(--accent-ink); background: var(--bg); border: 1px solid var(--line);
+    border-radius: 12px; padding: 14px 22px 14px calc(22px + .18em);
+  }
+  .otp-meta { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 11.5px; color: var(--ink-3); }
+  .ring { width: 26px; height: 26px; transform: rotate(-90deg); }
+  .ring .track { stroke: var(--line); }
+  .ring .arc { stroke: var(--warn); stroke-linecap: round; transition: stroke-dashoffset 1s linear; }
+  .pair-url { margin-top: 14px; font-family: var(--mono); font-size: 11.5px; color: var(--ink-2); background: var(--raised); border: 1px dashed var(--line); padding: 7px 12px; border-radius: 8px; }
+  .pair-scope { margin-top: 14px; width: 100%; text-align: left; }
+  .pair-scope label { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); font-weight: 600; }
+  .scope-opts { display: flex; gap: 6px; margin-top: 6px; }
+  .scope-opts button { flex: 1; padding: 6px 4px; border-radius: 8px; border: 1px solid var(--line); font-size: 11px; color: var(--ink-2); }
+  .scope-opts button.on { border-color: var(--accent); color: var(--accent-ink); background: var(--accent-dim); }
+  .adapter-line { margin-top: 16px; font-family: var(--mono); font-size: 10.5px; color: var(--ink-3); }
+  .adapter-line code { color: var(--ink-2); background: var(--bg); padding: 2px 7px; border-radius: 5px; }
+
+  .fleet-list { display: flex; flex-direction: column; gap: 10px; }
+  .fl-row {
+    background: var(--panel); border: 1px solid var(--line-soft); border-radius: 12px;
+    padding: 13px 16px; display: flex; align-items: center; gap: 12px;
+  }
+  .fl-ic {
+    width: 36px; height: 36px; border-radius: 10px; background: var(--raised); border: 1px solid var(--line);
+    display: grid; place-items: center; color: var(--ink-2); flex: none;
+  }
+  .fl-ic svg { width: 17px; height: 17px; }
+  .fl-main { min-width: 0; }
+  .fl-main .n { font-weight: 600; font-size: 13px; display: flex; align-items: center; gap: 8px; }
+  .fl-main .m { font-size: 11.5px; color: var(--ink-3); font-family: var(--mono); margin-top: 1px; }
+  .fl-right { margin-left: auto; display: flex; align-items: center; gap: 8px; flex: none; }
+  .link-btn { font-size: 11.5px; color: var(--ink-3); padding: 4px 8px; border-radius: 6px; }
+  .link-btn:hover { color: var(--danger); background: var(--hover); }
+  .st { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; }
+  .st i { width: 7px; height: 7px; border-radius: 50%; }
+  .st.on { color: var(--ok); } .st.on i { background: var(--ok); }
+  .st.idle { color: var(--ink-3); } .st.idle i { background: var(--ink-3); }
+  .fleet-h { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); font-weight: 600; margin: 18px 0 8px; }
+  .fleet-h:first-child { margin-top: 0; }
+  .add-row { border-style: dashed; color: var(--ink-3); justify-content: center; font-size: 12px; cursor: pointer; }
+  .add-row:hover { color: var(--accent-ink); border-color: var(--accent); }
+
+  /* ============ POLICIES VIEW ============ */
+  .pol-table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line-soft); border-radius: 12px; overflow: hidden; }
+  .pol-wrap { border: 1px solid var(--line-soft); border-radius: 12px; overflow-x: auto; }
+  .pol-table th, .pol-table td { padding: 10px 14px; text-align: left; font-size: 12px; border-bottom: 1px solid var(--line-soft); }
+  .pol-table th { font-size: 10px; letter-spacing: .07em; text-transform: uppercase; color: var(--ink-3); background: var(--raised); font-weight: 600; }
+  .pol-table td:first-child { color: var(--ink); font-weight: 500; }
+  .pol-table tr:last-child td { border-bottom: 0; }
+  .pv { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; padding: 2px 9px; border-radius: 999px; }
+  .pv.allow { background: rgba(63,191,135,.12); color: var(--ok); }
+  .pv.ask { background: rgba(217,164,74,.12); color: var(--warn); }
+  .pv.block { background: rgba(224,102,102,.12); color: var(--danger); }
+  .pv.na { color: var(--ink-3); }
+  .budget-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 10px; }
+  @media (max-width: 800px) { .budget-grid { grid-template-columns: 1fr; } }
+
+  /* mission view */
+  .vtoggle { display: inline-flex; background: var(--bg); border: 1px solid var(--line-soft); border-radius: 8px; padding: 2px; }
+  .vtoggle button { padding: 3px 11px; border-radius: 6px; font-size: 11px; font-weight: 600; color: var(--ink-3); }
+  .vtoggle button.on { background: var(--raised); color: var(--ink); box-shadow: 0 0 0 1px var(--line); }
+  #mission-view .tl-inner::before { display: none; }
+  .mgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 1320px) { .mgrid { grid-template-columns: 1fr; } }
+  .mtask { display: flex; align-items: center; gap: 8px; padding: 6px 0; font-size: 12.5px; border-top: 1px solid var(--line-soft); }
+  .mtask:first-of-type { border-top: 0; }
+  .owner { font-family: var(--mono); font-size: 10px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--line); color: var(--ink-2); }
+  .xcheck { padding: 7px 12px; border-top: 1px dashed var(--line-soft); font-size: 11px; color: var(--ink-3); }
+
+  /* popovers */
+  .pop { position: relative; display: inline-flex; }
+  .menu {
+    position: absolute; bottom: calc(100% + 8px); left: 0; min-width: 200px;
+    background: var(--raised); border: 1px solid var(--line); border-radius: 10px; padding: 5px;
+    display: none; z-index: 40; box-shadow: 0 12px 32px rgba(0,0,0,.45);
+  }
+  .pop.open .menu { display: block; }
+  .menu button { display: flex; width: 100%; text-align: left; padding: 6px 9px; border-radius: 6px; font-size: 12px; color: var(--ink-2); gap: 7px; align-items: center; }
+  .menu button:hover { background: var(--hover); }
+  .menu button.sel { color: var(--accent-ink); }
+  .menu .mh { font-size: 9.5px; letter-spacing: .07em; text-transform: uppercase; color: var(--ink-3); padding: 5px 9px 3px; font-weight: 600; }
+
+  /* reasoning */
+  .reason { font-size: 12px; color: var(--ink-2); font-style: italic; line-height: 1.65; }
+  .task-line { font-size: 11.5px; color: var(--ink-3); margin-bottom: 8px; }
+  .task-line b { color: var(--ink-2); font-weight: 600; }
+
+  /* settings */
+  .set-sec { background: var(--panel); border: 1px solid var(--line-soft); border-radius: 12px; padding: 16px; margin-bottom: 14px; }
+  .set-sec h3 { margin: 0 0 6px; font-size: 13px; }
+  .set-sec .sd { font-size: 11.5px; color: var(--ink-3); margin: 0 0 10px; }
+  .frow { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line-soft); font-size: 12.5px; }
+  .frow:first-of-type { border-top: 0; }
+  .frow .fl { width: 220px; flex: none; color: var(--ink-2); }
+  .fval { font-family: var(--mono); font-size: 11.5px; background: var(--bg); border: 1px solid var(--line); border-radius: 7px; padding: 5px 10px; color: var(--ink); }
+  .fval.sel::after { content: " ▾"; color: var(--ink-3); }
+  .tgl { width: 30px; height: 17px; border-radius: 999px; background: var(--accent); position: relative; flex: none; border: 0; }
+  .tgl::after { content: ""; position: absolute; right: 2px; top: 2px; width: 13px; height: 13px; border-radius: 50%; background: #fff; }
+  .tgl.off { background: var(--line); } .tgl.off::after { right: auto; left: 2px; }
+
+  /* ————— design notes ————— */
+  .note {
+    display: none; width: 17px; height: 17px; border-radius: 50%; background: var(--warn);
+    color: #14100a; font: 700 10.5px/17px var(--mono); text-align: center; flex: none;
+    font-style: normal; vertical-align: middle; margin: 0 4px; cursor: default;
+  }
+  body.notes .note { display: inline-block; }
+  .notes-toggle {
+    position: fixed; right: 16px; bottom: 16px; z-index: 90;
+    background: var(--raised); border: 1px solid var(--line); border-radius: 999px;
+    padding: 7px 15px; font-size: 12px; font-weight: 600; color: var(--ink-2);
+    box-shadow: 0 8px 24px rgba(0,0,0,.4);
+  }
+  .notes-toggle:hover { color: var(--ink); border-color: var(--accent); }
+  body.notes .notes-toggle { color: var(--warn); border-color: rgba(217,164,74,.5); }
+  .notes-drawer {
+    position: fixed; right: 16px; bottom: 60px; width: 360px; max-height: 60vh; overflow-y: auto;
+    background: var(--raised); border: 1px solid var(--line); border-radius: 14px; padding: 16px;
+    z-index: 89; display: none; box-shadow: 0 16px 48px rgba(0,0,0,.5);
+  }
+  body.notes .notes-drawer { display: block; }
+  .notes-drawer h3 { margin: 0 0 10px; font-size: 13px; }
+  .nd-item { display: flex; gap: 9px; margin-bottom: 10px; font-size: 12px; color: var(--ink-2); line-height: 1.55; }
+  .nd-item .note { display: inline-block; margin: 1px 0 0; }
+  .nd-item b { color: var(--ink); font-weight: 600; }
+
+  @media (max-width: 1180px) { .sessions { display: none; } }
+  @media (max-width: 940px) { .inspector { display: none; } }
+</style>
+
+<div class="app">
+  <!-- ————— icon rail ————— -->
+  <nav class="rail" aria-label="Primary">
+    <div class="logo">A</div>
+    <button class="active" data-view="v-console" aria-label="Console">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 17l6-6-6-6M12 19h8"/></svg>
+      <span class="tip">Console</span>
+    </button>
+    <button data-view="v-fleet" aria-label="Fleet — harnesses and devices">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="3" width="20" height="8" rx="2"/><rect x="2" y="13" width="20" height="8" rx="2"/><circle cx="6.5" cy="7" r="1" fill="currentColor"/><circle cx="6.5" cy="17" r="1" fill="currentColor"/></svg>
+      <span class="tip">Fleet — harnesses &amp; devices</span>
+    </button>
+    <button data-view="v-connectors" aria-label="Connectors">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 7V2M15 7V2M6 7h12v4a6 6 0 01-12 0zM12 17v5"/></svg>
+      <span class="tip">Connectors — MCP servers</span>
+    </button>
+    <button data-view="v-policies" aria-label="Policies">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6z"/><path d="M9 12l2 2 4-4"/></svg>
+      <span class="tip">Policies</span>
+    </button>
+    <div class="spacer"></div>
+    <button aria-label="Voice — TTS on, voice alba" style="position:relative">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M11 5L6 9H2v6h4l5 4zM15.5 8.5a5 5 0 010 7M19 5a9 9 0 010 14"/></svg>
+      <span class="voice-dot"></span>
+      <span class="tip">Voice: alba · on</span>
+    </button>
+    <button data-view="v-settings" aria-label="Settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.34 1.87l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.7 1.7 0 00-1.87-.34 1.7 1.7 0 00-1.03 1.56V21a2 2 0 11-4 0v-.09a1.7 1.7 0 00-1.03-1.56 1.7 1.7 0 00-1.87.34l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.7 1.7 0 004.6 15a1.7 1.7 0 00-1.56-1.03H3a2 2 0 110-4h.09A1.7 1.7 0 004.6 9a1.7 1.7 0 00-.34-1.87l-.06-.06a2 2 0 112.83-2.83l.06.06A1.7 1.7 0 009 4.6a1.7 1.7 0 001.03-1.56V3a2 2 0 114 0v.09c0 .68.4 1.3 1.03 1.56.63.26 1.35.12 1.87-.34l.06-.06a2 2 0 112.83 2.83l-.06.06A1.7 1.7 0 0019.4 9c.26.63.88 1.03 1.56 1.03H21a2 2 0 110 4h-.09c-.68 0-1.3.4-1.51.97z"/></svg>
+      <span class="tip">Settings</span>
+    </button>
+  </nav>
+
+  <!-- ============ CONSOLE ============ -->
+  <section id="v-console" class="view on">
+    <div class="sessions">
+      <div class="top">
+        <button class="btn-new"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg> New session <span class="k">⌘N</span></button>
+        <div class="search"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg> Search sessions…</div>
+      </div>
+      <div class="sess-group">
+        <h4>Today</h4>
+        <button class="sess active">
+          <span class="t"><span class="live"></span> Fix fail-open auth middleware</span>
+          <span class="m">pi-code · edit · $0.0183</span>
+        </button>
+        <button class="sess">
+          <span class="t">Audit WS upgrade handler</span>
+          <span class="m">pi-code · plan · $0.0027</span>
+        </button>
+      </div>
+      <div class="sess-group">
+        <h4>Yesterday</h4>
+        <button class="sess">
+          <span class="t">Wire subagent tool tracking</span>
+          <span class="m">opencode · edit · $0.0410</span>
+        </button>
+        <button class="sess">
+          <span class="t">TTS barge-in prototype</span>
+          <span class="m">pi-code · yolo · $0.0092</span>
+        </button>
+      </div>
+      <div class="foot">
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--ink-3)">
+          <span>2 harnesses · 3 devices</span><span class="mono num">spend today $0.07</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="center">
+      <header class="chead">
+        <h1>Fix fail-open auth middleware</h1><i class="note" data-n="1">1</i>
+        <span class="chip harness mono"><span class="dot"></span>pi-code · local</span>
+        <span class="chip mode">EDIT — writes gated to /workspace</span>
+        <span class="vtoggle" role="group" aria-label="Center view">
+          <button class="on" id="vt-tl">Timeline</button><button id="vt-ms">Mission<i class="note" data-n="13">13</i></button>
+        </span>
+        <span style="flex:1"></span>
+        <span class="chip cost num">52.3k tok · <b>$0.0183</b></span>
+      </header>
+
+      <div class="tl" id="mission-view" style="display:none">
+        <div class="tl-inner" style="max-width:960px">
+          <p style="font-size:11.5px;color:var(--ink-3);margin:0 0 12px">Same session, zoomed out — the agent's own breakdown of the task into phases. It re-plans here too: items it adds mid-run are tagged with their source turn. Click any task to jump to its timeline entry.</p>
+          <div class="mgrid">
+            <div class="card open"><div class="hd" style="cursor:default">Phase 1 <span class="name">Recon</span><span class="meta"><span class="badge done">done</span></span></div>
+              <div class="bd">
+                <div class="mtask">Map every route mounted with requireAuth <span style="flex:1"></span><span class="owner" style="border-color:var(--lane-1);color:var(--lane-1)">route-scanner</span><span class="ok-txt mono" style="font-size:10px">done</span></div>
+                <div class="mtask">Read middleware/auth.js + config flow <span style="flex:1"></span><span class="owner">main</span><span class="ok-txt mono" style="font-size:10px">done</span></div>
+              </div>
+              <div class="xcheck">cross-check ✓ — findings verified against inline mounts in server.js</div>
+            </div>
+            <div class="card open"><div class="hd" style="cursor:default">Phase 2 <span class="name">Fix</span><span class="meta"><span class="badge done">done</span></span></div>
+              <div class="bd">
+                <div class="mtask">Rewrite fail-open check, timing-safe compare <span style="flex:1"></span><span class="owner">main</span><span class="ok-txt mono" style="font-size:10px">+9 −3</span></div>
+              </div>
+              <div class="xcheck">cross-check ✓ — code-review skill approved the diff</div>
+            </div>
+            <div class="card open"><div class="hd" style="cursor:default">Phase 3 <span class="name">Harden</span><span class="meta"><span class="badge run"><i></i>active</span></span></div>
+              <div class="bd">
+                <div class="mtask">API-key bootstrap, persist to security-config <span style="flex:1"></span><span class="owner">main</span><span class="warn-txt mono" style="font-size:10px">running</span></div>
+                <div class="mtask">Add same key check to WS upgrade path <span class="chip" style="font-size:9px;padding:1px 6px">added from reasoning · turn 4</span><span style="flex:1"></span><span class="owner">main</span><span class="mono" style="font-size:10px;color:var(--ink-3)">queued</span></div>
+              </div>
+              <div class="xcheck">cross-check pending — security-audit skill runs after both land</div>
+            </div>
+            <div class="card open"><div class="hd" style="cursor:default">Phase 4 <span class="name">Prove</span><span class="meta"><span class="badge run"><i></i>active</span></span></div>
+              <div class="bd">
+                <div class="mtask">Test suite: 401 missing/invalid, 200 valid <span style="flex:1"></span><span class="owner" style="border-color:var(--lane-2);color:var(--lane-2)">test-writer</span><span class="warn-txt mono" style="font-size:10px">2/3 green</span></div>
+                <div class="mtask">Re-run route scan, expect 0/9 open <span style="flex:1"></span><span class="owner" style="border-color:var(--lane-1);color:var(--lane-1)">route-scanner</span><span class="mono" style="font-size:10px;color:var(--ink-3)">queued</span></div>
+              </div>
+              <div class="xcheck">exit criteria — all tests green and rescan clean before session reports done</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tl" id="timeline-view">
+        <div class="tl-inner">
+
+          <div class="entry user">
+            <div class="when num">09:41:02</div>
+            <div class="node"><i></i></div>
+            <div class="body">
+              <div class="msg-user">
+                <div class="who">You · MacBook</div>
+                Audit the auth layer — the API middleware is fail-open. Fix it and cover it with tests.
+              </div>
+            </div>
+          </div>
+
+          <div class="entry">
+            <div class="when num">09:41:19</div>
+            <div class="node"><i></i></div>
+            <div class="body">
+              <div class="card open">
+                <div class="hd" data-toggle>
+                  <svg class="caret" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 6l6 6-6 6"/></svg>
+                  Plan <span class="name">4 steps · step 3 in progress</span>
+                  <span class="meta">approved 09:41</span>
+                </div>
+                <div class="bd">
+                  <div class="plan-steps">
+                    <div class="pstep done"><span class="st">done</span> Map every route mounted with requireAuth</div>
+                    <div class="pstep done"><span class="st">done</span> Rewrite fail-open check in middleware/auth.js</div>
+                    <div class="pstep now"><span class="st">now</span> Generate API-key bootstrap &amp; persist to security-config</div>
+                    <div class="pstep todo"><span class="st">next</span> Run security test suite, verify 401 on missing key</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="entry sub1">
+            <div class="when num">09:41:31</div>
+            <div class="node"><i></i></div>
+            <div class="body">
+              <div class="card sub-card open">
+                <div class="hd" data-toggle>
+                  <svg class="caret" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 6l6 6-6 6"/></svg>
+                  Sub-agent <span class="name">route-scanner</span><i class="note" data-n="2">2</i>
+                  <span class="meta"><button class="link-btn" data-agent style="color:var(--accent-ink)">full trace →</button><span class="badge done">done</span></span>
+                </div>
+                <div class="bd">
+                  <div class="task-line"><b>Task</b> — Enumerate every Express route mounted with requireAuth and report which are reachable without a key.</div>
+                  <div class="sub-tl">
+                    <div class="tool-line"><span class="verb">Grep</span> requireAuth · agent-backend/routes/ <span style="margin-left:auto;color:var(--ink-3)">140ms</span></div>
+                    <div class="tool-line"><span class="verb">Read</span> agent-backend/server.js:88-130 <span style="margin-left:auto;color:var(--ink-3)">85ms</span></div>
+                    <div class="tool-line"><span class="verb">Return</span> 9 routes mounted, 9/9 unauthenticated in practice</div>
+                  </div>
+                </div>
+                <div class="sub-usage num"><b>12.4k</b> tok&nbsp;·&nbsp;<b>$0.0041</b>&nbsp;·&nbsp;<b>3</b> tools&nbsp;·&nbsp;<b>41s</b>&nbsp;·&nbsp;deepseek-v4-flash</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="entry">
+            <div class="when num">09:42:47</div>
+            <div class="node"><i></i></div>
+            <div class="body">
+              <div class="card" id="diff-card">
+                <div class="hd" data-preview>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg>
+                  Edit <span class="name">agent-backend/middleware/auth.js</span><i class="note" data-n="3">3</i>
+                  <span class="meta"><span class="diffstat"><span class="a">+9</span><span class="d">−3</span></span> preview →</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="entry gate">
+            <div class="when num">09:43:05</div>
+            <div class="node"><i></i></div>
+            <div class="body">
+              <div class="card gate-card" id="gate">
+                <div class="hd">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--warn)" stroke-width="2" stroke-linecap="round"><path d="M12 9v4M12 17h.01M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"/></svg>
+                  Approval needed <span class="name">Bash</span><i class="note" data-n="5">5</i>
+                  <span class="meta">policy: EDIT mode</span>
+                </div>
+                <div class="gate-why">Wants to run <code>node scripts/rotate-api-key.js --write</code> — writes outside <code>/workspace</code>, which EDIT mode gates behind approval.</div>
+                <div class="gate-actions">
+                  <button class="btn approve" id="approve">Approve once</button>
+                  <button class="btn deny" id="deny">Deny</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="entry sub2">
+            <div class="when num">09:43:38</div>
+            <div class="node"><i></i></div>
+            <div class="body">
+              <div class="card sub-card lane2 open">
+                <div class="hd" data-toggle>
+                  <svg class="caret" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 6l6 6-6 6"/></svg>
+                  Sub-agent <span class="name">test-writer</span>
+                  <span class="meta"><button class="link-btn" data-agent style="color:var(--accent-ink)">full trace →</button><span class="badge run"><i></i>running</span></span>
+                </div>
+                <div class="bd">
+                  <div class="task-line"><b>Task</b> — Write and run a test suite proving 401 on missing/invalid key and 200 on a valid one.</div>
+                  <div class="sub-tl">
+                    <div class="tool-line"><span class="verb">Write</span> agent-backend/tests/test_auth.js <span style="margin-left:auto;color:var(--ink-3)">210ms</span></div>
+                    <div class="tool-line"><span class="verb">Bash</span> node tests/test_auth.js <span style="margin-left:auto" class="warn-txt">streaming…</span></div>
+                  </div>
+                  <div class="tool-out">▸ auth middleware
+  <span class="ok-txt">✓</span> rejects request with no API key (401)
+  <span class="ok-txt">✓</span> rejects request with wrong key (401)
+  <span class="warn-txt">⠸</span> accepts request with valid key…</div>
+                </div>
+                <div class="sub-usage num"><b>6.1k</b> tok&nbsp;·&nbsp;<b>$0.0019</b>&nbsp;·&nbsp;<b>2</b> tools&nbsp;·&nbsp;live&nbsp;·&nbsp;deepseek-v4-flash</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="entry">
+            <div class="when num">09:43:58</div>
+            <div class="node"><i></i></div>
+            <div class="body">
+              <div class="card">
+                <div class="hd" data-toggle>
+                  <svg class="caret" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 6l6 6-6 6"/></svg>
+                  Reasoning <span class="name">turn 4</span><i class="note" data-n="9">9</i>
+                  <span class="meta">1.2k tok · 3.4s · not spoken</span>
+                </div>
+                <div class="bd"><div class="reason">The middleware fix holds for HTTP, but the WS upgrade path in ws/index.js bypasses Express middleware entirely — the same key check must happen in the upgrade handler or the fix is cosmetic. Rather than widening this diff, queue it as the next plan step and keep this change reviewable.</div></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="entry">
+            <div class="when num">09:44:02</div>
+            <div class="node"><i></i></div>
+            <div class="body">
+              <div class="msg-assist">
+                The middleware is no longer fail-open: a missing key now refuses to boot the server instead of silently allowing every request, and a valid key is generated and persisted on first run. Tests are running — two of three already green.
+                <div><span class="tts-chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M11 5L6 9H2v6h4l5 4zM15.5 8.5a5 5 0 010 7"/></svg> spoken · alba · 4.2s</span></div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <div class="composer">
+        <div class="box">
+          <textarea placeholder="Message the agent — or press · to speak" aria-label="Message the agent"></textarea>
+          <div class="row">
+            <span class="pop">
+              <button class="chip h-chip" data-pop style="border-color:rgba(217,164,74,.4);color:var(--warn)">mode: edit ▾</button>
+              <div class="menu" style="min-width:250px">
+                <div class="mh">Permission mode — what the agent may do</div>
+                <button>Chat <span style="color:var(--ink-3)">— read-only, no tools</span></button>
+                <button>Plan <span style="color:var(--ink-3)">— read + plan, no writes</span></button>
+                <button class="sel">Edit <span style="color:var(--ink-3)">— writes gated to /workspace</span></button>
+                <button style="color:var(--danger)">Yolo <span style="color:var(--ink-3)">— everything allowed</span></button>
+              </div>
+            </span>
+            <span class="chip h-chip"><span class="dot" style="background:var(--ok)"></span>pi-code</span>
+            <span class="pop">
+              <button class="chip h-chip" data-pop>prompt: standard ▾</button>
+              <div class="menu" style="min-width:240px">
+                <div class="mh">Prompt library — agents inherit the pick</div>
+                <button class="sel">standard <span style="color:var(--ink-3)">— aegis default</span></button>
+                <button>claude-style <span style="color:var(--ink-3)">— fable/opus flavor</span></button>
+                <button>gemini-style</button>
+                <button>codex-style</button>
+                <button style="color:var(--accent-ink)">＋ add prompt…</button>
+              </div>
+            </span>
+            <span class="pop">
+              <button class="chip h-chip" data-pop>effort: balanced ▾</button>
+              <div class="menu">
+                <div class="mh">Effort profile — model + reasoning budget</div>
+                <button>fast — chat, QA, quick research</button>
+                <button class="sel">balanced</button>
+                <button>deep — dense planner, mission tracking</button>
+              </div>
+            </span>
+            <span class="pop">
+              <button class="chip h-chip" data-pop>skills: 3 ▾</button>
+              <div class="menu">
+                <div class="mh">Attached to this session</div>
+                <button class="sel">✓ code-review</button>
+                <button class="sel">✓ security-audit</button>
+                <button class="sel">✓ tts-summarize</button>
+                <button>workspace-snapshot</button>
+                <button style="color:var(--accent-ink)">＋ add skill…</button>
+              </div>
+            </span>
+            <span style="flex:1"></span>
+            <button class="icon-btn" aria-label="Dictate"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v1a7 7 0 0014 0v-1M12 18v4"/></svg></button>
+            <button class="icon-btn on" aria-label="Voice responses on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M11 5L6 9H2v6h4l5 4zM15.5 8.5a5 5 0 010 7M19 5a9 9 0 010 14"/></svg></button>
+            <button class="send">Send <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ————— inspector ————— -->
+    <aside class="inspector">
+      <div class="seg-row" role="tablist">
+        <button class="on" data-seg="seg-overview" role="tab">Overview<i class="note" data-n="6">6</i></button>
+        <button data-seg="seg-files" role="tab">Workspace</button>
+        <button data-seg="seg-preview" role="tab">Preview</button>
+        <button data-seg="seg-agent" role="tab">Trace<i class="note" data-n="10">10</i></button>
+      </div>
+
+      <div class="ins-body on" id="seg-overview">
+        <div class="ins-sec">
+          <h4>Usage · this session <span class="src-tag">provider-reported</span><i class="note" data-n="4">4</i></h4>
+          <div class="tiles">
+            <div class="tile"><div class="l">Tokens in / out</div><div class="v num">44.6k <span class="u">/ 7.7k</span></div></div>
+            <div class="tile"><div class="l">Cost</div><div class="v num" style="color:var(--ok)">$0.0183</div><div class="s num">cap $0.05 / session</div></div>
+            <div class="tile"><div class="l">Tool calls</div><div class="v num">14</div><div class="s num">2 sub-agents · depth 1</div></div>
+            <div class="tile"><div class="l">Latency p50 / p95</div><div class="v num">0.34<span class="u">s</span> <span class="u">/ 2.1s</span></div></div>
+          </div>
+          <div class="chart-card" style="margin-top:8px">
+            <div class="cap">Tokens per turn
+              <span style="margin-left:auto" class="lgd"><i style="background:var(--s-in)"></i>in</span>
+              <span class="lgd"><i style="background:var(--s-out)"></i>out</span>
+            </div>
+            <div class="tok-bars" aria-hidden="true">
+              <div class="tok-turn"><i class="in" style="height:28%"></i><i class="out" style="height:9%"></i></div>
+              <div class="tok-turn"><i class="in" style="height:42%"></i><i class="out" style="height:14%"></i></div>
+              <div class="tok-turn"><i class="in" style="height:35%"></i><i class="out" style="height:11%"></i></div>
+              <div class="tok-turn"><i class="in" style="height:66%"></i><i class="out" style="height:22%"></i></div>
+              <div class="tok-turn"><i class="in" style="height:58%"></i><i class="out" style="height:17%"></i></div>
+              <div class="tok-turn"><i class="in" style="height:90%"></i><i class="out" style="height:30%"></i></div>
+              <div class="tok-turn"><i class="in" style="height:74%"></i><i class="out" style="height:26%"></i></div>
+              <div class="tok-turn"><i class="in" style="height:100%"></i><i class="out" style="height:34%"></i></div>
+            </div>
+            <div class="meter"><i style="width:41%"></i></div>
+            <div class="m-cap"><span>context 52.3k / 128k</span><span>41%</span></div>
+            <div class="meter warn" style="margin-top:8px"><i style="width:37%"></i></div>
+            <div class="m-cap"><span>budget $0.0183 / $0.05</span><span>37%</span></div>
+          </div>
+        </div>
+
+        <div class="ins-sec">
+          <h4>Sub-agents</h4>
+          <div class="sub-row"><span class="lane" style="background:var(--lane-1)"></span><span class="n">route-scanner</span><span class="badge done">done</span><span class="r num">12.4k · $0.0041</span></div>
+          <div class="sub-row"><span class="lane" style="background:var(--lane-2)"></span><span class="n">test-writer</span><span class="badge run"><i></i>run</span><span class="r num">6.1k · $0.0019</span></div>
+        </div>
+
+        <div class="ins-sec">
+          <h4>Tool latency · slowest</h4>
+          <div class="lat-row"><span class="n">Bash</span><div class="bar"><i style="width:100%"></i></div><span class="t num">2.10s</span></div>
+          <div class="lat-row"><span class="n">Write</span><div class="bar"><i style="width:11%"></i></div><span class="t num">0.21s</span></div>
+          <div class="lat-row"><span class="n">Grep</span><div class="bar"><i style="width:7%"></i></div><span class="t num">0.14s</span></div>
+          <div class="lat-row"><span class="n">Read</span><div class="bar"><i style="width:4%"></i></div><span class="t num">0.09s</span></div>
+        </div>
+
+        <div class="ins-sec">
+          <h4>Turn latency</h4>
+          <div class="chart-card">
+            <svg class="spark" viewBox="0 0 300 44" preserveAspectRatio="none" aria-hidden="true">
+              <line x1="0" y1="22" x2="300" y2="22" stroke="var(--line-soft)" stroke-width="1"/>
+              <path d="M0,34 L40,30 L80,32 L120,18 L160,24 L200,10 L240,16 L280,12" fill="none" stroke="var(--s-in)" stroke-width="2" stroke-linejoin="round"/>
+              <circle cx="280" cy="12" r="3.5" fill="var(--s-in)"/>
+            </svg>
+            <div class="m-cap"><span>last 8 turns</span><span>now 1.9s</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="ins-body" id="seg-files">
+        <div class="ins-sec">
+          <h4>Workspace · /workspace <span style="float:right;color:var(--warn)">2 changed</span></h4>
+          <div class="ftree">
+            <button class="fnode dir">▾ agent-backend/</button>
+            <button class="fnode dir indent1">▾ middleware/</button>
+            <button class="fnode indent2" data-preview>auth.js <span class="fb M">M</span></button>
+            <button class="fnode dir indent1">▾ tests/</button>
+            <button class="fnode indent2">test_auth.js <span class="fb A">A</span></button>
+            <button class="fnode indent1">security-guard.js</button>
+            <button class="fnode indent1">server.js</button>
+            <button class="fnode dir">▸ dashboard/</button>
+            <button class="fnode dir">▸ prompts/</button>
+          </div>
+        </div>
+        <div class="empty-hint">Click a changed file to preview its diff.<br>Images, HTML and markdown render inline.</div>
+      </div>
+
+      <div class="ins-body" id="seg-preview">
+        <div id="preview-empty" class="empty-hint"><b>Nothing selected.</b><br>Click an edit card in the timeline or a file in the workspace tree to preview it here.</div>
+        <div id="preview-diff" style="display:none">
+          <div class="prev-head">
+            <span>agent-backend/middleware/auth.js</span>
+            <span class="diffstat"><span class="a">+9</span><span class="d">−3</span></span>
+          </div>
+          <div class="prev-frame">
+            <div class="difflines">
+              <div class="dl ctx"><span class="ln num">8</span>function requireAuth(req, res, next) {</div>
+              <div class="dl del"><span class="ln num">9</span>-  if (!config.apiKey) return next(); // fail-open</div>
+              <div class="dl del"><span class="ln num">10</span>-  const key = req.get('x-api-key');</div>
+              <div class="dl del"><span class="ln num">11</span>-  if (key === config.apiKey) return next();</div>
+              <div class="dl add"><span class="ln num">9</span>+  const expected = config.apiKey;</div>
+              <div class="dl add"><span class="ln num">10</span>+  if (!expected) {</div>
+              <div class="dl add"><span class="ln num">11</span>+    // refuse to serve unauthenticated — key is</div>
+              <div class="dl add"><span class="ln num">12</span>+    // generated at boot by ensureApiKey()</div>
+              <div class="dl add"><span class="ln num">13</span>+    return res.status(503).json({ error: 'auth not initialized' });</div>
+              <div class="dl add"><span class="ln num">14</span>+  }</div>
+              <div class="dl add"><span class="ln num">15</span>+  const key = req.get('x-api-key');</div>
+              <div class="dl add"><span class="ln num">16</span>+  if (key &amp;&amp; timingSafeEqual(key, expected)) return next();</div>
+              <div class="dl add"><span class="ln num">17</span>+  return res.status(401).json({ error: 'unauthorized' });</div>
+              <div class="dl ctx"><span class="ln num">18</span>}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="ins-body" id="seg-agent">
+        <div class="ins-sec">
+          <h4><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--lane-1);margin-right:6px"></span>route-scanner <span class="badge done" style="margin-left:6px">done</span></h4>
+          <div class="task-line" style="margin-top:6px"><b>Task</b> — Enumerate every Express route mounted with requireAuth and report which are reachable without a key.</div>
+          <div class="task-line mono">spawned by main agent · 09:41:31 → 09:42:12 · deepseek-v4-flash · depth 1</div>
+          <div class="tiles" style="margin-top:8px">
+            <div class="tile"><div class="l">Tokens in / out</div><div class="v num">9.8k <span class="u">/ 2.6k</span></div></div>
+            <div class="tile"><div class="l">Cost</div><div class="v num" style="color:var(--ok)">$0.0041</div></div>
+            <div class="tile"><div class="l">Tool calls</div><div class="v num">3</div></div>
+            <div class="tile"><div class="l">Duration</div><div class="v num">41<span class="u">s</span></div></div>
+          </div>
+        </div>
+        <div class="ins-sec">
+          <h4>Own timeline</h4>
+          <div class="chart-card" style="display:flex;flex-direction:column;gap:8px">
+            <div class="tool-line"><span class="verb">Reason</span> <span class="reason" style="font-size:11px">need every mount site, not just routes/ — server.js mounts some inline</span></div>
+            <div class="tool-line"><span class="verb">Grep</span> requireAuth · routes/ <span style="margin-left:auto;color:var(--ink-3)">140ms · 6 hits</span></div>
+            <div class="tool-line"><span class="verb">Read</span> server.js:88-130 <span style="margin-left:auto;color:var(--ink-3)">85ms · 3 more mounts</span></div>
+            <div class="tool-line"><span class="verb">Reason</span> <span class="reason" style="font-size:11px">config.apiKey is never written → middleware is a no-op on all 9</span></div>
+          </div>
+          <div class="tool-out" style="margin-top:8px">returned → 9 routes mounted, 9/9 unauthenticated in practice
+/api/config /api/sessions /api/models /api/tts
+/api/workspace /api/screenshot /api/logs /api/pair /api/devices</div>
+        </div>
+        <div class="empty-hint" style="padding:14px">Every sub-agent gets this trace — reasoning, tools, usage — persisted with the session. <b>test-writer</b> streams here while it runs.</div>
+      </div>
+    </aside>
+  </section>
+
+  <!-- ============ FLEET ============ -->
+  <section id="v-fleet" class="view">
+    <div class="page">
+      <div class="page-inner">
+        <h2>Fleet<i class="note" data-n="7">7</i></h2>
+        <p class="sub">Everything that can talk to this console — devices you drive it from, and harnesses that do the work. Both pair the same way: one code, one minute.</p>
+
+        <div class="fleet-grid">
+          <div class="pair-card">
+            <h3>Pair a device or harness</h3>
+            <div class="d">Open the URL below anywhere, or point a harness adapter at it, and enter this code.</div>
+            <div class="otp num" id="otp">H7K4·PQ2X</div>
+            <div class="otp-meta">
+              <svg class="ring" viewBox="0 0 26 26" aria-hidden="true">
+                <circle class="track" cx="13" cy="13" r="10" fill="none" stroke-width="3"/>
+                <circle class="arc" id="ring-arc" cx="13" cy="13" r="10" fill="none" stroke-width="3" stroke-dasharray="62.8" stroke-dashoffset="0"/>
+              </svg>
+              expires in <span class="mono num" id="otp-t">4:31</span>
+              <button class="link-btn" style="color:var(--accent-ink)">regenerate</button>
+            </div>
+            <div class="pair-url">http://aegis.local:6801/pair</div>
+            <div class="pair-scope">
+              <label>Scope granted at pairing</label>
+              <div class="scope-opts">
+                <button>Chat + voice</button><button class="on">Read-only</button><button>Full control</button>
+              </div>
+            </div>
+            <div class="adapter-line">harness CLI: <code>npx aegis-adapter --code H7K4PQ2X</code></div>
+          </div>
+
+          <div>
+            <div class="fleet-h">Harnesses · 3</div>
+            <div class="fleet-list">
+              <div class="fl-row">
+                <div class="fl-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 17l6-6-6-6M12 19h8"/></svg></div>
+                <div class="fl-main">
+                  <div class="n">pi-code <span class="st on"><i></i>connected</span></div>
+                  <div class="m">local · child process · v0.9.2 · 2 active sessions</div>
+                </div>
+                <div class="fl-right"><span class="chip mono num">today $0.05</span><button class="link-btn">policies</button></div>
+              </div>
+              <div class="fl-row">
+                <div class="fl-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M3.5 9h17M3.5 15h17M12 3a15 15 0 010 18M12 3a15 15 0 000 18"/></svg></div>
+                <div class="fl-main">
+                  <div class="n">opencode <span class="st idle"><i></i>idle</span></div>
+                  <div class="m">remote · WS token · paired via OTP · workstation-02</div>
+                </div>
+                <div class="fl-right"><span class="chip mono num">today $0.02</span><button class="link-btn">policies</button></div>
+              </div>
+              <div class="fl-row">
+                <div class="fl-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 17l6-6-6-6M12 19h8"/></svg></div>
+                <div class="fl-main">
+                  <div class="n">pi-code · worker-2 <span class="st idle"><i></i>idle</span></div>
+                  <div class="m">local · child process · same machine, separate policy scope</div>
+                </div>
+                <div class="fl-right"><span class="chip mono num">today $0.00</span><button class="link-btn">policies</button></div>
+              </div>
+              <div class="fl-row add-row">+ Connect a harness — any CLI that speaks the adapter protocol; run as many per machine as you want</div>
+            </div>
+
+            <div class="fleet-h">Devices · 3</div>
+            <div class="fleet-list">
+              <div class="fl-row">
+                <div class="fl-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M7 20h10"/></svg></div>
+                <div class="fl-main">
+                  <div class="n">Himanshu's MacBook <span class="chip" style="font-size:9.5px">this device</span></div>
+                  <div class="m">full control · owner · active now</div>
+                </div>
+                <div class="fl-right"><span class="st on"><i></i>online</span></div>
+              </div>
+              <div class="fl-row">
+                <div class="fl-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></svg></div>
+                <div class="fl-main">
+                  <div class="n">Pixel 9</div>
+                  <div class="m">chat + voice · paired 2026-07-08 · last seen 2d ago</div>
+                </div>
+                <div class="fl-right"><button class="link-btn">revoke</button></div>
+              </div>
+              <div class="fl-row">
+                <div class="fl-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="4" y="3" width="16" height="18" rx="2"/></svg></div>
+                <div class="fl-main">
+                  <div class="n">iPad</div>
+                  <div class="m">read-only · paired 2026-07-05 · last seen 5h ago</div>
+                </div>
+                <div class="fl-right"><button class="link-btn">revoke</button></div>
+              </div>
+            </div>
+
+            <div class="fleet-h">Connectors</div>
+            <div class="fleet-list"><div class="fl-row" style="color:var(--ink-3);font-size:12px">MCP tool servers moved to their own page — see <b style="color:var(--accent-ink);margin:0 4px">Connectors</b> in the rail.</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ CONNECTORS ============ -->
+  <section id="v-connectors" class="view">
+    <div class="page">
+      <div class="page-inner">
+        <h2>Connectors<i class="note" data-n="12">12</i></h2>
+        <p class="sub">MCP tool servers. Register once here — every harness session gets the tools, every call passes the policy engine and lands in the timeline like any other tool.</p>
+
+        <div class="fleet-list">
+          <div class="fl-row" style="flex-wrap:wrap">
+            <div class="fl-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.9a3.4 3.4 0 00-1-2.6c3.2-.4 6.5-1.6 6.5-7A5.4 5.4 0 0020 4.8 5 5 0 0019.9 1S18.7.6 16 2.5a13.4 13.4 0 00-7 0C6.3.6 5.1 1 5.1 1A5 5 0 005 4.8a5.4 5.4 0 00-1.5 3.7c0 5.4 3.3 6.6 6.5 7a3.4 3.4 0 00-1 2.6V22"/></svg></div>
+            <div class="fl-main">
+              <div class="n">github <span class="st on"><i></i>connected</span></div>
+              <div class="m">npx @modelcontextprotocol/server-github · OAuth · 11 tools · used 26× today</div>
+            </div>
+            <div class="fl-right"><button class="link-btn">reauth</button><button class="link-btn">remove</button></div>
+            <div style="flex-basis:100%;padding:10px 0 2px 48px;display:flex;gap:8px;flex-wrap:wrap;font-size:11px">
+              <span class="chip mono">list_prs <span class="pv allow" style="font-size:9px">allow</span></span>
+              <span class="chip mono">read_file <span class="pv allow" style="font-size:9px">allow</span></span>
+              <span class="chip mono">create_pr <span class="pv ask" style="font-size:9px">ask</span></span>
+              <span class="chip mono">push_commit <span class="pv ask" style="font-size:9px">ask</span></span>
+              <span class="chip mono">delete_branch <span class="pv block" style="font-size:9px">block</span></span>
+              <span style="color:var(--ink-3);align-self:center">+ 6 more</span>
+            </div>
+          </div>
+          <div class="fl-row">
+            <div class="fl-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M8 12h8M12 8v8"/></svg></div>
+            <div class="fl-main">
+              <div class="n">lightpanda-browser <span class="st on"><i></i>connected</span></div>
+              <div class="m">local · mcp-server-lightpanda · headless browsing, screenshots · 4 tools</div>
+            </div>
+            <div class="fl-right"><button class="link-btn" style="color:var(--accent-ink)">tools &amp; policy</button></div>
+          </div>
+          <div class="fl-row">
+            <div class="fl-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4z"/></svg></div>
+            <div class="fl-main">
+              <div class="n">slack <span class="st on"><i></i>connected</span></div>
+              <div class="m">remote URL · bot token · post updates, read channels · post: ask</div>
+            </div>
+            <div class="fl-right"><button class="link-btn" style="color:var(--accent-ink)">tools &amp; policy</button></div>
+          </div>
+          <div class="fl-row">
+            <div class="fl-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 3v18h18M7 14l4-4 3 3 5-6"/></svg></div>
+            <div class="fl-main">
+              <div class="n">grafana <span class="st idle"><i></i>idle</span></div>
+              <div class="m">docker · service account · dashboards, alerts · read-only</div>
+            </div>
+            <div class="fl-right"><button class="link-btn" style="color:var(--accent-ink)">tools &amp; policy</button></div>
+          </div>
+          <div class="fl-row add-row">+ Add connector — npx command, docker image, or remote MCP URL</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ SETTINGS ============ -->
+  <section id="v-settings" class="view">
+    <div class="page">
+      <div class="page-inner" style="max-width:720px">
+        <h2>Settings<i class="note" data-n="11">11</i></h2>
+        <p class="sub">Global defaults. Mode, prompt directive and skills can be overridden per session from the composer.</p>
+
+        <div class="set-sec">
+          <h3>Models</h3>
+          <div class="frow"><span class="fl">LiteLLM endpoint</span><span class="fval">http://127.0.0.1:5000/v1</span></div>
+          <div class="frow"><span class="fl">API key</span><span class="fval">••••••••••••••••</span></div>
+          <div class="frow"><span class="fl">Execution model</span><span class="fval sel">deepseek-v4-flash</span></div>
+          <div class="frow"><span class="fl">Reasoning planner</span><span class="fval sel">deepseek-v4-flash</span></div>
+          <div class="frow"><span class="fl">Thinking mode</span><span class="fval sel">normal</span></div>
+        </div>
+
+        <div class="set-sec">
+          <h3>Prompt library</h3>
+          <p class="sd">Stored system prompts — including frontier-style ones (claude, gemini, codex flavors) — selectable per session from the composer. The main agent and every sub-agent it spawns inherit the selected prompt; mode directives (plan/edit/yolo) are appended on top.</p>
+          <div class="frow"><span class="fl mono">standard</span><span style="color:var(--ink-3);font-size:11.5px">aegis default</span><span style="flex:1"></span><button class="link-btn" style="color:var(--accent-ink)">edit</button></div>
+          <div class="frow"><span class="fl mono">claude-style</span><span style="color:var(--ink-3);font-size:11.5px">fable/opus flavor</span><span style="flex:1"></span><button class="link-btn" style="color:var(--accent-ink)">edit</button></div>
+          <div class="frow"><span class="fl mono">gemini-style</span><span style="color:var(--ink-3);font-size:11.5px">gemini-cli flavor</span><span style="flex:1"></span><button class="link-btn" style="color:var(--accent-ink)">edit</button></div>
+          <div class="frow"><span class="fl mono">codex-style</span><span style="color:var(--ink-3);font-size:11.5px">openai codex flavor</span><span style="flex:1"></span><button class="link-btn" style="color:var(--accent-ink)">edit</button></div>
+          <div class="frow"><button class="link-btn" style="color:var(--accent-ink)">＋ add prompt — paste, file, or URL</button></div>
+        </div>
+
+        <div class="set-sec">
+          <h3>Skills</h3>
+          <p class="sd">Reusable instruction packs the agent can load. Attach per session, or mark as always-on.</p>
+          <div class="frow"><span class="fl mono">code-review</span><span style="color:var(--ink-3);font-size:11.5px">review diffs before write-back</span><span style="flex:1"></span><button class="tgl" aria-label="code-review on"></button></div>
+          <div class="frow"><span class="fl mono">security-audit</span><span style="color:var(--ink-3);font-size:11.5px">path + command hygiene checks</span><span style="flex:1"></span><button class="tgl" aria-label="security-audit on"></button></div>
+          <div class="frow"><span class="fl mono">tts-summarize</span><span style="color:var(--ink-3);font-size:11.5px">spoken one-line summaries</span><span style="flex:1"></span><button class="tgl" aria-label="tts-summarize on"></button></div>
+          <div class="frow"><span class="fl mono">workspace-snapshot</span><span style="color:var(--ink-3);font-size:11.5px">checkpoint before edits</span><span style="flex:1"></span><button class="tgl off" aria-label="workspace-snapshot off"></button></div>
+          <div class="frow"><button class="link-btn" style="color:var(--accent-ink)">＋ add skill from folder or git URL</button></div>
+        </div>
+
+        <div class="set-sec">
+          <h3>Voice</h3>
+          <div class="frow"><span class="fl">Voice responses (TTS)</span><button class="tgl" aria-label="TTS on"></button></div>
+          <div class="frow"><span class="fl">Voice</span><span class="fval sel">alba</span></div>
+          <div class="frow"><span class="fl">Barge-in</span><span style="color:var(--ink-3);font-size:11.5px">speaking interrupts the agent's audio</span><span style="flex:1"></span><button class="tgl" aria-label="barge-in on"></button></div>
+        </div>
+
+        <div class="set-sec">
+          <h3>Memory &amp; compaction</h3>
+          <div class="frow"><span class="fl">Auto-compaction</span><button class="tgl" aria-label="auto-compaction on"></button></div>
+          <div class="frow"><span class="fl">Threshold</span><span class="fval num">70% of context</span></div>
+          <div class="frow"><span class="fl">&nbsp;</span><button class="btn" style="background:var(--raised)">Compact memory now</button></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ POLICIES ============ -->
+  <section id="v-policies" class="view">
+    <div class="page">
+      <div class="page-inner">
+        <h2>Policies<i class="note" data-n="8">8</i></h2>
+        <p class="sub">What each mode may do, before the agent ever runs. Approvals surface in the timeline where the action happens; everything else is decided here.</p>
+
+        <div class="fleet-h">Capability × mode</div>
+        <div class="pol-wrap">
+          <table class="pol-table">
+            <thead><tr><th>Capability</th><th>Chat</th><th>Plan</th><th>Edit</th><th>Yolo</th></tr></thead>
+            <tbody>
+              <tr><td>Read files in /workspace</td><td><span class="pv allow">allow</span></td><td><span class="pv allow">allow</span></td><td><span class="pv allow">allow</span></td><td><span class="pv allow">allow</span></td></tr>
+              <tr><td>Write inside /workspace</td><td><span class="pv block">block</span></td><td><span class="pv block">block</span></td><td><span class="pv allow">allow</span></td><td><span class="pv allow">allow</span></td></tr>
+              <tr><td>Write outside /workspace</td><td><span class="pv block">block</span></td><td><span class="pv block">block</span></td><td><span class="pv ask">ask</span></td><td><span class="pv allow">allow</span></td></tr>
+              <tr><td>Run shell commands</td><td><span class="pv block">block</span></td><td><span class="pv ask">ask</span></td><td><span class="pv ask">ask</span></td><td><span class="pv allow">allow</span></td></tr>
+              <tr><td>Network access</td><td><span class="pv block">block</span></td><td><span class="pv block">block</span></td><td><span class="pv ask">ask</span></td><td><span class="pv allow">allow</span></td></tr>
+              <tr><td>Spawn sub-agents</td><td><span class="pv na">n/a</span></td><td><span class="pv allow">allow</span></td><td><span class="pv allow">allow</span></td><td><span class="pv allow">allow</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="fleet-h" style="margin-top:24px">Budgets &amp; limits — enforced, not advisory</div>
+        <div class="budget-grid">
+          <div class="tile"><div class="l">Max cost per session</div><div class="v num">$0.05</div><div class="s">harness paused at cap, asks to continue</div></div>
+          <div class="tile"><div class="l">Token budget per session</div><div class="v num">200k</div><div class="s">auto-compaction at 70% context</div></div>
+          <div class="tile"><div class="l">Sub-agent depth</div><div class="v num">2</div><div class="s">deeper spawns are blocked</div></div>
+        </div>
+
+        <div class="fleet-h" style="margin-top:24px">Per-device overrides</div>
+        <div class="fleet-list">
+          <div class="fl-row">
+            <div class="fl-main">
+              <div class="n">Pixel 9</div>
+              <div class="m">max mode: chat · voice allowed · cannot approve gates</div>
+            </div>
+            <div class="fl-right"><button class="link-btn" style="color:var(--accent-ink)">edit</button></div>
+          </div>
+          <div class="fl-row">
+            <div class="fl-main">
+              <div class="n">iPad</div>
+              <div class="m">read-only · timeline visible, composer disabled</div>
+            </div>
+            <div class="fl-right"><button class="link-btn" style="color:var(--accent-ink)">edit</button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<!-- ————— design notes ————— -->
+<button class="notes-toggle" id="notes-btn">Design notes</button>
+<div class="notes-drawer" role="note">
+  <h3>What changed, and why</h3>
+  <div class="nd-item"><i class="note">1</i><div><b>One timeline, not chat + hidden tabs.</b> Everything the agent does — messages, plan, tools, edits, sub-agents, approvals — is a single chronological stream. The work is the centerpiece, chat is woven in.</div></div>
+  <div class="nd-item"><i class="note">2</i><div><b>Sub-agents are first-class.</b> Each spawn is a nested lane with its own tool calls, tokens, cost and duration — lineage color carries into the inspector. This is the end-to-end observability piece.</div></div>
+  <div class="nd-item"><i class="note">3</i><div><b>Edits preview on click.</b> Any edit card or workspace file opens in the inspector's Preview segment — diffs, images, HTML, markdown.</div></div>
+  <div class="nd-item"><i class="note">4</i><div><b>Usage is provider-reported.</b> Real prompt/completion tokens from LiteLLM usage objects, real cost, per-turn breakdown — no more "estimated" placeholders, plus enforced budget caps.</div></div>
+  <div class="nd-item"><i class="note">5</i><div><b>Approvals happen in place.</b> Policy gates render in the timeline at the moment they fire, with the reason spelled out — no modal, no separate approvals queue.</div></div>
+  <div class="nd-item"><i class="note">6</i><div><b>Three inspector segments replace five clipped tabs.</b> Overview (usage + sub-agents + latency), Workspace (file tree), Preview (context-sensitive). Settings moves to the rail.</div></div>
+  <div class="nd-item"><i class="note">7</i><div><b>Fleet is a page, not a footer row.</b> One OTP flow pairs both devices (phone, laptop) and harnesses (pi, opencode, custom adapters), with scope chosen at pairing time and revocation per device.</div></div>
+  <div class="nd-item"><i class="note">8</i><div><b>Policies are legible.</b> A capability × mode matrix plus enforced budgets and per-device overrides — the authorization story in one screen.</div></div>
+  <div class="nd-item"><i class="note">9</i><div><b>Reasoning is a per-turn accordion.</b> Collapsed by default, with its own token count, and excluded from TTS. Sub-agents' reasoning appears inside their trace.</div></div>
+  <div class="nd-item"><i class="note">10</i><div><b>Trace = end-to-end sub-agent observability.</b> "Full trace" on any sub-agent opens its task, its own reasoning + tool timeline, and its own metrics — persisted, not just a session rollup.</div></div>
+  <div class="nd-item"><i class="note">11</i><div><b>Settings is one page on the rail</b> — models, prompt directives, skills (attach per session from the composer), voice, memory. Nothing hidden in a sixth clipped tab.</div></div>
+  <div class="nd-item"><i class="note">12</i><div><b>Connectors are their own page.</b> MCP servers (github, lightpanda browser, slack…) registered once, shared by every harness, with per-tool allow/ask/block. Skills = instructions; connectors = tools.</div></div>
+  <div class="nd-item"><i class="note">13</i><div><b>Mission is a lens, not a tab.</b> Deep-effort sessions get a zoomed-out view of the same timeline data: the agent's own phase breakdown, task ownership per sub-agent, cross-check gates, and re-plans tagged with the reasoning turn that caused them. No second source of truth.</div></div>
+  <div class="nd-item"><i class="note">15</i><div><b>Compact composer, everything an accordion chip.</b> Mode, prompt, effort and skills are uniform popover chips — one quiet row. The prompt chip picks from a stored library of frontier-style system prompts (claude/gemini/codex flavors) that the agent and its sub-agents inherit.</div></div>
+  <div class="nd-item"><i class="note">14</i><div><b>Effort ≠ permission.</b> fast / balanced / deep is a composer profile (model routing + reasoning budget); Chat/Plan/Edit/Yolo stays what the agent <i>may do</i>. Two axes, not seven modes.</div></div>
+  <div class="nd-item" style="margin-bottom:0;color:var(--ink-3)">Mobile IA mirrors the rail: Console / Fleet / Policies as bottom nav; inspector segments become swipe-up sheets. One machine can run any number of harnesses — each is a separate row in Fleet with its own policy scope.</div>
+</div>
+
+<script>
+  // view switching
+  document.querySelectorAll('.rail button[data-view]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.rail button[data-view]').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      document.querySelectorAll('.view').forEach(v => v.classList.remove('on'));
+      document.getElementById(btn.dataset.view).classList.add('on');
+    });
+  });
+
+  // inspector segments
+  const segBtns = document.querySelectorAll('.seg-row button');
+  function showSeg(id) {
+    segBtns.forEach(b => b.classList.toggle('on', b.dataset.seg === id));
+    document.querySelectorAll('.ins-body').forEach(p => p.classList.toggle('on', p.id === id));
+  }
+  segBtns.forEach(b => b.addEventListener('click', () => showSeg(b.dataset.seg)));
+
+  // collapsible cards
+  document.querySelectorAll('[data-toggle]').forEach(hd =>
+    hd.addEventListener('click', () => hd.closest('.card').classList.toggle('open')));
+
+  // preview wiring: edit card + workspace file → Preview segment
+  document.querySelectorAll('[data-preview]').forEach(el =>
+    el.addEventListener('click', () => {
+      showSeg('seg-preview');
+      document.getElementById('preview-empty').style.display = 'none';
+      document.getElementById('preview-diff').style.display = 'block';
+    }));
+
+  // approval gate demo
+  const gate = document.getElementById('gate');
+  document.getElementById('approve').addEventListener('click', () => {
+    gate.innerHTML = '<div class="hd" style="cursor:default"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--ok)" stroke-width="2.5" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg> Approved once <span class="name">node scripts/rotate-api-key.js --write</span><span class="meta ok-txt">exit 0 · 1.4s</span></div><div class="tool-out" style="margin:0 12px 11px">API key rotated and persisted to security-config.json\nrestart not required — hot-reloaded</div>';
+    gate.style.borderColor = 'rgba(63,191,135,.35)';
+  });
+  document.getElementById('deny').addEventListener('click', () => {
+    gate.innerHTML = '<div class="hd" style="cursor:default"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg> Denied <span class="name">node scripts/rotate-api-key.js --write</span><span class="meta dang-txt">agent will replan</span></div>';
+    gate.style.borderColor = 'rgba(224,102,102,.35)';
+  });
+
+  // OTP countdown
+  let t = 271; const total = 300;
+  const arc = document.getElementById('ring-arc'), tEl = document.getElementById('otp-t');
+  setInterval(() => {
+    t = t > 0 ? t - 1 : 300;
+    tEl.textContent = Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0');
+    arc.style.strokeDashoffset = (62.8 * (1 - t / total)).toFixed(1);
+  }, 1000);
+
+  // timeline ⇄ mission toggle
+  const vtTl = document.getElementById('vt-tl'), vtMs = document.getElementById('vt-ms');
+  function setCenter(mission) {
+    document.getElementById('timeline-view').style.display = mission ? 'none' : 'block';
+    document.getElementById('mission-view').style.display = mission ? 'block' : 'none';
+    vtTl.classList.toggle('on', !mission); vtMs.classList.toggle('on', mission);
+  }
+  vtTl.addEventListener('click', () => setCenter(false));
+  vtMs.addEventListener('click', () => setCenter(true));
+
+  // composer popovers
+  document.querySelectorAll('[data-pop]').forEach(b => b.addEventListener('click', e => {
+    e.stopPropagation();
+    const p = b.closest('.pop');
+    document.querySelectorAll('.pop').forEach(o => o !== p && o.classList.remove('open'));
+    p.classList.toggle('open');
+  }));
+  document.addEventListener('click', () => document.querySelectorAll('.pop').forEach(p => p.classList.remove('open')));
+
+  // sub-agent full trace → inspector Trace segment
+  document.querySelectorAll('[data-agent]').forEach(b => b.addEventListener('click', e => {
+    e.stopPropagation(); showSeg('seg-agent');
+  }));
+
+  // skill/settings toggles (mock)
+  document.querySelectorAll('.tgl').forEach(t => t.addEventListener('click', () => t.classList.toggle('off')));
+
+  // design notes toggle
+  document.getElementById('notes-btn').addEventListener('click', () =>
+    document.body.classList.toggle('notes'));
+</script>
