@@ -299,6 +299,7 @@ async function handleStartTask(ws, userPrompt, sessionId, mode, systemPromptType
     : litellmConfig.selectedNormalModel;
   metricsManager.initSession(sessionId, activeMode, activeModelName);
   metricsManager.recordInputTokens(sessionId, userPrompt);
+  metricsManager.beginTurn(sessionId, userPrompt);
   
   // ── Initialize subagent tracker ───────────────────────────
   // Restore prior sub-agent history for this session (if any was persisted)
@@ -396,6 +397,26 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
   
   events.on("thinking_delta", ({ delta }) => {
     metricsManager.recordReasoning(sessionId, estimateTokens(delta));
+  });
+
+  // Provider-reported usage relayed by the harness. When the usage belongs to
+  // a sub-agent's own LLM calls, credit that agent's counters too; the session
+  // totals always absorb it (sub-agent work is session work).
+  events.on("usage", ({ input, output, reasoning, subagentId }) => {
+    if (subagentId) {
+      const agent = subagentTracker.getAgent(subagentId);
+      if (agent) {
+        agent.tokens.input += input || 0;
+        agent.tokens.output += output || 0;
+        agent.tokens.reasoning += reasoning || 0;
+        agent.tokens.total = agent.tokens.input + agent.tokens.output + agent.tokens.reasoning;
+      }
+    }
+    metricsManager.recordUsage(sessionId, { input, output, reasoning });
+    sendWithSession(ws, {
+      type: "usage_update",
+      ...metricsManager.toFrontendUpdate(sessionId),
+    }, sessionId);
   });
   
   events.on("accumulated_thinking", ({ text }) => {
@@ -553,6 +574,13 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
   
   events.on("agent_end", async ({ accumulatedText, accumulatedThinking }) => {
     sendLog(ws, "Agent prompt turn completed.");
+
+    // Close the per-turn ledger entry and push the final numbers for this turn.
+    metricsManager.endTurn(sessionId);
+    sendWithSession(ws, {
+      type: "usage_update",
+      ...metricsManager.toFrontendUpdate(sessionId),
+    }, sessionId);
     
     const cleanFinalText = (accumulatedText || "")
       .replace(/<tts>[\s\S]*?<\/tts>/gi, "")

@@ -48,7 +48,11 @@ export default function AgentTab({ metrics, status, approvalsHistory, subAgents 
             icon={Cpu}
             label="Tokens"
             value={(metrics.tokens || 0).toLocaleString()}
-            sub="estimated"
+            sub={
+              metrics.tokensSource === 'reported'
+                ? `${(metrics.tokensIn || 0).toLocaleString()} in / ${(metrics.tokensOut || 0).toLocaleString()} out · reported`
+                : 'estimated'
+            }
           />
           <MetricCard
             icon={Activity}
@@ -64,10 +68,10 @@ export default function AgentTab({ metrics, status, approvalsHistory, subAgents 
           />
           <MetricCard
             icon={DollarSign}
-            label="Est. cost"
+            label={metrics.costEstimated === false ? 'Cost' : 'Est. cost'}
             value={`$${(metrics.cost || 0).toFixed(metrics.cost < 0.01 ? 4 : 2)}`}
             valueCls="text-success"
-            sub="estimated"
+            sub={metrics.costEstimated === false ? 'from reported usage' : 'estimated'}
           />
         </div>
       </div>

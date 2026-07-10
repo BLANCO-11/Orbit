@@ -124,7 +124,32 @@ class PiCodeHarness extends HarnessInterface {
     });
   }
   
+  /**
+   * Normalize a provider usage object (any of the common key spellings) and
+   * emit a standardized `usage` event. Providers/LiteLLM variously report
+   * usage as {input_tokens, output_tokens}, {prompt_tokens, completion_tokens},
+   * or already-normalized {input, output}; reasoning tokens may live under
+   * completion_tokens_details. Zero-usage payloads are dropped.
+   */
+  _emitUsage(u, subagentId = null) {
+    if (!u || typeof u !== "object") return;
+    const input = u.input ?? u.input_tokens ?? u.prompt_tokens ?? 0;
+    const output = u.output ?? u.output_tokens ?? u.completion_tokens ?? 0;
+    const reasoning =
+      u.reasoning ?? u.reasoning_tokens ??
+      u.completion_tokens_details?.reasoning_tokens ?? 0;
+    const cacheRead = u.cache_read ?? u.cacheRead ?? u.cache_read_input_tokens ?? 0;
+    if (!input && !output && !reasoning) return;
+    this.events.emit("usage", { input, output, reasoning, cacheRead, subagentId });
+  }
+
   _handleStdoutItem(item) {
+    // Provider usage can ride on any event type (message_update final chunks,
+    // agent_end, turn_end, dedicated usage items) — sniff every item once.
+    const usage =
+      item.usage || item.message?.usage || item.assistantMessageEvent?.usage || null;
+    if (usage) this._emitUsage(usage, item.subagentId || null);
+
     if (item.type === "message_update") {
       const ev = item.assistantMessageEvent;
       if (ev.type === "text_delta") {

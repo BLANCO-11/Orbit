@@ -17,6 +17,8 @@ const initialState = {
   // Metrics
   metrics: {
     toolCalls: 0, latency: 0, tokens: 0, cost: 0,
+    tokensIn: 0, tokensOut: 0, tokensReasoning: 0,
+    tokensSource: 'estimated', costEstimated: true, turns: [],
     activeSubagents: [], actionFeed: [], latencyPerTool: {},
   },
   approvalsHistory: [],
@@ -143,6 +145,12 @@ function aegisReducer(state, action) {
       if (action.payload.tokens !== undefined) next.tokens = action.payload.tokens;
       if (action.payload.sessionTokens !== undefined) next.tokens = action.payload.sessionTokens;
       if (action.payload.cost !== undefined) next.cost = action.payload.cost;
+      if (action.payload.tokensIn !== undefined) next.tokensIn = action.payload.tokensIn;
+      if (action.payload.tokensOut !== undefined) next.tokensOut = action.payload.tokensOut;
+      if (action.payload.tokensReasoning !== undefined) next.tokensReasoning = action.payload.tokensReasoning;
+      if (action.payload.tokensSource !== undefined) next.tokensSource = action.payload.tokensSource;
+      if (action.payload.costEstimated !== undefined) next.costEstimated = action.payload.costEstimated;
+      if (action.payload.turns !== undefined) next.turns = action.payload.turns;
       if (action.payload.latency !== undefined) next.latency = action.payload.latency;
       if (action.payload.latencyPerTool !== undefined) next.latencyPerTool = action.payload.latencyPerTool;
       if (action.payload.activeSubagents !== undefined) next.activeSubagents = action.payload.activeSubagents;

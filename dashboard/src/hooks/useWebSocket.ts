@@ -148,6 +148,7 @@ export function useWebSocket(
             break;
             
           case 'subagent_metrics':
+          case 'usage_update':
             dispatch(actions.updateMetrics(data));
             break;
             

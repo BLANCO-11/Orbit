@@ -5,7 +5,7 @@
 const { performance } = require("perf_hooks");
 
 // ── Schema ──────────────────────────────────────────────────────────
-const METRICS_SCHEMA_VERSION = 1;
+const METRICS_SCHEMA_VERSION = 2;
 
 /**
  * Creates a fresh metrics object conforming to the structured schema.
@@ -25,6 +25,10 @@ function createEmptyMetrics() {
       reasoning: 0,
       total: 0,
       estimated: true,
+      // Provider-reported usage (from the harness's `usage` events). When any
+      // reported usage arrives, `estimated` flips false and these become the
+      // authoritative numbers for totals and cost.
+      reported: { input: 0, output: 0, reasoning: 0, total: 0 },
     },
     latency: {
       totalMs: 0,
@@ -32,6 +36,9 @@ function createEmptyMetrics() {
       perPhase: {},
     },
     subagents: [],
+    // Per-turn ledger (append-only): one entry per prompt turn with the token/
+    // cost/tool-call deltas for that turn. Capped at 100 entries.
+    turns: [],
     reasoningChunks: 0,
     sessionToolCalls: 0,
     sessionTokens: 0,
@@ -48,8 +55,13 @@ function migrateLegacyMetrics(oldMetrics) {
   if (!oldMetrics || typeof oldMetrics !== "object") {
     return createEmptyMetrics();
   }
-  // Already migrated
+  // Already structured (v1+). v1 → v2 just adds fields; patch them in place.
   if (oldMetrics._schemaVersion && oldMetrics.toolCalls?.byTool) {
+    if (!oldMetrics.tokens.reported) {
+      oldMetrics.tokens.reported = { input: 0, output: 0, reasoning: 0, total: 0 };
+    }
+    if (!Array.isArray(oldMetrics.turns)) oldMetrics.turns = [];
+    oldMetrics._schemaVersion = METRICS_SCHEMA_VERSION;
     return oldMetrics;
   }
   // Legacy: { toolCalls: N, tokens: N, latency: N, cost: N, activeSubagents: [], actionFeed: [] }
@@ -110,32 +122,38 @@ function estimateTokensFromLines(lines) {
   return lines.reduce((sum, line) => sum + estimateTokens(String(line)), 0);
 }
 
-// ── Cost Estimation ─────────────────────────────────────────────────
-// Token counts are a character-count estimate (see estimateTokens above),
-// not real provider usage — the harness protocol (harnesses/interface.js)
-// has no usage/token event, and the LLM calls happen inside the external
-// `pi` CLI process, not in this backend, so we never see a real API
-// response to read `usage` from. Cost is therefore necessarily an
-// estimate derived from an estimate; rates are blended $/1M tokens
-// (input+output averaged, since we don't split by direction).
+// ── Cost ────────────────────────────────────────────────────────────
+// Directional $/1M-token rates. When the harness reports real usage
+// (tokens.reported), cost is computed from the actual input/output split;
+// when only the character-count estimate is available, we assume a 3:1
+// input:output split (typical for tool-heavy agent traffic).
 const MODEL_PRICING_PER_MILLION = [
-  { match: /claude-.*opus/i, rate: 15 },
-  { match: /claude-.*sonnet/i, rate: 3 },
-  { match: /claude-.*haiku/i, rate: 0.8 },
-  { match: /gpt-4o-mini/i, rate: 0.15 },
-  { match: /gpt-4o/i, rate: 2.5 },
-  { match: /gpt-4/i, rate: 5 },
-  { match: /gpt-3\.5/i, rate: 0.5 },
-  { match: /gemini.*pro/i, rate: 1.25 },
-  { match: /gemini.*flash/i, rate: 0.075 },
-  { match: /deepseek/i, rate: 0.28 },
+  { match: /claude-.*opus/i, in: 15, out: 75 },
+  { match: /claude-.*sonnet/i, in: 3, out: 15 },
+  { match: /claude-.*haiku/i, in: 0.8, out: 4 },
+  { match: /gpt-4o-mini/i, in: 0.15, out: 0.6 },
+  { match: /gpt-4o/i, in: 2.5, out: 10 },
+  { match: /gpt-4/i, in: 5, out: 15 },
+  { match: /gpt-3\.5/i, in: 0.5, out: 1.5 },
+  { match: /gemini.*pro/i, in: 1.25, out: 5 },
+  { match: /gemini.*flash/i, in: 0.075, out: 0.3 },
+  { match: /deepseek/i, in: 0.14, out: 0.28 },
 ];
-const DEFAULT_RATE_PER_MILLION = 1; // blended fallback for unrecognized/local models
+const DEFAULT_RATES = { in: 0.5, out: 1.5 }; // fallback for unrecognized/local models
 
-function estimateCost(totalTokens, modelName) {
+/**
+ * Cost from a directional token split. Reasoning tokens bill as output
+ * (that's how every provider meters thinking).
+ */
+function computeCost({ input = 0, output = 0, reasoning = 0 }, modelName) {
   const entry = MODEL_PRICING_PER_MILLION.find(p => modelName && p.match.test(modelName));
-  const rate = entry ? entry.rate : DEFAULT_RATE_PER_MILLION;
-  return (totalTokens / 1_000_000) * rate;
+  const rates = entry || DEFAULT_RATES;
+  return (input / 1_000_000) * rates.in + ((output + reasoning) / 1_000_000) * rates.out;
+}
+
+/** Legacy blended estimate from a single total (assumes 3:1 in:out). */
+function estimateCost(totalTokens, modelName) {
+  return computeCost({ input: totalTokens * 0.75, output: totalTokens * 0.25 }, modelName);
 }
 
 // ── Metrics Manager ─────────────────────────────────────────────────
@@ -147,6 +165,21 @@ class SessionMetricsManager {
     this._toolTimers = new Map();
     /** Map<sessionId, { startTime }> for phase timing */
     this._phaseTimers = new Map();
+    /** Map<sessionId, openTurn> for the per-turn ledger (ephemeral, not persisted) */
+    this._openTurns = new Map();
+  }
+
+  /**
+   * Effective token counters: provider-reported when any usage arrived,
+   * character-count estimate otherwise.
+   */
+  _effectiveTokens(m) {
+    return m.tokens.estimated ? m.tokens : m.tokens.reported;
+  }
+
+  _effectiveCost(m) {
+    const t = this._effectiveTokens(m);
+    return computeCost({ input: t.input, output: t.output, reasoning: t.reasoning }, m.model);
   }
 
   /**
@@ -312,6 +345,80 @@ class SessionMetricsManager {
   }
 
   /**
+   * Record provider-reported usage (real tokens from the model API, relayed
+   * by the harness as a `usage` event). First reported usage flips the
+   * session from estimated to reported accounting.
+   */
+  recordUsage(sessionId, { input = 0, output = 0, reasoning = 0 } = {}) {
+    const metrics = this._metrics.get(sessionId);
+    if (!metrics) return;
+    if (!metrics.tokens.reported) {
+      metrics.tokens.reported = { input: 0, output: 0, reasoning: 0, total: 0 };
+    }
+    const r = metrics.tokens.reported;
+    r.input += input;
+    r.output += output;
+    r.reasoning += reasoning;
+    r.total = r.input + r.output + r.reasoning;
+    metrics.tokens.estimated = false;
+    metrics.sessionTokens = r.total;
+    metrics.lastActivity = new Date().toISOString();
+  }
+
+  // ── Per-turn ledger ─────────────────────────────────────────────────
+
+  /**
+   * Open a turn: snapshot counters so endTurn can record this turn's deltas.
+   */
+  beginTurn(sessionId, promptText) {
+    const metrics = this._metrics.get(sessionId);
+    if (!metrics) return;
+    // Snapshot BOTH counters: if the session flips estimated→reported mid-turn
+    // (first real usage event arrives), the delta must be taken against the
+    // matching source's baseline, not across sources.
+    const est = metrics.tokens;
+    const rep = metrics.tokens.reported || { input: 0, output: 0, reasoning: 0 };
+    this._openTurns.set(sessionId, {
+      startMs: Date.now(),
+      prompt: String(promptText || "").substring(0, 120),
+      estimatedAt: { input: est.input, output: est.output, reasoning: est.reasoning },
+      reportedAt: { input: rep.input, output: rep.output, reasoning: rep.reasoning },
+      toolCallsAt: metrics.toolCalls.total,
+      costAt: this._effectiveCost(metrics),
+    });
+  }
+
+  /**
+   * Close the open turn and append its deltas to the persisted ledger.
+   */
+  endTurn(sessionId) {
+    const metrics = this._metrics.get(sessionId);
+    const open = this._openTurns.get(sessionId);
+    if (!metrics || !open) return null;
+    this._openTurns.delete(sessionId);
+    const t = this._effectiveTokens(metrics);
+    const baseline = metrics.tokens.estimated ? open.estimatedAt : open.reportedAt;
+    const entry = {
+      at: new Date(open.startMs).toISOString(),
+      durationMs: Date.now() - open.startMs,
+      prompt: open.prompt,
+      tokens: {
+        input: Math.max(0, t.input - baseline.input),
+        output: Math.max(0, t.output - baseline.output),
+        reasoning: Math.max(0, t.reasoning - baseline.reasoning),
+      },
+      toolCalls: metrics.toolCalls.total - open.toolCallsAt,
+      cost: Math.max(0, this._effectiveCost(metrics) - open.costAt),
+      source: metrics.tokens.estimated ? "estimated" : "reported",
+    };
+    if (!Array.isArray(metrics.turns)) metrics.turns = [];
+    metrics.turns.push(entry);
+    if (metrics.turns.length > 100) metrics.turns = metrics.turns.slice(-100);
+    metrics.lastActivity = new Date().toISOString();
+    return entry;
+  }
+
+  /**
    * Aggregate sub-agent tokens into the session total.
    * Called when a sub-agent completes its task.
    */
@@ -450,7 +557,8 @@ class SessionMetricsManager {
     if (!metrics) return createEmptyMetrics();
     return {
       ...metrics,
-      cost: estimateCost(metrics.tokens.total, metrics.model),
+      cost: this._effectiveCost(metrics),
+      costSource: metrics.tokens.estimated ? "estimated" : "reported",
       lastActivity: new Date().toISOString(),
     };
   }
@@ -471,16 +579,22 @@ class SessionMetricsManager {
         tokens: sa.tokens.total,
         mode: sa.mode,
       }));
+    const eff = this._effectiveTokens(m);
     return {
       toolCalls: m.toolCalls.total,
       sessionToolCalls: m.sessionToolCalls,
-      tokens: m.tokens.total,
-      sessionTokens: m.sessionTokens,
+      tokens: eff.total,
+      sessionTokens: eff.total,
+      tokensIn: eff.input,
+      tokensOut: eff.output,
+      tokensReasoning: eff.reasoning,
       tokensEstimated: m.tokens.estimated,
-      cost: estimateCost(m.tokens.total, m.model),
-      costEstimated: true, // always true until the harness protocol reports real usage
+      tokensSource: m.tokens.estimated ? "estimated" : "reported",
+      cost: this._effectiveCost(m),
+      costEstimated: m.tokens.estimated,
       latency: m.latency.totalMs,
       latencyPerTool: m.latency.perTool,
+      turns: (m.turns || []).slice(-12),
       activeSubagents: activeSubs,
       subagents: activeSubs, // field name expected by frontend
       actionFeed: m.actionFeed.slice(-10),
@@ -494,6 +608,7 @@ class SessionMetricsManager {
     this._metrics.delete(sessionId);
     this._toolTimers.delete(sessionId);
     this._phaseTimers.delete(sessionId);
+    this._openTurns.delete(sessionId);
   }
 }
 
@@ -508,5 +623,6 @@ module.exports = {
   estimateTokens,
   estimateTokensFromLines,
   estimateCost,
+  computeCost,
   METRICS_SCHEMA_VERSION,
 };
