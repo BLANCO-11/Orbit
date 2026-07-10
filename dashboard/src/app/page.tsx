@@ -14,16 +14,22 @@ import { useTheme, useResponsive, useWebSocket, useSessions, useTTS, useSTT, use
 
 // Layout
 import AppShell from '@/components/layout/AppShell';
+import IconRail from '@/components/layout/IconRail';
 import ChatArea from '@/components/chat/ChatArea';
 
 // Panels
 import DetailPanel from '@/components/panels/DetailPanel';
 import AgentTab from '@/components/panels/AgentTab';
 import WorkspaceTab from '@/components/panels/WorkspaceTab';
+import TraceTab from '@/components/panels/TraceTab';
+
+// Views
+import FleetView from '@/components/views/FleetView';
+import ConnectorsView from '@/components/views/ConnectorsView';
+import PoliciesView from '@/components/views/PoliciesView';
 
 // Components
 import SessionList from '@/components/SessionList';
-import ExecutionPlan from '@/components/ExecutionPlan';
 import LogViewer from '@/components/LogViewer';
 import SettingsPanel from '@/components/SettingsPanel';
 import PairDevice from '@/components/PairDevice';
@@ -107,6 +113,7 @@ function DashboardInner() {
   const [prompt, setPrompt] = useState('');
   const [showThinking, setShowThinking] = useState(true);
   const [rightPanelTab, setRightPanelTab] = useState('agent');
+  const [activeView, setActiveView] = useState<'console' | 'fleet' | 'connectors' | 'policies' | 'settings'>('console');
   const [activeNavTab, setActiveNavTab] = useState('chat');
   const [cmdPaletteOpen, setCmdPaletteOpen] = useState(false);
   const inputHistoryRef = useRef([]);
@@ -273,9 +280,14 @@ function DashboardInner() {
 
   const handleNavTabChange = useCallback((tabId) => {
     setActiveNavTab(tabId);
-    if (tabId === 'logs' || tabId === 'metrics' || tabId === 'settings') {
+    if (tabId === 'settings') {
+      setActiveView('settings');
+      return;
+    }
+    setActiveView('console');
+    if (tabId === 'logs' || tabId === 'metrics') {
       setShowThinking(true);
-      setRightPanelTab(tabId === 'logs' ? 'console' : tabId === 'metrics' ? 'agent' : 'settings');
+      setRightPanelTab(tabId === 'logs' ? 'logs' : 'agent');
     }
   }, []);
 
@@ -300,9 +312,52 @@ function DashboardInner() {
     }
   }, [state.visibleCount, state.messages.length, dispatch]);
 
+  // ── Full-page views (rail destinations) ──
+  const settingsView = (
+    <div className="h-full overflow-y-auto">
+      <div className="mx-auto max-w-[720px] px-7 py-7">
+        <h2 className="mb-4 text-lg font-semibold">Settings</h2>
+        <ComponentErrorBoundary label="Settings panel">
+          <SettingsPanel
+            settings={settings}
+            onSettingsChange={updateSettings}
+            securityConfig={securityConfig}
+            setSecurityConfig={setSecurityConfig}
+            systemPromptType={systemPromptType} setSystemPromptType={setSystemPromptType}
+            voiceResponse={state.voiceState === 'audio'}
+            setVoiceResponse={(val) => dispatch(actions.setVoiceState(val ? 'audio' : 'disabled'))}
+            models={models} voices={voices}
+            onSave={saveAllSettings}
+            onManualCompact={handleManualCompact}
+            onAddConfigItem={addConfigItem} onRemoveConfigItem={removeConfigItem}
+            sessionMode={state.sessionMode}
+            onSetSessionMode={handleSetSessionMode}
+          />
+        </ComponentErrorBoundary>
+      </div>
+    </div>
+  );
+
   // ── JSX ──
   return (
     <ErrorBoundary>
+    <div className="flex h-dvh overflow-hidden bg-background text-foreground">
+    {!isMobile && (
+      <IconRail
+        activeView={activeView}
+        onViewChange={setActiveView}
+        voiceOn={state.voiceState === 'audio'}
+        onToggleVoice={() =>
+          dispatch(actions.setVoiceState(state.voiceState === 'audio' ? 'disabled' : 'audio'))
+        }
+      />
+    )}
+    <div className="relative min-w-0 flex-1">
+    {activeView === 'fleet' && <ComponentErrorBoundary label="Fleet"><FleetView /></ComponentErrorBoundary>}
+    {activeView === 'connectors' && <ComponentErrorBoundary label="Connectors"><ConnectorsView /></ComponentErrorBoundary>}
+    {activeView === 'policies' && <ComponentErrorBoundary label="Policies"><PoliciesView /></ComponentErrorBoundary>}
+    {activeView === 'settings' && settingsView}
+    {activeView === 'console' && (
     <AppShell
       sidebar={
         <ComponentErrorBoundary label="Session list">
@@ -340,36 +395,15 @@ function DashboardInner() {
               <WorkspaceTab />
             </ComponentErrorBoundary>
           )}
-          {rightPanelTab === 'plan' && (
-            <ComponentErrorBoundary label="Plan panel">
-              <ExecutionPlan executionPlan={state.executionPlan} reasoningHistory={state.reasoningHistory} />
+          {rightPanelTab === 'trace' && (
+            <ComponentErrorBoundary label="Trace panel">
+              <TraceTab agents={state.metrics.subagentTrace || []} />
             </ComponentErrorBoundary>
           )}
           {rightPanelTab === 'logs' && (
             <div className="flex h-full flex-col overflow-hidden p-4">
               <ComponentErrorBoundary label="Log viewer">
                 <LogViewer logs={state.logs} logEndRef={logEndRef} />
-              </ComponentErrorBoundary>
-            </div>
-          )}
-          {rightPanelTab === 'settings' && (
-            <div className="h-full overflow-y-auto p-4">
-              <ComponentErrorBoundary label="Settings panel">
-              <SettingsPanel
-                settings={settings}
-                onSettingsChange={updateSettings}
-                securityConfig={securityConfig}
-                setSecurityConfig={setSecurityConfig}
-                systemPromptType={systemPromptType} setSystemPromptType={setSystemPromptType}
-                voiceResponse={state.voiceState === 'audio'}
-                setVoiceResponse={(val) => dispatch(actions.setVoiceState(val ? 'audio' : 'disabled'))}
-                models={models} voices={voices}
-                onSave={saveAllSettings}
-                onManualCompact={handleManualCompact}
-                onAddConfigItem={addConfigItem} onRemoveConfigItem={removeConfigItem}
-                sessionMode={state.sessionMode}
-                onSetSessionMode={handleSetSessionMode}
-              />
               </ComponentErrorBoundary>
             </div>
           )}
@@ -386,15 +420,8 @@ function DashboardInner() {
             setShowThinking(true);
           }
         },
-        showSettings: showThinking && rightPanelTab === 'settings',
-        onToggleSettings: () => {
-          if (showThinking && rightPanelTab === 'settings') {
-            setShowThinking(false);
-          } else {
-            setRightPanelTab('settings');
-            setShowThinking(true);
-          }
-        },
+        showSettings: false,
+        onToggleSettings: () => setActiveView('settings'),
         theme, mounted, onToggleTheme: toggleTheme,
         connectionState,
         notificationCenter: <NotificationCenter logs={state.logs} />,
@@ -406,6 +433,7 @@ function DashboardInner() {
       <ComponentErrorBoundary label="Chat">
       <ChatArea
         messages={state.messages.slice(-state.visibleCount)}
+        reasoningHistory={state.reasoningHistory}
         hasMoreMessages={state.messages.length > state.visibleCount}
         onLoadOlder={handleLoadOlderMessages}
         systemPromptType={systemPromptType}
@@ -468,6 +496,9 @@ function DashboardInner() {
       />
       </ComponentErrorBoundary>
     </AppShell>
+    )}
+    </div>
+    </div>
       <CommandPalette
         isOpen={cmdPaletteOpen}
         onClose={() => setCmdPaletteOpen(false)}
@@ -477,9 +508,9 @@ function DashboardInner() {
           onTogglePanel: () => setShowThinking(prev => !prev),
           onStop: handleStopAgent,
           onCompact: handleManualCompact,
-          onOpenSettings: () => { setRightPanelTab('settings'); setShowThinking(true); },
-          onToggleLogs: () => { setRightPanelTab('logs'); setShowThinking(true); },
-          onToggleWorkspace: () => { setRightPanelTab('workspace'); setShowThinking(true); },
+          onOpenSettings: () => setActiveView('settings'),
+          onToggleLogs: () => { setActiveView('console'); setRightPanelTab('logs'); setShowThinking(true); },
+          onToggleWorkspace: () => { setActiveView('console'); setRightPanelTab('workspace'); setShowThinking(true); },
           onSetTheme: setTheme,
         }}
       />

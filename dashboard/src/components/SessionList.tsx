@@ -2,8 +2,7 @@
 "use client";
 
 import React from "react";
-import { Plus, Search, Trash2, Smartphone } from "lucide-react";
-import { useDevices } from "@/hooks/useDevices";
+import { Plus, Search, Trash2 } from "lucide-react";
 
 export default function SessionList({
   sessions,
@@ -20,9 +19,6 @@ export default function SessionList({
   getSessionPreview,
   sessionsLength,
 }) {
-  const { devices } = useDevices();
-  const activeDevices = devices.filter((d) => !d.revoked);
-
   return (
     <div className="flex h-full w-full flex-col">
       {/* ── Top: new session + search ── */}
@@ -115,16 +111,6 @@ export default function SessionList({
         )}
       </div>
 
-      {/* ── Footer: paired devices ── */}
-      <div className="border-t border-border-soft px-3.5 py-2.5">
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Smartphone size={14} className="text-faint" />
-          Paired devices
-          <span className="ml-auto rounded-full bg-muted px-2 py-px text-[11px] text-faint">
-            {activeDevices.length}
-          </span>
-        </div>
-      </div>
     </div>
   );
 }

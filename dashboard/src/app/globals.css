@@ -65,6 +65,13 @@
   --chart-4: #9333ea;
   --chart-5: #d63d43;
 
+  /* Chart series (mock: tokens in/out) + sub-agent lineage lanes */
+  --series-in: #6355e0;
+  --series-out: #12a26b;
+  --lane-1: #12a26b;
+  --lane-2: #c07600;
+  --lane-3: #0a84c4;
+
   --sidebar: #fbfbfd;
   --sidebar-foreground: #16161c;
   --sidebar-primary: #6355e0;
@@ -130,6 +137,13 @@
   --chart-3: #f5a623;
   --chart-4: #c084fc;
   --chart-5: #f2555a;
+
+  /* Chart series + lanes — dark steps (validated for CVD on dark surface) */
+  --series-in: #8781ec;
+  --series-out: #1baf7a;
+  --lane-1: #1baf7a;
+  --lane-2: #d98f4a;
+  --lane-3: #5ac8fa;
 
   --sidebar: #101015;
   --sidebar-foreground: #ededf2;
@@ -216,6 +230,11 @@
   --color-border-soft: var(--border-soft);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-series-in: var(--series-in);
+  --color-series-out: var(--series-out);
+  --color-lane-1: var(--lane-1);
+  --color-lane-2: var(--lane-2);
+  --color-lane-3: var(--lane-3);
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);

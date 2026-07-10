@@ -27,6 +27,44 @@ function MetricCard({ icon: Icon, label, value, sub, valueCls }) {
 }
 
 /**
+ * TokensPerTurnChart — grouped in/out mini-bars per prompt turn, fed by the
+ * per-turn ledger (metrics.turns). Series colors are the CVD-validated pair.
+ */
+function TokensPerTurnChart({ turns }) {
+  if (!turns || turns.length === 0) return null;
+  const max = Math.max(1, ...turns.map((t) => Math.max(t.tokens?.input || 0, (t.tokens?.output || 0) + (t.tokens?.reasoning || 0))));
+  return (
+    <div className="rounded-[11px] border border-border-soft bg-card px-3 py-[11px] shadow-card">
+      <div className="mb-2 flex items-center gap-3 text-[10.5px] text-faint">
+        Tokens per turn
+        <span className="ml-auto inline-flex items-center gap-1">
+          <i className="inline-block size-[7px] rounded-[2px]" style={{ background: 'var(--series-in)' }} /> in
+        </span>
+        <span className="inline-flex items-center gap-1">
+          <i className="inline-block size-[7px] rounded-[2px]" style={{ background: 'var(--series-out)' }} /> out
+        </span>
+      </div>
+      <div className="flex h-[46px] items-end gap-[6px]" aria-hidden="true">
+        {turns.map((t, i) => {
+          const inH = Math.max(4, ((t.tokens?.input || 0) / max) * 100);
+          const outH = Math.max(4, (((t.tokens?.output || 0) + (t.tokens?.reasoning || 0)) / max) * 100);
+          return (
+            <div key={i} className="flex h-full flex-1 items-end gap-[2px]" title={`${t.prompt || `turn ${i + 1}`} — in ${t.tokens?.input ?? 0} / out ${(t.tokens?.output ?? 0) + (t.tokens?.reasoning ?? 0)}${t.source ? ` · ${t.source}` : ''}`}>
+              <i className="block flex-1 rounded-t-[3px]" style={{ height: `${inH}%`, background: 'var(--series-in)' }} />
+              <i className="block flex-1 rounded-t-[3px]" style={{ height: `${outH}%`, background: 'var(--series-out)' }} />
+            </div>
+          );
+        })}
+      </div>
+      <div className="mt-1.5 flex justify-between font-mono text-[10px] tabular-nums text-faint">
+        <span>last {turns.length} turn{turns.length > 1 ? 's' : ''}</span>
+        <span>{turns[turns.length - 1]?.source || ''}</span>
+      </div>
+    </div>
+  );
+}
+
+/**
  * AgentTab — session metrics, live sub-agents, per-tool latency, action feed.
  */
 export default function AgentTab({ metrics, status, approvalsHistory, subAgents = [] }) {
@@ -74,6 +112,11 @@ export default function AgentTab({ metrics, status, approvalsHistory, subAgents 
             sub={metrics.costEstimated === false ? 'from reported usage' : 'estimated'}
           />
         </div>
+        {(metrics.turns?.length ?? 0) > 0 && (
+          <div className="mt-2">
+            <TokensPerTurnChart turns={metrics.turns} />
+          </div>
+        )}
       </div>
 
       {/* ── Sub-agents ── */}

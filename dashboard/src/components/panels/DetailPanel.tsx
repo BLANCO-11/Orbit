@@ -1,30 +1,39 @@
-// @ts-nocheck
 'use client';
 
 import React from 'react';
-import { Activity, Folder, GitBranch, List, Settings } from 'lucide-react';
+import { Activity, Folder, GitBranch, List } from 'lucide-react';
 
 const TABS = [
-  { id: 'agent', label: 'Agent', icon: Activity },
+  { id: 'agent', label: 'Overview', icon: Activity },
   { id: 'workspace', label: 'Workspace', icon: Folder },
-  { id: 'plan', label: 'Plan', icon: GitBranch },
+  { id: 'trace', label: 'Trace', icon: GitBranch },
   { id: 'logs', label: 'Logs', icon: List },
-  { id: 'settings', label: 'Settings', icon: Settings },
-];
+] as const;
+
+export type InspectorTab = (typeof TABS)[number]['id'];
+
+interface DetailPanelProps {
+  activeTab: string;
+  onTabChange: (tab: InspectorTab) => void;
+  children: React.ReactNode;
+}
 
 /**
- * DetailPanel — inspector tab strip: Agent | Workspace | Plan | Logs | Settings
+ * DetailPanel — inspector segments: Overview | Workspace | Trace | Logs.
+ * Settings lives on the icon rail now, not in a fifth clipped tab.
  */
-export default function DetailPanel({ activeTab, onTabChange, children }) {
+export default function DetailPanel({ activeTab, onTabChange, children }: DetailPanelProps) {
   return (
     <div className="flex h-full flex-col">
-      <div className="flex shrink-0 gap-0.5 overflow-x-auto border-b border-border-soft px-3">
+      <div role="tablist" aria-label="Inspector" className="flex shrink-0 gap-0.5 border-b border-border-soft px-3">
         {TABS.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
           return (
             <button
               key={tab.id}
+              role="tab"
+              aria-selected={isActive}
               onClick={() => onTabChange(tab.id)}
               className={`flex items-center gap-1.5 whitespace-nowrap border-b-2 px-3 pb-[11px] pt-3 text-[12.5px] transition-colors ${
                 isActive

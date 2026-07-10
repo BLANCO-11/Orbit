@@ -31,7 +31,7 @@ export default function AppShell({
   const closeRightPanel = useCallback(() => setRightPanelOpen(false), []);
 
   return (
-    <div className="flex h-dvh flex-col bg-background text-foreground">
+    <div className="flex h-full flex-col bg-background text-foreground">
       <Header
         onToggleSidebar={toggleSidebar}
         onToggleRightPanel={toggleRightPanel}

@@ -4,6 +4,7 @@
 import React, { useRef } from 'react';
 import ApprovalBanner from '@/components/ApprovalBanner';
 import ChatMessage, { ChatEmptyState } from '@/components/ChatMessage';
+import ReasoningAccordion from './ReasoningAccordion';
 import { ModeBadge, ModePrompt } from './ModePrompt';
 import ChatInput from './ChatInput';
 import ModeSelector from './ModeSelector';
@@ -15,6 +16,7 @@ import PromptTypeSelector from './PromptTypeSelector';
  */
 export default function ChatArea({
   messages,
+  reasoningHistory = [],
   status,
   renderMarkdown,
   expandedTools,
@@ -95,20 +97,41 @@ export default function ChatArea({
 
           {messages.length === 0 && showEmptyState && <ChatEmptyState />}
 
-          {messages.map((msg, i) => (
-            <ChatMessage
-              key={i}
-              message={msg}
-              renderMarkdown={renderMarkdown}
-              expandedTools={expandedTools}
-              toggleTool={toggleTool}
-              getToolSummary={getToolSummary}
-              getToolOutput={getToolOutput}
-              onSetSessionMode={onSetSessionMode}
-              onSetSessionModeAndReRun={onSetSessionModeAndReRun}
-              sessionMode={sessionMode}
-            />
-          ))}
+          {(() => {
+            // Interleave per-turn reasoning accordions after each user message.
+            // Messages are windowed (slice(-visibleCount)) so match groups by
+            // query content, consuming each group at most once.
+            const used = new Set();
+            let userTurn = 0;
+            return messages.map((msg, i) => {
+              const isUser = msg.role === 'user';
+              let group = null;
+              if (isUser) {
+                userTurn++;
+                group = reasoningHistory.find(
+                  (g, gi) => !used.has(gi) && g.query === msg.content && (used.add(gi) || true)
+                ) || null;
+              }
+              return (
+                <React.Fragment key={i}>
+                  <ChatMessage
+                    message={msg}
+                    renderMarkdown={renderMarkdown}
+                    expandedTools={expandedTools}
+                    toggleTool={toggleTool}
+                    getToolSummary={getToolSummary}
+                    getToolOutput={getToolOutput}
+                    onSetSessionMode={onSetSessionMode}
+                    onSetSessionModeAndReRun={onSetSessionModeAndReRun}
+                    sessionMode={sessionMode}
+                  />
+                  {group && group.entries?.length > 0 && (
+                    <ReasoningAccordion group={group} turnIndex={userTurn} />
+                  )}
+                </React.Fragment>
+              );
+            });
+          })()}
           <div ref={chatEndRef} />
         </div>
       </div>

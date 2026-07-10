@@ -544,8 +544,10 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
     // Send metrics update
     sendWithSession(ws, {
       type: "subagent_metrics",
-      subagents: subagentTracker.toFrontendSummary(),
+      // Spread FIRST so the tracker's full-history summary isn't clobbered by
+      // toFrontendUpdate()'s active-only `subagents` field.
       ...metricsManager.toFrontendUpdate(sessionId),
+      subagents: subagentTracker.toFrontendSummary(),
     }, sessionId);
   });
   
@@ -555,8 +557,10 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
     
     sendWithSession(ws, {
       type: "subagent_metrics",
-      subagents: subagentTracker.toFrontendSummary(),
+      // Spread FIRST so the tracker's full-history summary isn't clobbered by
+      // toFrontendUpdate()'s active-only `subagents` field.
       ...metricsManager.toFrontendUpdate(sessionId),
+      subagents: subagentTracker.toFrontendSummary(),
     }, sessionId);
   });
   
@@ -567,8 +571,10 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
 
     sendWithSession(ws, {
       type: "subagent_metrics",
-      subagents: subagentTracker.toFrontendSummary(),
+      // Spread FIRST so the tracker's full-history summary isn't clobbered by
+      // toFrontendUpdate()'s active-only `subagents` field.
       ...metricsManager.toFrontendUpdate(sessionId),
+      subagents: subagentTracker.toFrontendSummary(),
     }, sessionId);
   });
   
