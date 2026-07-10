@@ -9,7 +9,13 @@ import { useAegisDispatch, actions } from '@/providers/AegisProvider';
  * Handles: connect, reconnect, parse, dispatch to reducer.
  * Returns: { sendMessage, connectionState }
  */
-export function useWebSocket(backendWsUrl) {
+export function useWebSocket(
+  backendWsUrl: string,
+  options: {
+    onSpeechSentence?: (sentence: string) => void;
+    onIntelligentSpeech?: (text: string) => void;
+  } = {}
+) {
   const dispatch = useAegisDispatch();
   const socketRef = useRef(null);
   const reconnectTimerRef = useRef(null);
@@ -79,9 +85,16 @@ export function useWebSocket(backendWsUrl) {
             }));
             break;
             
-          case 'intelligent_speech':
           case 'speech_sentence':
-            // Handled by useTTS hook
+            if (options.onSpeechSentence) {
+              options.onSpeechSentence(data.content);
+            }
+            break;
+            
+          case 'intelligent_speech':
+            if (options.onIntelligentSpeech) {
+              options.onIntelligentSpeech(data.content);
+            }
             break;
             
           case 'approval_required':

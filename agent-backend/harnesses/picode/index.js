@@ -95,8 +95,10 @@ class PiCodeHarness extends HarnessInterface {
     this._setupStdout();
     this._setupStderr();
     
+    const pid = this.piProcess.pid;
+
     this.piProcess.on("close", (code) => {
-      console.log(`[PiCodeHarness] Process ${this.piProcess.pid} exited with code ${code}`);
+      console.log(`[PiCodeHarness] Process ${pid} exited with code ${code}`);
       // Clean up temp prompt file
       fs.unlink(tempPromptPath, () => {});
       this.events.emit("close", { code });

@@ -19,6 +19,18 @@ const proxy = httpProxy.createProxyServer({
   changeOrigin: true,
 });
 
+// Handle proxy errors to prevent Node crash when backend is offline
+proxy.on('error', (err, req, res) => {
+  console.error('Proxy connection error:', err.message);
+  if (!res) return;
+  if (typeof res.writeHead === 'function') {
+    res.writeHead(502, { 'Content-Type': 'text/plain' });
+    res.end('Bad Gateway: backend offline');
+  } else if (typeof res.destroy === 'function') {
+    res.destroy();
+  }
+});
+
 app.prepare().then(() => {
   const server = createServer((req, res) => {
     const parsedUrl = parse(req.url, true);
@@ -33,18 +45,41 @@ app.prepare().then(() => {
     handle(req, res, parsedUrl);
   });
 
-  // WebSocket upgrade: proxy to backend
-  server.on('upgrade', (req, socket, head) => {
-    const parsedUrl = parse(req.url, true);
-    if (parsedUrl.pathname?.startsWith('/api/ws')) {
-      proxy.ws(req, socket, head, { target: BACKEND });
-    } else {
-      socket.destroy();
+  // Override server.emit to intercept 'upgrade' events before other listeners (like Next.js) receive them.
+  // This prevents double-upgrading/double-handling of WebSockets which causes "Invalid frame header".
+  const originalEmit = server.emit;
+  server.emit = function (event, ...args) {
+    if (event === 'upgrade') {
+      const [req, socket, head] = args;
+      const parsedUrl = parse(req.url, true);
+      if (parsedUrl.pathname?.startsWith('/api/ws')) {
+        proxy.ws(req, socket, head, { target: BACKEND });
+        return true; // Handled, prevent propagation to other listeners
+      }
+      if (!parsedUrl.pathname?.startsWith('/_next/')) {
+        socket.destroy();
+        return true; // Handled/destroyed, prevent propagation
+      }
     }
-  });
+    return originalEmit.apply(this, [event, ...args]);
+  };
 
-  const PORT = process.env.PORT || 6801;
-  server.listen(PORT, '0.0.0.0', () => {
-    console.log(`AegisAgent Dashboard listening on port ${PORT} (proxying /api/* to ${BACKEND})`);
+  // Parse command line arguments for port and hostname
+  const args = process.argv.slice(2);
+  let PORT = process.env.PORT || 6801;
+  let HOST = '0.0.0.0';
+
+  for (let i = 0; i < args.length; i++) {
+    if ((args[i] === '--port' || args[i] === '-p') && args[i + 1]) {
+      PORT = parseInt(args[i + 1], 10);
+      i++;
+    } else if ((args[i] === '--hostname' || args[i] === '-H') && args[i + 1]) {
+      HOST = args[i + 1];
+      i++;
+    }
+  }
+
+  server.listen(PORT, HOST, () => {
+    console.log(`AegisAgent Dashboard listening on ${HOST}:${PORT} (proxying /api/* to ${BACKEND})`);
   });
 });

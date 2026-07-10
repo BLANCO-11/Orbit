@@ -43,13 +43,23 @@ function DashboardInner() {
   const { theme, mounted, toggleTheme, setTheme } = useTheme();
   const { isMobile } = useResponsive();
 
+  const [selectedVoice, setSelectedVoice] = useState('alba');
+  const { speakText, queueSentence, startSession: startTtsSession, stopSpeaking } = useTTS(selectedVoice);
+
   // WebSocket goes through Next.js custom server proxy → backend:6800
   const backendWsUrl = typeof window !== 'undefined'
     ? `ws://${window.location.hostname}:${window.location.port || '6801'}/api/ws`
     : 'ws://localhost:6801/api/ws';
 
   // ── WebSocket ──
-  const { sendMessage, connectionState, setSessionId } = useWebSocket(backendWsUrl);
+  const { sendMessage, connectionState, setSessionId } = useWebSocket(backendWsUrl, {
+    onSpeechSentence: (sentence) => {
+      queueSentence(sentence);
+    },
+    onIntelligentSpeech: (text) => {
+      speakText(text);
+    }
+  });
 
   // ── Sessions ──
   const {
@@ -68,7 +78,6 @@ function DashboardInner() {
   const [securityConfig, setSecurityConfig] = useState(null);
   const [models, setModels] = useState([]);
   const [voices, setVoices] = useState([]);
-  const [selectedVoice, setSelectedVoice] = useState('alba');
   const [systemPromptType, setSystemPromptType] = useState('standard');
 
   // Config field states (passed to SettingsPanel)
@@ -126,7 +135,6 @@ function DashboardInner() {
   useEffect(() => { fetchConfig(); fetchVoices(); }, [fetchConfig, fetchVoices]);
 
   // ── TTS ──
-  const { speakText, startSession: startTtsSession, stopSpeaking } = useTTS(selectedVoice);
 
   // ── STT ──
   const { isListening, isSupported: sttSupported, startListening, stopListening } = useSTT();

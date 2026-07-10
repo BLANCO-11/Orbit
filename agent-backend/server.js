@@ -525,19 +525,20 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
     
     sendWithSession(ws, { type: "message", role: "assistant", content: cleanFinalText }, sessionId);
     
-    // TTS
+    // TTS: Only generate final summary or fallback TTS if we did NOT stream any <tts> tags during generation.
     const ttsMatch = (accumulatedText || "").match(/<tts>([\s\S]*?)<\/tts>/i);
-    const ttsText = ttsMatch ? ttsMatch[1].trim() : cleanFinalText;
-    
-    if (ttsText.length > 50 || ttsText.includes("`") || ttsText.includes("\n") || ttsText.includes("*")) {
-      const summary = await generateIntelligentSpeech(ws.currentPrompt || "query", cleanFinalText, getConfig);
-      if (summary) {
-        sendWithSession(ws, { type: "intelligent_speech", content: summary }, sessionId);
-      } else {
+    if (!ttsMatch) {
+      const ttsText = cleanFinalText;
+      if (ttsText.length > 50 || ttsText.includes("`") || ttsText.includes("\n") || ttsText.includes("*")) {
+        const summary = await generateIntelligentSpeech(ws.currentPrompt || "query", cleanFinalText, getConfig);
+        if (summary) {
+          sendWithSession(ws, { type: "intelligent_speech", content: summary }, sessionId);
+        } else {
+          sendWithSession(ws, { type: "intelligent_speech", content: ttsText }, sessionId);
+        }
+      } else if (ttsText) {
         sendWithSession(ws, { type: "intelligent_speech", content: ttsText }, sessionId);
       }
-    } else if (ttsText) {
-      sendWithSession(ws, { type: "intelligent_speech", content: ttsText }, sessionId);
     }
     
     sendStatus(ws, "done", sessionId);

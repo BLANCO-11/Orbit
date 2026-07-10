@@ -174,17 +174,15 @@ export function useSessions() {
   }, [sessions, currentSessionId, saveSession, dispatch]);
 
   const deleteSession = useCallback(async (sessionId) => {
-    setSessions(prev => {
-      const next = prev.filter(s => s.id !== sessionId);
-      if (sessionId === currentSessionId && next.length > 0) {
-        dispatch(actions.setCurrentSession(next[0].id));
-        dispatch(actions.setMessages(next[0].messages || []));
-        dispatch(actions.setSessionMode(next[0].mode || ''));
-      }
-      return next;
-    });
+    const next = sessions.filter(s => s.id !== sessionId);
+    if (sessionId === currentSessionId && next.length > 0) {
+      dispatch(actions.setCurrentSession(next[0].id));
+      dispatch(actions.setMessages(next[0].messages || []));
+      dispatch(actions.setSessionMode(next[0].mode || ''));
+    }
+    setSessions(next);
     fetch(`/api/sessions/${sessionId}`, { method: 'DELETE' }).catch(() => {});
-  }, [currentSessionId, dispatch]);
+  }, [sessions, currentSessionId, dispatch]);
 
   const renameSession = useCallback(async (sessionId, newTitle) => {
     setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, title: newTitle } : s));

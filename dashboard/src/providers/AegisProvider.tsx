@@ -78,15 +78,22 @@ function aegisReducer(state, action) {
     case ADD_MESSAGE:
       return { ...state, messages: [...state.messages, action.payload] };
     
-    case UPDATE_LAST_MESSAGE:
-      return {
-        ...state,
-        messages: state.messages.map((m, i) =>
-          i === state.messages.length - 1 && m.role === 'assistant'
-            ? { ...m, ...action.payload }
-            : m
-        ),
-      };
+    case UPDATE_LAST_MESSAGE: {
+      const lastMsg = state.messages[state.messages.length - 1];
+      if (lastMsg && lastMsg.role === 'assistant') {
+        return {
+          ...state,
+          messages: state.messages.map((m, i) =>
+            i === state.messages.length - 1 ? { ...m, ...action.payload } : m
+          ),
+        };
+      } else {
+        return {
+          ...state,
+          messages: [...state.messages, { role: 'assistant', ...action.payload }],
+        };
+      }
+    }
     
     case SET_MESSAGES:
       return { ...state, messages: action.payload, visibleCount: 10 };
