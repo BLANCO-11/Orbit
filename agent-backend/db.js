@@ -6,7 +6,7 @@ const dbPath = path.join(__dirname, "aegis.db");
 const db = new DatabaseSync(dbPath);
 
 // ── Schema Versioning ───────────────────────────────────────────────
-const CURRENT_SCHEMA_VERSION = 3;
+const CURRENT_SCHEMA_VERSION = 4;
 const BACKUP_INTERVAL = 10; // auto-backup every N saves
 let saveCount = 0;
 
@@ -55,6 +55,19 @@ if (currentSchemaVersion < 3) {
   console.log(`[DB] Migrated sessions schema to version ${CURRENT_SCHEMA_VERSION}`);
 }
 
+if (currentSchemaVersion < 4) {
+  try {
+    db.exec("ALTER TABLE sessions ADD COLUMN subagent_tree TEXT NOT NULL DEFAULT '{}'");
+  } catch (e) {
+    // Column may already exist from a partial migration; ignore
+  }
+  db.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)").run(
+    "schema_version",
+    String(CURRENT_SCHEMA_VERSION)
+  );
+  console.log(`[DB] Migrated sessions schema to version ${CURRENT_SCHEMA_VERSION}`);
+}
+
 // ── Initialize tables ────────────────────────────────────────────────
 db.exec(`
   CREATE TABLE IF NOT EXISTS sessions (
@@ -65,6 +78,7 @@ db.exec(`
     execution_plan TEXT NOT NULL,
     metrics TEXT NOT NULL,
     mode TEXT NOT NULL DEFAULT '',
+    subagent_tree TEXT NOT NULL DEFAULT '{}',
     timestamp INTEGER NOT NULL
   )
 `);
@@ -142,6 +156,7 @@ function mapRow(row) {
     executionPlan: row.execution_plan,
     metrics: JSON.parse(row.metrics || "{}"),
     mode: row.mode || "",
+    subagentTree: JSON.parse(row.subagent_tree || "{}"),
     timestamp: row.timestamp,
     schemaVersion: row.schema_version || 0,
   };
@@ -161,8 +176,8 @@ function enforceTTL() {
 
 function saveSession(session) {
   const stmt = db.prepare(`
-    INSERT INTO sessions (id, title, messages, logs, execution_plan, metrics, mode, timestamp)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO sessions (id, title, messages, logs, execution_plan, metrics, mode, subagent_tree, timestamp)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       title = excluded.title,
       messages = excluded.messages,
@@ -170,6 +185,7 @@ function saveSession(session) {
       execution_plan = excluded.execution_plan,
       metrics = excluded.metrics,
       mode = excluded.mode,
+      subagent_tree = excluded.subagent_tree,
       timestamp = excluded.timestamp
   `);
   stmt.run(
@@ -180,6 +196,7 @@ function saveSession(session) {
     session.executionPlan || "",
     JSON.stringify(session.metrics || {}),
     session.mode || "",
+    JSON.stringify(session.subagentTree || {}),
     session.timestamp || Date.now()
   );
 

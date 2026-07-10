@@ -17,7 +17,7 @@ const initialState = {
   // Metrics
   metrics: {
     toolCalls: 0, latency: 0, tokens: 0, cost: 0,
-    activeSubagents: [], actionFeed: [],
+    activeSubagents: [], actionFeed: [], latencyPerTool: {},
   },
   approvalsHistory: [],
   approvalRequest: null,
@@ -144,6 +144,7 @@ function aegisReducer(state, action) {
       if (action.payload.sessionTokens !== undefined) next.tokens = action.payload.sessionTokens;
       if (action.payload.cost !== undefined) next.cost = action.payload.cost;
       if (action.payload.latency !== undefined) next.latency = action.payload.latency;
+      if (action.payload.latencyPerTool !== undefined) next.latencyPerTool = action.payload.latencyPerTool;
       if (action.payload.activeSubagents !== undefined) next.activeSubagents = action.payload.activeSubagents;
       if (action.payload.subagents !== undefined) next.activeSubagents = action.payload.subagents;
       if (action.payload.actionFeed !== undefined) next.actionFeed = action.payload.actionFeed;

@@ -314,7 +314,7 @@ export default function MetricsPanel({ metrics, status, approvalsHistory }) {
   // the grand totals. But we still calculate here as a fallback.
   const accumulatedToolCalls = (metrics.toolCalls || 0);
   const accumulatedTokens = (metrics.tokens || 0);
-  const accumulatedCost = metrics.cost || "0";
+  const accumulatedCost = (metrics.cost || 0).toFixed(metrics.cost < 0.01 ? 4 : 2);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
@@ -437,6 +437,37 @@ export default function MetricsPanel({ metrics, status, approvalsHistory }) {
                 <SubagentPanel key={i} subagent={sa} />
               ))
             )}
+          </div>
+        </div>
+      )}
+
+      {/* SECTION 2.5: PER-TOOL LATENCY BREAKDOWN */}
+      {metrics.latencyPerTool && Object.keys(metrics.latencyPerTool).length > 0 && (
+        <div>
+          <SectionHeader icon={<Clock size={12} />} title="Per-Tool Latency" />
+          <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+            {Object.entries(metrics.latencyPerTool)
+              .sort((a, b) => b[1].totalMs - a[1].totalMs)
+              .slice(0, 8)
+              .map(([toolName, stats]) => (
+                <div
+                  key={toolName}
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    fontSize: "0.72rem",
+                    padding: "3px 8px",
+                    background: "rgba(0,0,0,0.1)",
+                    borderRadius: "4px",
+                  }}
+                >
+                  <span style={{ color: "var(--text-primary)" }}>{toolName}</span>
+                  <span style={{ color: "var(--text-tertiary)" }}>
+                    {stats.count}× · avg {stats.avgMs}ms
+                  </span>
+                </div>
+              ))}
           </div>
         </div>
       )}

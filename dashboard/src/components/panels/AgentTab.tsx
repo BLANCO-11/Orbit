@@ -18,7 +18,7 @@ export default function AgentTab({ metrics, status, approvalsHistory, subAgents 
           <MetricBadge icon={<Cpu size={12} />} label="Tokens" value={metrics.tokens?.toLocaleString() || '0'} />
           <MetricBadge icon={<Activity size={12} />} label="Tools" value={`${metrics.toolCalls || 0} calls`} />
           <MetricBadge icon={<Clock size={12} />} label="Latency" value={`${((metrics.latency || 0) / 1000).toFixed(1)}s`} />
-          <MetricBadge icon={<FileText size={12} />} label="Cost" value={`$${metrics.cost || '0'}`} color="var(--accent-success)" />
+          <MetricBadge icon={<FileText size={12} />} label="Est. Cost" value={`$${(metrics.cost || 0).toFixed(metrics.cost < 0.01 ? 4 : 2)}`} color="var(--accent-success)" />
         </div>
       </div>
 

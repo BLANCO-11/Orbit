@@ -222,12 +222,16 @@ wss.on("connection", (ws) => {
           const persistable = metricsManager.toPersistable(sid);
           const existingSession = db.getSession(sid);
           if (existingSession) {
-            db.saveSession({ ...existingSession, metrics: persistable });
+            db.saveSession({
+              ...existingSession,
+              metrics: persistable,
+              subagentTree: ses.subagentTracker ? ses.subagentTracker.toJSON() : existingSession.subagentTree,
+            });
           }
         } catch (e) {
           console.error(`[Metrics] Error persisting session ${sid}:`, e.message);
         }
-        
+
         if (ses.harness) {
           try { ses.harness.disconnect(); } catch {}
         }
@@ -287,11 +291,27 @@ async function handleStartTask(ws, userPrompt, sessionId, mode, systemPromptType
   }
   
   // ── Initialize metrics ────────────────────────────────────
-  metricsManager.initSession(sessionId, activeMode);
+  const litellmConfig = getConfig().litellm || {};
+  const activeModelName = taskMode === "reasoning"
+    ? litellmConfig.selectedReasoningModel
+    : litellmConfig.selectedNormalModel;
+  metricsManager.initSession(sessionId, activeMode, activeModelName);
   metricsManager.recordInputTokens(sessionId, userPrompt);
   
   // ── Initialize subagent tracker ───────────────────────────
+  // Restore prior sub-agent history for this session (if any was persisted)
+  // instead of always starting from an empty tree — otherwise a harness
+  // restart, or even just the next prompt turn before an autosave fires,
+  // silently drops all previously-tracked sub-agent activity.
   const subagentTracker = new SubagentTracker(sessionId);
+  try {
+    const priorSession = db.getSession(sessionId);
+    if (priorSession && priorSession.subagentTree && priorSession.subagentTree.agents) {
+      subagentTracker.fromJSON(priorSession.subagentTree);
+    }
+  } catch (e) {
+    console.error(`[SubagentTracker] Error restoring history for ${sessionId}:`, e.message);
+  }
   
   // ── Spawn or reuse harness ────────────────────────────────
   let sessionItem = activeSessions.get(sessionId);
@@ -330,7 +350,7 @@ async function handleStartTask(ws, userPrompt, sessionId, mode, systemPromptType
       const persistable = metricsManager.toPersistable(sessionId);
       const existingSession = db.getSession(sessionId);
       if (existingSession) {
-        db.saveSession({ ...existingSession, metrics: persistable });
+        db.saveSession({ ...existingSession, metrics: persistable, subagentTree: subagentTracker.toJSON() });
       }
     } catch {}
   }, saveInterval);
@@ -570,7 +590,7 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
       const persistable = metricsManager.toPersistable(sessionId);
       const existingSession = db.getSession(sessionId);
       if (existingSession) {
-        db.saveSession({ ...existingSession, metrics: persistable });
+        db.saveSession({ ...existingSession, metrics: persistable, subagentTree: subagentTracker.toJSON() });
       }
     } catch (e) {
       console.error(`[Metrics] Error persisting metrics for ${sessionId}:`, e.message);
@@ -607,7 +627,13 @@ async function shutdown(signal) {
     try {
       const persistable = metricsManager.toPersistable(sid);
       const existing = db.getSession(sid);
-      if (existing) db.saveSession({ ...existing, metrics: persistable });
+      if (existing) {
+        db.saveSession({
+          ...existing,
+          metrics: persistable,
+          subagentTree: ses.subagentTracker ? ses.subagentTracker.toJSON() : existing.subagentTree,
+        });
+      }
     } catch {}
     
     if (ses.harness) {

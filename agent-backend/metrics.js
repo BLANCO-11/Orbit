@@ -32,11 +32,12 @@ function createEmptyMetrics() {
       perPhase: {},
     },
     subagents: [],
-    reasoningSteps: 0,
+    reasoningChunks: 0,
     sessionToolCalls: 0,
     sessionTokens: 0,
     actionFeed: [],
     mode: "",
+    model: "",
   };
 }
 
@@ -109,6 +110,34 @@ function estimateTokensFromLines(lines) {
   return lines.reduce((sum, line) => sum + estimateTokens(String(line)), 0);
 }
 
+// ── Cost Estimation ─────────────────────────────────────────────────
+// Token counts are a character-count estimate (see estimateTokens above),
+// not real provider usage — the harness protocol (harnesses/interface.js)
+// has no usage/token event, and the LLM calls happen inside the external
+// `pi` CLI process, not in this backend, so we never see a real API
+// response to read `usage` from. Cost is therefore necessarily an
+// estimate derived from an estimate; rates are blended $/1M tokens
+// (input+output averaged, since we don't split by direction).
+const MODEL_PRICING_PER_MILLION = [
+  { match: /claude-.*opus/i, rate: 15 },
+  { match: /claude-.*sonnet/i, rate: 3 },
+  { match: /claude-.*haiku/i, rate: 0.8 },
+  { match: /gpt-4o-mini/i, rate: 0.15 },
+  { match: /gpt-4o/i, rate: 2.5 },
+  { match: /gpt-4/i, rate: 5 },
+  { match: /gpt-3\.5/i, rate: 0.5 },
+  { match: /gemini.*pro/i, rate: 1.25 },
+  { match: /gemini.*flash/i, rate: 0.075 },
+  { match: /deepseek/i, rate: 0.28 },
+];
+const DEFAULT_RATE_PER_MILLION = 1; // blended fallback for unrecognized/local models
+
+function estimateCost(totalTokens, modelName) {
+  const entry = MODEL_PRICING_PER_MILLION.find(p => modelName && p.match.test(modelName));
+  const rate = entry ? entry.rate : DEFAULT_RATE_PER_MILLION;
+  return (totalTokens / 1_000_000) * rate;
+}
+
 // ── Metrics Manager ─────────────────────────────────────────────────
 class SessionMetricsManager {
   constructor() {
@@ -123,14 +152,16 @@ class SessionMetricsManager {
   /**
    * Initialize metrics for a session. Idempotent — reuses existing if present.
    */
-  initSession(sessionId, mode) {
+  initSession(sessionId, mode, modelName) {
     if (this._metrics.has(sessionId)) {
       const existing = this._metrics.get(sessionId);
       if (mode) existing.mode = mode;
+      if (modelName) existing.model = modelName;
       return existing;
     }
     const m = createEmptyMetrics();
     m.mode = mode || "";
+    m.model = modelName || "";
     this._metrics.set(sessionId, m);
     this._toolTimers.set(sessionId, new Map());
     this._phaseTimers.set(sessionId, {});
@@ -248,7 +279,7 @@ class SessionMetricsManager {
     metrics.tokens.reasoning += tok;
     metrics.tokens.total += tok;
     metrics.sessionTokens = metrics.tokens.total;
-    metrics.reasoningSteps++;
+    metrics.reasoningChunks++;
     metrics.lastActivity = new Date().toISOString();
   }
 
@@ -417,7 +448,11 @@ class SessionMetricsManager {
   toPersistable(sessionId) {
     const metrics = this._metrics.get(sessionId);
     if (!metrics) return createEmptyMetrics();
-    return { ...metrics, lastActivity: new Date().toISOString() };
+    return {
+      ...metrics,
+      cost: estimateCost(metrics.tokens.total, metrics.model),
+      lastActivity: new Date().toISOString(),
+    };
   }
 
   /**
@@ -441,7 +476,11 @@ class SessionMetricsManager {
       sessionToolCalls: m.sessionToolCalls,
       tokens: m.tokens.total,
       sessionTokens: m.sessionTokens,
+      tokensEstimated: m.tokens.estimated,
+      cost: estimateCost(m.tokens.total, m.model),
+      costEstimated: true, // always true until the harness protocol reports real usage
       latency: m.latency.totalMs,
+      latencyPerTool: m.latency.perTool,
       activeSubagents: activeSubs,
       subagents: activeSubs, // field name expected by frontend
       actionFeed: m.actionFeed.slice(-10),
@@ -468,5 +507,6 @@ module.exports = {
   migrateLegacyMetrics,
   estimateTokens,
   estimateTokensFromLines,
+  estimateCost,
   METRICS_SCHEMA_VERSION,
 };
