@@ -151,6 +151,20 @@ export function useWebSocket(
           case 'usage_update':
             dispatch(actions.updateMetrics(data));
             break;
+
+          case 'budget_exceeded':
+            dispatch(actions.addMessage({
+              role: 'assistant',
+              content: `🛑 **Budget reached** — ${data.message || 'Session budget limit hit.'}`,
+              isBudgetNotice: true,
+            }));
+            dispatch(actions.addLog({
+              text: `[Budget] ${data.message || 'limit reached'}`,
+              isSystem: true,
+              timestamp: new Date().toLocaleTimeString(),
+            }));
+            dispatch(actions.setStatus('done'));
+            break;
             
           case 'screenshot_updated':
             dispatch(actions.setScreenshot(`/screenshots/${data.file}?t=${Date.now()}`));

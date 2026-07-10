@@ -53,8 +53,12 @@ const activeSessions = new Map();    // sessionId → { harness, ws, mode, subag
 const pendingApprovals = new Map();  // toolCallId → resolve callback
 const sessionAllowedPaths = new Map(); // sessionId → Set<allowedPaths>
 
-let securityConfig = loadConfig();
-const getConfig = () => securityConfig;
+// Read config fresh from disk each call so a saved change (policy, budgets,
+// notifications) hot-reloads on the next tool call / turn without a restart.
+// Previously this returned a single startup snapshot, so POST /api/config
+// wrote the file but nothing in-process ever saw the new values.
+loadConfig(); // fail fast at boot if the config file is missing/corrupt
+const getConfig = () => loadConfig();
 const { nodePath, piPath } = discoverPiBinaries();
 
 // ── Express App ─────────────────────────────────────────────────────
@@ -300,6 +304,29 @@ async function handleStartTask(ws, userPrompt, sessionId, mode, systemPromptType
     ? litellmConfig.selectedReasoningModel
     : litellmConfig.selectedNormalModel;
   metricsManager.initSession(sessionId, activeMode, activeModelName);
+
+  // ── Budget gate ───────────────────────────────────────────────────
+  // Enforce per-session cost/token caps BEFORE spending anything on this
+  // turn. Caps of 0 mean unlimited. Exceeding halts the turn and tells the
+  // user, rather than silently burning past the limit.
+  const budgets = getConfig().budgets || {};
+  const budgetState = metricsManager.checkBudget(sessionId, budgets);
+  if (!budgetState.ok) {
+    const parts = budgetState.exceeded.map(e =>
+      e.kind === "cost"
+        ? `cost $${e.value.toFixed(4)} ≥ cap $${Number(e.limit).toFixed(4)}`
+        : `${Math.round(e.value).toLocaleString()} tokens ≥ cap ${Number(e.limit).toLocaleString()}`
+    );
+    sendLog(ws, `[Budget] Session cap reached — ${parts.join("; ")}. Turn halted.`, false, sessionId);
+    sendWithSession(ws, {
+      type: "budget_exceeded",
+      exceeded: budgetState.exceeded,
+      message: `Session budget reached (${parts.join("; ")}). Raise the cap in Policies to continue.`,
+    }, sessionId);
+    sendStatus(ws, "done", sessionId);
+    return;
+  }
+
   metricsManager.recordInputTokens(sessionId, userPrompt);
   metricsManager.beginTurn(sessionId, userPrompt);
   
@@ -441,6 +468,23 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
       const saName = "Subagent (" + saPrompt.substring(0, 24) + (saPrompt.length > 24 ? "..." : "") + ")";
       const inheritedMode = mode || "chat";
       const parentId = subagentId || null;
+
+      // Enforce sub-agent depth cap: a spawn deeper than the limit is refused
+      // before the agent process is tracked or run.
+      const maxDepth = getConfig().budgets?.maxSubagentDepth ?? 2;
+      const depth = subagentTracker.depthOf(parentId);
+      if (maxDepth > 0 && depth > maxDepth) {
+        sendLog(ws, `[Budget] Blocked sub-agent spawn at depth ${depth} (cap ${maxDepth}).`, false);
+        sendWithSession(ws, {
+          type: "budget_exceeded",
+          exceeded: [{ kind: "subagentDepth", limit: maxDepth, value: depth }],
+          message: `Sub-agent depth ${depth} exceeds the cap of ${maxDepth}. Raise it in Policies to allow deeper nesting.`,
+        }, sessionId);
+        const ses = activeSessions.get(sessionId);
+        if (ses?.harness) ses.harness.cancel();
+        sendStatus(ws, "done", sessionId);
+        return;
+      }
 
       subagentTracker.spawnAgent(id, saName, parentId, inheritedMode, saPrompt);
       subagentTracker.setStatus(id, STATUS.WORKING);

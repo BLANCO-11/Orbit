@@ -365,6 +365,27 @@ class SessionMetricsManager {
     metrics.lastActivity = new Date().toISOString();
   }
 
+  /**
+   * Check the session's accumulated usage against configured budget caps.
+   * A cap of 0 (or missing) means "no limit". Returns the list of exceeded
+   * caps, each with the limit and the current value, so the caller can halt
+   * and report precisely. Sub-agent depth is checked separately at spawn time.
+   */
+  checkBudget(sessionId, budgets) {
+    const metrics = this._metrics.get(sessionId);
+    if (!metrics || !budgets) return { ok: true, exceeded: [] };
+    const exceeded = [];
+    const tokens = this._effectiveTokens(metrics).total;
+    const cost = this._effectiveCost(metrics);
+    if (budgets.maxCostPerSession > 0 && cost >= budgets.maxCostPerSession) {
+      exceeded.push({ kind: "cost", limit: budgets.maxCostPerSession, value: cost });
+    }
+    if (budgets.maxTokensPerSession > 0 && tokens >= budgets.maxTokensPerSession) {
+      exceeded.push({ kind: "tokens", limit: budgets.maxTokensPerSession, value: tokens });
+    }
+    return { ok: exceeded.length === 0, exceeded };
+  }
+
   // ── Per-turn ledger ─────────────────────────────────────────────────
 
   /**

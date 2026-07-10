@@ -285,6 +285,23 @@ class SubagentTracker {
   // ── Mode Inheritance ──────────────────────────────────────────────
 
   /**
+   * Depth of an agent in the spawn tree. A root sub-agent (parentId=null) is
+   * depth 1; its children are depth 2; etc. Used to enforce maxSubagentDepth.
+   * `parentId` may reference an agent not yet spawned — treat as root.
+   */
+  depthOf(parentId) {
+    let depth = 1;
+    let cur = parentId;
+    const seen = new Set();
+    while (cur && this._agents.has(cur) && !seen.has(cur)) {
+      seen.add(cur);
+      depth++;
+      cur = this._agents.get(cur).parentId;
+    }
+    return depth;
+  }
+
+  /**
    * Get the effective mode for an agent, walking up to parent if not set.
    */
   getEffectiveMode(agentId) {

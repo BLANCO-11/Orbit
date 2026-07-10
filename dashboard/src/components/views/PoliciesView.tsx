@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 
 type PolicyValue = 'allow' | 'ask' | 'block' | 'n/a';
 
@@ -33,6 +33,84 @@ function Pv({ v }: { v: PolicyValue }) {
  * server.js + security-guard path/command validation). Editable matrix,
  * budgets, and per-device overrides land in Phase 4.
  */
+interface Budgets {
+  maxCostPerSession: number;
+  maxTokensPerSession: number;
+  maxSubagentDepth: number;
+}
+
+function BudgetsSection() {
+  const [config, setConfig] = useState<any>(null);
+  const [budgets, setBudgets] = useState<Budgets>({ maxCostPerSession: 0, maxTokensPerSession: 0, maxSubagentDepth: 2 });
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/config')
+      .then((r) => r.json())
+      .then((c) => {
+        setConfig(c);
+        if (c.budgets) setBudgets({ maxSubagentDepth: 2, maxCostPerSession: 0, maxTokensPerSession: 0, ...c.budgets });
+      })
+      .catch(() => {});
+  }, []);
+
+  const save = () => {
+    if (!config) return;
+    setSaving(true);
+    setSaved(false);
+    fetch('/api/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...config, budgets }),
+    })
+      .then((r) => r.json())
+      .then(() => { setSaved(true); setTimeout(() => setSaved(false), 2500); })
+      .finally(() => setSaving(false));
+  };
+
+  const field = (label: string, key: keyof Budgets, hint: string, step = 1) => (
+    <div className="rounded-xl border border-border-soft bg-card px-4 py-3">
+      <label className="block text-[11px] font-medium text-muted-foreground">{label}</label>
+      <div className="mt-1.5 flex items-center gap-2">
+        <input
+          type="number"
+          min={0}
+          step={step}
+          value={budgets[key]}
+          onChange={(e) => setBudgets((b) => ({ ...b, [key]: Number(e.target.value) }))}
+          className="w-28 rounded-lg border border-border bg-background px-2.5 py-1.5 font-mono text-[13px] tabular-nums outline-none focus:border-ring"
+        />
+        <span className="text-[11px] text-faint">{budgets[key] === 0 && key !== 'maxSubagentDepth' ? 'unlimited' : hint}</span>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="mt-6">
+      <div className="mb-2 text-[10.5px] font-bold uppercase tracking-[0.08em] text-faint">
+        Budgets &amp; limits — enforced, not advisory
+      </div>
+      <div className="grid gap-2.5 sm:grid-cols-3">
+        {field('Max cost per session ($)', 'maxCostPerSession', 'halts the turn at this cost', 0.01)}
+        {field('Max tokens per session', 'maxTokensPerSession', 'halts the turn at this many tokens', 1000)}
+        {field('Max sub-agent depth', 'maxSubagentDepth', 'deeper spawns are blocked')}
+      </div>
+      <div className="mt-3 flex items-center gap-3">
+        <button
+          onClick={save}
+          disabled={saving || !config}
+          className="rounded-[9px] bg-primary px-4 py-1.5 text-[13px] font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50"
+        >
+          {saving ? 'Saving…' : 'Save budgets'}
+        </button>
+        {saved && <span className="text-xs text-success">Saved — applies on the next action.</span>}
+        <span className="text-xs text-faint">0 = unlimited (cost &amp; tokens).</span>
+      </div>
+    </div>
+  );
+}
+
 export default function PoliciesView() {
   return (
     <div className="h-full overflow-y-auto">
@@ -73,10 +151,11 @@ export default function PoliciesView() {
 
         <p className="mt-3 text-xs leading-relaxed text-faint">
           Edit mode additionally gates writes outside the workspace behind an in-conversation
-          approval (allow once / allow for session / deny). Editable per-cell policy, enforced
-          budget caps, and per-device overrides ship in Phase 4 of{' '}
-          <span className="font-mono">plan/IMPLEMENTATION-PLAN.md</span>.
+          approval (allow once / allow for session / deny). Editable per-cell policy and per-device
+          overrides are still ahead; budgets below are live and enforced.
         </p>
+
+        <BudgetsSection />
       </div>
     </div>
   );
