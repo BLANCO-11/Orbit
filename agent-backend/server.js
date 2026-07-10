@@ -38,6 +38,7 @@ const { createModelsRouter, createTtsRouter, createVoicesRouter } = require("./r
 const createNotificationsRouter = require("./routes/notifications");
 const createHealthRouter = require("./routes/health");
 const createWorkspaceRouter = require("./routes/workspace");
+const createDevicesRouter = require("./routes/devices");
 
 // WebSocket
 const createWebSocketServer = require("./ws/index");
@@ -68,10 +69,10 @@ mcpClient.connect().catch(err => console.error("MCP connect failed:", err.messag
 
 // ── HTTP + WebSocket Server ─────────────────────────────────────────
 const server = http.createServer(app);
-const wss = createWebSocketServer(server);
+const wss = createWebSocketServer(server, db);
 
 // ── Auth ────────────────────────────────────────────────────────────
-const authMiddleware = createAuthMiddleware();
+const authMiddleware = createAuthMiddleware(db);
 if (!createAuthMiddleware.getSharedApiKey()) {
   console.warn("[SECURITY] AEGIS_API_KEY is not set — the API and WebSocket are UNAUTHENTICATED.");
   console.warn("[SECURITY] Fine for local-only dev; set AEGIS_API_KEY before exposing this server beyond 127.0.0.1.");
@@ -86,6 +87,7 @@ app.use("/api/voices", authMiddleware, createVoicesRouter());
 app.use("/api/notify", authMiddleware, createNotificationsRouter(getConfig, wss));
 app.use("/api/workspace", authMiddleware, createWorkspaceRouter());
 app.use("/api/health", createHealthRouter({ db, mcpClient, getConfig, activeSessions }));
+app.use("/api", createDevicesRouter(db, authMiddleware, () => process.env.DASHBOARD_ORIGIN || "http://localhost:6801"));
 
 // Error handler (must be last middleware)
 app.use(errorHandler);
@@ -329,7 +331,7 @@ async function handleStartTask(ws, userPrompt, sessionId, mode, systemPromptType
       });
       
       await harness.connect();
-      sessionItem = { harness, ws, mode: activeMode, subagentTracker };
+      sessionItem = { harness, ws, mode: activeMode, subagentTracker, deviceId: ws.device?.id || null };
       activeSessions.set(sessionId, sessionItem);
     } catch (err) {
       console.error(`[handleStartTask] Failed to spawn harness:`, err);

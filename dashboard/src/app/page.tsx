@@ -28,11 +28,21 @@ import MetricsPanel from '@/components/MetricsPanel';
 import LogViewer from '@/components/LogViewer';
 import ScreenshotViewer from '@/components/ScreenshotViewer';
 import SettingsPanel from '@/components/SettingsPanel';
+import PairDevice from '@/components/PairDevice';
 import { installApiAuthFetch } from '@/lib/api-auth';
+import { getDeviceToken } from '@/lib/device-auth';
 
 installApiAuthFetch();
 
 export default function Dashboard() {
+  // This app renders entirely client-side (see ClientDashboard.tsx's
+  // ssr:false dynamic import) regardless of which path Next's router
+  // resolved, so /pair is handled here as a client-side path check rather
+  // than a separate file-based route.
+  if (typeof window !== 'undefined' && window.location.pathname === '/pair') {
+    return <PairDevice />;
+  }
+
   return (
     <AegisProvider>
       <DashboardInner />
@@ -56,11 +66,15 @@ function DashboardInner() {
   const { speakText, queueSentence, startSession: startTtsSession, stopSpeaking } = useTTS(settings.selectedVoice);
 
   // WebSocket goes through Next.js custom server proxy → backend:6800
-  // NEXT_PUBLIC_AEGIS_API_KEY is only needed if the backend has AEGIS_API_KEY set
-  // (see middleware/auth.js) — unset by default for local dev, matching the backend.
-  const wsKeyParam = process.env.NEXT_PUBLIC_AEGIS_API_KEY
-    ? `?key=${encodeURIComponent(process.env.NEXT_PUBLIC_AEGIS_API_KEY)}`
-    : '';
+  // A paired device token (see lib/device-auth.ts) takes priority; falls back
+  // to the shared NEXT_PUBLIC_AEGIS_API_KEY key for simple unpaired setups —
+  // both unset by default for local dev, matching the backend's dev-mode.
+  const deviceToken = getDeviceToken();
+  const wsKeyParam = deviceToken
+    ? `?deviceToken=${encodeURIComponent(deviceToken)}`
+    : process.env.NEXT_PUBLIC_AEGIS_API_KEY
+      ? `?key=${encodeURIComponent(process.env.NEXT_PUBLIC_AEGIS_API_KEY)}`
+      : '';
   const backendWsUrl = typeof window !== 'undefined'
     ? `ws://${window.location.hostname}:${window.location.port || '6801'}/api/ws${wsKeyParam}`
     : `ws://localhost:6801/api/ws${wsKeyParam}`;

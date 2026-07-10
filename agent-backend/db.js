@@ -1,12 +1,13 @@
 const { DatabaseSync } = require("node:sqlite");
 const path = require("path");
 const fs = require("fs");
+const crypto = require("crypto");
 
 const dbPath = path.join(__dirname, "aegis.db");
 const db = new DatabaseSync(dbPath);
 
 // ── Schema Versioning ───────────────────────────────────────────────
-const CURRENT_SCHEMA_VERSION = 4;
+const CURRENT_SCHEMA_VERSION = 5;
 const BACKUP_INTERVAL = 10; // auto-backup every N saves
 let saveCount = 0;
 
@@ -61,6 +62,35 @@ if (currentSchemaVersion < 4) {
   } catch (e) {
     // Column may already exist from a partial migration; ignore
   }
+  db.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)").run(
+    "schema_version",
+    String(CURRENT_SCHEMA_VERSION)
+  );
+  console.log(`[DB] Migrated sessions schema to version ${CURRENT_SCHEMA_VERSION}`);
+}
+
+if (currentSchemaVersion < 5) {
+  // Device identity + pairing tables (see createDevice/createPairingCode below).
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS devices (
+      id TEXT PRIMARY KEY,
+      label TEXT NOT NULL,
+      token_hash TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      last_seen INTEGER,
+      revoked_at INTEGER,
+      policy_overrides TEXT NOT NULL DEFAULT '{}'
+    )
+  `);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS pairing_codes (
+      code TEXT PRIMARY KEY,
+      label TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      expires_at INTEGER NOT NULL,
+      redeemed_at INTEGER
+    )
+  `);
   db.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)").run(
     "schema_version",
     String(CURRENT_SCHEMA_VERSION)
@@ -240,6 +270,101 @@ function searchSessions(query) {
   return rows.map(mapRow);
 }
 
+// ── Device Pairing (URL + OTP) ───────────────────────────────────────
+// A pairing code is a short-lived, single-use OTP exchanged for a
+// long-lived device token. Only the token's SHA-256 hash is ever stored —
+// the raw token is returned once, at redemption time, and never again.
+
+const PAIRING_CODE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const PAIRING_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no 0/O/1/I ambiguity
+
+function hashToken(token) {
+  return crypto.createHash("sha256").update(token).digest("hex");
+}
+
+function generatePairingCode(length = 6) {
+  let code = "";
+  const bytes = crypto.randomBytes(length);
+  for (let i = 0; i < length; i++) {
+    code += PAIRING_CODE_ALPHABET[bytes[i] % PAIRING_CODE_ALPHABET.length];
+  }
+  return code;
+}
+
+/** Create a new pairing code for a device that's about to connect. */
+function createPairingCode(label) {
+  const code = generatePairingCode();
+  const now = Date.now();
+  const expiresAt = now + PAIRING_CODE_TTL_MS;
+  db.prepare(`
+    INSERT INTO pairing_codes (code, label, created_at, expires_at, redeemed_at)
+    VALUES (?, ?, ?, ?, NULL)
+  `).run(code, label || "New device", now, expiresAt);
+  return { code, expiresAt };
+}
+
+/**
+ * Redeem a pairing code: validates it's unexpired and unused, marks it
+ * redeemed, and creates a new device with a freshly generated token.
+ * Returns { id, label, token } on success (raw token only ever returned
+ * here), or null if the code is invalid/expired/already used.
+ */
+function redeemPairingCode(code, deviceLabel) {
+  const row = db.prepare("SELECT * FROM pairing_codes WHERE code = ?").get(code);
+  if (!row) return null;
+  if (row.redeemed_at) return null;
+  if (Date.now() > row.expires_at) return null;
+
+  db.prepare("UPDATE pairing_codes SET redeemed_at = ? WHERE code = ?").run(Date.now(), code);
+  return createDevice(deviceLabel || row.label);
+}
+
+function createDevice(label) {
+  const id = crypto.randomUUID();
+  const token = crypto.randomBytes(32).toString("hex");
+  db.prepare(`
+    INSERT INTO devices (id, label, token_hash, created_at, last_seen, revoked_at, policy_overrides)
+    VALUES (?, ?, ?, ?, NULL, NULL, '{}')
+  `).run(id, label || "New device", hashToken(token), Date.now());
+  return { id, label: label || "New device", token };
+}
+
+/** Look up a device by its raw token (as presented over WS/HTTP). Returns null if unknown or revoked. */
+function getDeviceByToken(token) {
+  if (!token) return null;
+  const row = db.prepare("SELECT * FROM devices WHERE token_hash = ?").get(hashToken(token));
+  if (!row || row.revoked_at) return null;
+  return mapDeviceRow(row);
+}
+
+function touchDeviceLastSeen(id) {
+  db.prepare("UPDATE devices SET last_seen = ? WHERE id = ?").run(Date.now(), id);
+}
+
+function listDevices() {
+  const rows = db.prepare("SELECT * FROM devices ORDER BY created_at DESC").all();
+  return rows.map(mapDeviceRow);
+}
+
+function renameDevice(id, label) {
+  db.prepare("UPDATE devices SET label = ? WHERE id = ?").run(label, id);
+}
+
+function revokeDevice(id) {
+  db.prepare("UPDATE devices SET revoked_at = ? WHERE id = ?").run(Date.now(), id);
+}
+
+function mapDeviceRow(row) {
+  return {
+    id: row.id,
+    label: row.label,
+    createdAt: row.created_at,
+    lastSeen: row.last_seen,
+    revoked: Boolean(row.revoked_at),
+    policyOverrides: JSON.parse(row.policy_overrides || "{}"),
+  };
+}
+
 module.exports = {
   saveSession,
   getSession,
@@ -248,4 +373,12 @@ module.exports = {
   searchSessions,
   performBackup,
   getBackups,
+  createPairingCode,
+  redeemPairingCode,
+  createDevice,
+  getDeviceByToken,
+  touchDeviceLastSeen,
+  listDevices,
+  renameDevice,
+  revokeDevice,
 };

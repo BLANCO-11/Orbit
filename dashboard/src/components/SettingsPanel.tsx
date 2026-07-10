@@ -1,12 +1,13 @@
 // @ts-nocheck
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Plus, Trash2, Settings, Shield, Edit3, Zap } from "lucide-react";
+import { Plus, Trash2, Settings, Shield, Edit3, Zap, Smartphone, Copy, X } from "lucide-react";
+import { useDevices } from "@/hooks/useDevices";
 
 export default function SettingsPanel({
   settings,
@@ -26,6 +27,8 @@ export default function SettingsPanel({
   sessionMode,
   onSetSessionMode,
 }) {
+  const { devices, pairing, startPairing, clearPairing, revokeDevice } = useDevices();
+  const [newDeviceLabel, setNewDeviceLabel] = useState("");
   const sectionLabelStyle = {
     fontSize: "0.95rem",
     fontWeight: "700",
@@ -517,6 +520,83 @@ export default function SettingsPanel({
       ) : (
         <div style={{ color: "var(--text-secondary)", fontSize: "0.8rem" }}>Loading settings...</div>
       )}
+
+      {/* ── Paired Devices ── */}
+      <div style={sectionLabelStyle}>
+        <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+          <Smartphone size={13} /> Paired Devices
+        </span>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "16px" }}>
+        {devices.length === 0 ? (
+          <div style={{ fontSize: "0.75rem", color: "var(--text-tertiary)", fontStyle: "italic" }}>
+            No other devices paired yet.
+          </div>
+        ) : (
+          devices.map((d) => (
+            <div key={d.id} style={rowStyle}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "2px", overflow: "hidden" }}>
+                <span style={{ fontSize: "0.78rem", fontWeight: 600, color: d.revoked ? "var(--text-tertiary)" : "var(--text-primary)" }}>
+                  {d.label} {d.revoked && "(revoked)"}
+                </span>
+                <span style={{ fontSize: "0.68rem", color: "var(--text-tertiary)" }}>
+                  {d.lastSeen ? `Last seen ${new Date(d.lastSeen).toLocaleString()}` : "Never connected"}
+                </span>
+              </div>
+              {!d.revoked && (
+                <Trash2
+                  size={13}
+                  onClick={() => revokeDevice(d.id)}
+                  style={{ color: "#f87171", cursor: "pointer", flexShrink: 0 }}
+                />
+              )}
+            </div>
+          ))
+        )}
+
+        {pairing ? (
+          <div style={{
+            display: "flex", flexDirection: "column", gap: "8px", padding: "12px",
+            background: "var(--accent-primary-muted)", border: "1px solid var(--accent-primary)",
+            borderRadius: "var(--radius-sm)",
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: "0.72rem", color: "var(--text-secondary)", fontWeight: 600 }}>
+                Enter this code on the new device — expires in 5 minutes
+              </span>
+              <X size={13} onClick={clearPairing} style={{ cursor: "pointer", color: "var(--text-tertiary)" }} />
+            </div>
+            <div style={{
+              fontFamily: "var(--font-mono)", fontSize: "1.3rem", fontWeight: 700, letterSpacing: "0.2em",
+              textAlign: "center", color: "var(--accent-primary)",
+            }}>
+              {pairing.code}
+            </div>
+            <div style={{ display: "flex", gap: "4px" }}>
+              <Input readOnly value={pairing.pairingUrl} style={smallInputStyle} />
+              <Button
+                variant="outline"
+                style={smallButtonStyle}
+                onClick={() => navigator.clipboard?.writeText(pairing.pairingUrl)}
+              >
+                <Copy size={12} />
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div style={addRowStyle}>
+            <Input
+              value={newDeviceLabel}
+              onChange={(e) => setNewDeviceLabel(e.target.value)}
+              placeholder="Device name, e.g. My Phone"
+              style={smallInputStyle}
+            />
+            <Button onClick={() => startPairing(newDeviceLabel)} variant="outline" style={smallButtonStyle}>
+              <Plus size={12} /> Pair
+            </Button>
+          </div>
+        )}
+      </div>
     </aside>
   );
 }
