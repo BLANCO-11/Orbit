@@ -282,9 +282,9 @@ function DashboardInner() {
   }, [securityConfig]);
 
   // ── Markdown ──
-  const renderMarkdown = useCallback((text) => {
+  const renderMarkdown = useCallback((text: string) => {
     try {
-      const raw = marked.parse(text || '', { breaks: true });
+      const raw = marked.parse(text || '', { breaks: true }) as string;
       const clean = DOMPurify.sanitize(raw);
       return { __html: clean };
     } catch {

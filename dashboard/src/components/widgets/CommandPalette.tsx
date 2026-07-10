@@ -10,7 +10,7 @@ import { Search, CornerDownLeft } from 'lucide-react';
  *   New Session, Switch Theme, Toggle Sidebar, Toggle Detail Panel,
  *   Compact Memory, Stop Agent, Open Settings, Toggle Logs
  */
-const COMMANDS = [
+const COMMANDS: Array<{ id: string; label: string; shortcut: string; category: string; type?: string; theme?: string }> = [
   { id: 'new-session', label: 'New Session', shortcut: 'Ctrl+N', category: 'Sessions' },
   { id: 'toggle-sidebar', label: 'Toggle Sidebar', shortcut: 'Ctrl+B', category: 'View' },
   { id: 'toggle-panel', label: 'Toggle Detail Panel', shortcut: 'Ctrl+J', category: 'View' },
@@ -21,7 +21,7 @@ const COMMANDS = [
   { id: 'toggle-workspace', label: 'Open Workspace', shortcut: '', category: 'View' },
 ];
 
-const THEME_COMMANDS = [
+const THEME_COMMANDS: Array<{ id: string; label: string; shortcut?: string; category?: string; type?: string; theme?: string }> = [
   { id: 'theme-deep-space', label: 'Theme: Deep Space', theme: 'deep-space' },
   { id: 'theme-frost', label: 'Theme: Frost', theme: 'frost' },
   { id: 'theme-forest', label: 'Theme: Forest', theme: 'forest' },
@@ -42,7 +42,7 @@ export default function CommandPalette({ isOpen, onClose, handlers }) {
     ? allCommands.filter(c => c.label.toLowerCase().includes(query.toLowerCase()))
     : [
         ...COMMANDS.filter(c => !c.category || c.category !== 'theme'),
-        { type: 'header', label: 'Themes' },
+        { type: 'header' as const, id: 'header-themes', label: 'Themes' },
         ...THEME_COMMANDS,
       ];
 

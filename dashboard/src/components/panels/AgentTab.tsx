@@ -70,7 +70,7 @@ export default function AgentTab({ metrics, status, approvalsHistory, subAgents 
 
 // ── Metric Badge ──────────────────────────────────────────────
 
-function MetricBadge({ icon, label, value, color }) {
+function MetricBadge({ icon, label, value, color }: { icon: React.ReactNode; label: string; value: any; color?: string }) {
   return (
     <div style={{
       background: 'var(--surface-secondary)', border: '1px solid var(--border-subtle)',

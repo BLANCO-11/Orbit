@@ -36,7 +36,7 @@ export default function AppShell({
   bottomNavItems,
   activeNavTab,
   onNavTabChange,
-}) {
+}: any) {
   const { isDesktop, isMobile } = useResponsive();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [rightPanelOpen, setRightPanelOpen] = useState(false);

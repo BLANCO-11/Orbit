@@ -5,8 +5,13 @@ import React from 'react';
 /**
  * ErrorBoundary — Catch render errors, show friendly fallback.
  */
-export class ErrorBoundary extends React.Component {
-  constructor(props) {
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+}
+
+export class ErrorBoundary extends React.Component<{ children: React.ReactNode }, ErrorBoundaryState> {
+  constructor(props: { children: React.ReactNode }) {
     super(props);
     this.state = { hasError: false, error: null };
   }
@@ -61,7 +66,7 @@ export class ErrorBoundary extends React.Component {
 /**
  * ComponentErrorBoundary — Lightweight wrapper for individual components.
  */
-export function ComponentErrorBoundary({ children, fallback }) {
+export function ComponentErrorBoundary({ children, fallback }: { children: React.ReactNode; fallback?: React.ReactNode }) {
   return (
     <ErrorBoundary>
       {children}

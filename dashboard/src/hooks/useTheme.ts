@@ -44,7 +44,7 @@ export function useTheme() {
     const root = document.documentElement;
 
     // Apply all color tokens
-    Object.entries(theme.colors).forEach(([key, value]) => {
+    Object.entries(theme.colors as Record<string, string>).forEach(([key, value]) => {
       root.style.setProperty(key, value);
     });
 

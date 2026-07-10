@@ -172,7 +172,7 @@ export function useSessions(backendHttpUrl) {
       dispatch(actions.setExecutionPlan(target.executionPlan || ''));
       
       // Update URL
-      const url = new URL(window.location);
+      const url = new URL(window.location.href);
       url.searchParams.set('session', sessionId);
       window.history.pushState(null, '', url);
     }
