@@ -1,6 +1,7 @@
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { ThemeScript } from "./ThemeScript";
+import ClientDashboard from "./ClientDashboard";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -21,7 +22,7 @@ export default function RootLayout({ children }) {
         <ThemeScript />
       </head>
       <body className={`${inter.variable} min-h-full flex flex-col antialiased`}>
-        {children}
+        <ClientDashboard />
       </body>
     </html>
   );
