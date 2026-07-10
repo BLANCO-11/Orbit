@@ -617,6 +617,6 @@ process.on("SIGTERM", () => shutdown("SIGTERM"));
 process.on("SIGINT", () => shutdown("SIGINT"));
 
 // ── Start ───────────────────────────────────────────────────────────
-server.listen(PORT, '127.0.0.1', () => {
-  console.log(`AegisAgent Backend Server listening on 127.0.0.1:${PORT}`);
+server.listen(PORT, () => {
+  console.log(`AegisAgent Backend Server listening on port ${PORT}`);
 });
