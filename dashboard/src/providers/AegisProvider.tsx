@@ -53,6 +53,7 @@ const ADD_REASONING_GROUP = 'ADD_REASONING_GROUP';
 const UPDATE_REASONING_ENTRY = 'UPDATE_REASONING_ENTRY';
 const SET_METRICS = 'SET_METRICS';
 const UPDATE_METRICS = 'UPDATE_METRICS';
+const INCREMENT_TOOL_CALLS = 'INCREMENT_TOOL_CALLS';
 const TOGGLE_TOOL = 'TOGGLE_TOOL';
 const SET_VISIBLE_COUNT = 'SET_VISIBLE_COUNT';
 const SET_APPROVAL_REQUEST = 'SET_APPROVAL_REQUEST';
@@ -131,7 +132,10 @@ function aegisReducer(state, action) {
     
     case SET_METRICS:
       return { ...state, metrics: { ...state.metrics, ...action.payload } };
-    
+
+    case INCREMENT_TOOL_CALLS:
+      return { ...state, metrics: { ...state.metrics, toolCalls: (state.metrics.toolCalls || 0) + 1 } };
+
     case UPDATE_METRICS: {
       const next = { ...state.metrics };
       if (action.payload.toolCalls !== undefined) next.toolCalls = action.payload.toolCalls;
@@ -258,6 +262,7 @@ export const actions = {
   updateReasoningEntry: (content) => ({ type: UPDATE_REASONING_ENTRY, payload: content }),
   setMetrics: (metrics) => ({ type: SET_METRICS, payload: metrics }),
   updateMetrics: (metrics) => ({ type: UPDATE_METRICS, payload: metrics }),
+  incrementToolCalls: () => ({ type: INCREMENT_TOOL_CALLS }),
   toggleTool: (id) => ({ type: TOGGLE_TOOL, payload: id }),
   setVisibleCount: (count) => ({ type: SET_VISIBLE_COUNT, payload: count }),
   setApprovalRequest: (req) => ({ type: SET_APPROVAL_REQUEST, payload: req }),

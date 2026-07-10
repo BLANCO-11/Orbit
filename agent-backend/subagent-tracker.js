@@ -278,6 +278,8 @@ class SubagentTracker {
       latencyMs,
       tokens: tok,
     });
+
+    return latencyMs;
   }
 
   // ── Mode Inheritance ──────────────────────────────────────────────

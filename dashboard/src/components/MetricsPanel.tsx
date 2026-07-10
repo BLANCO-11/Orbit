@@ -472,10 +472,7 @@ export default function MetricsPanel({ metrics, status, approvalsHistory }) {
                   display: "flex",
                   flexDirection: "column",
                   background: "rgba(0,0,0,0.15)",
-                  borderLeft:
-                    feed.type === "start"
-                      ? "2px solid var(--accent-warning)"
-                      : "2px solid var(--accent-success)",
+                  borderLeft: "2px solid var(--accent-success)",
                   padding: "6px 10px",
                   borderRadius: "0 6px 6px 0",
                   fontSize: "0.75rem",
@@ -489,21 +486,14 @@ export default function MetricsPanel({ metrics, status, approvalsHistory }) {
                   }}
                 >
                   <span style={{ color: "var(--text-primary)", fontWeight: "500" }}>
-                    {feed.text}
+                    {feed.toolName}
                   </span>
                   <span style={{ fontSize: "0.65rem", color: "var(--text-tertiary)" }}>
-                    {feed.timestamp}
+                    {feed.timestamp ? new Date(feed.timestamp).toLocaleTimeString() : ""}
                   </span>
                 </div>
-                <div
-                  style={{
-                    fontSize: "0.65rem",
-                    color: feed.type === "start" ? "var(--accent-warning)" : "var(--accent-success)",
-                  }}
-                >
-                  {feed.type === "start"
-                    ? "Executing..."
-                    : `Completed at ${feed.timestampEnd}`}
+                <div style={{ fontSize: "0.65rem", color: "var(--accent-success)" }}>
+                  {`Completed in ${feed.latencyMs ?? 0}ms`}
                 </div>
               </div>
             ))

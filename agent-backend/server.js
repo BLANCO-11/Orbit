@@ -71,7 +71,11 @@ const server = http.createServer(app);
 const wss = createWebSocketServer(server);
 
 // ── Auth ────────────────────────────────────────────────────────────
-const authMiddleware = createAuthMiddleware(getConfig);
+const authMiddleware = createAuthMiddleware();
+if (!createAuthMiddleware.getSharedApiKey()) {
+  console.warn("[SECURITY] AEGIS_API_KEY is not set — the API and WebSocket are UNAUTHENTICATED.");
+  console.warn("[SECURITY] Fine for local-only dev; set AEGIS_API_KEY before exposing this server beyond 127.0.0.1.");
+}
 
 // ── Mount Routes ────────────────────────────────────────────────────
 app.use("/api/config", authMiddleware, createConfigRouter(activeSessions));
@@ -377,25 +381,30 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
     sendWithSession(ws, { type: "reasoning_update", content: text }, sessionId);
   });
   
-  events.on("tool_call_start", ({ id, name, arguments: args }) => {
+  events.on("tool_call_start", ({ id, name, arguments: args, subagentId }) => {
     const argsStr = JSON.stringify(args || {});
     sendLog(ws, `[Tool Call] ${name} ${argsStr}`);
-    
+
     metricsManager.startToolCall(sessionId, id, name);
     metricsManager.setToolCallArgs(sessionId, id, args);
-    
+
     sendWithSession(ws, { type: "tool_start", toolCallId: id, name, arguments: args }, sessionId);
-    
+
     // Track subagent spawns
     if (name === "subagent") {
       const saPrompt = (args && (args.prompt || args.task)) || "Task execution";
       const saName = "Subagent (" + saPrompt.substring(0, 24) + (saPrompt.length > 24 ? "..." : "") + ")";
       const inheritedMode = mode || "chat";
-      
-      subagentTracker.spawnAgent(id, saName, null, inheritedMode, saPrompt);
+      const parentId = subagentId || null;
+
+      subagentTracker.spawnAgent(id, saName, parentId, inheritedMode, saPrompt);
       subagentTracker.setStatus(id, STATUS.WORKING);
-      
+      metricsManager.addSubagent(sessionId, { id, name: saName, parentId, status: STATUS.WORKING, mode: inheritedMode });
+
       sendLog(ws, `[Subagent Spawn] Mode="${inheritedMode}" inherited by subagent "${saName}".`, false);
+    } else if (subagentId && subagentTracker.getAgent(subagentId)) {
+      // This tool call is being made BY a subagent (nested tool use) — record it against the subagent, not the session.
+      subagentTracker.startToolCall(subagentId, id, name, args);
     }
     
     // Mode enforcement
@@ -459,23 +468,25 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
     }
   });
   
-  events.on("tool_call_end", ({ id, name, result }) => {
+  events.on("tool_call_end", ({ id, name, result, subagentId }) => {
     sendLog(ws, `[Tool Done] Finished ${name}`);
-    
+
     const resultStr = typeof result === "string" ? result : JSON.stringify(result || "");
     const latencyMs = metricsManager.endToolCall(sessionId, id, name, resultStr);
-    
+
     sendWithSession(ws, { type: "tool_end", toolCallId: id, name, result }, sessionId);
-    
-    // Handle subagent tool calls
-    if (subagentTracker.getAgent(id)) {
-      subagentTracker.endToolCall(id, id, resultStr);
+
+    // Handle nested tool calls made BY a subagent
+    if (subagentId && subagentTracker.getAgent(subagentId)) {
+      const subLatencyMs = subagentTracker.endToolCall(subagentId, id, resultStr);
+      metricsManager.addSubagentToolCall(sessionId, subagentId, name, null, resultStr, subLatencyMs);
     }
-    
+
     // Subagent completion
     if (name === "subagent") {
       subagentTracker.markCompleted(id, resultStr);
-      
+      metricsManager.completeSubagent(sessionId, id, resultStr);
+
       // Aggregate subagent tokens into session totals
       const subTokens = subagentTracker.getAgent(id)?.tokens;
       if (subTokens) {
@@ -508,7 +519,9 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
   
   events.on("subagent_status", ({ subagentId, status }) => {
     subagentTracker.setStatus(subagentId, status);
-    
+    const normalizedStatus = subagentTracker.getAgent(subagentId)?.status;
+    metricsManager.updateSubagent(sessionId, subagentId, { status: normalizedStatus });
+
     sendWithSession(ws, {
       type: "subagent_metrics",
       subagents: subagentTracker.toFrontendSummary(),

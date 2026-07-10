@@ -60,7 +60,6 @@ export function useTheme() {
       root.classList.remove('dark');
     } else {
       root.classList.add('dark');
-      root.classList.remove('dark');
       root.classList.remove('light');
     }
 

@@ -54,9 +54,7 @@ export function useWebSocket(
             dispatch(actions.updateLastMessage({
               tools: data, // handled by ChatMessage's tools array logic
             }));
-            dispatch(actions.updateMetrics({
-              toolCalls: (state) => (state || 0) + 1, // handled by metrics reducer
-            }));
+            dispatch(actions.incrementToolCalls());
             break;
             
           case 'tool_end':

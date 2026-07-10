@@ -1,23 +1,36 @@
 // agent-backend/middleware/auth.js
-// API key authentication middleware
+// Shared-secret authentication middleware.
+//
+// The key comes from the AEGIS_API_KEY env var — never from security-config.json,
+// since that file is writable via an (until now, unauthenticated) API route and
+// must not be able to reset its own guard. This is a stopgap shared-secret check
+// ahead of the full per-device token/OTP pairing model (see plan/IMPLEMENTATION-PLAN.md
+// Phase 3); it protects a single deployment, not multiple distinct devices/users.
 
-function createAuthMiddleware(getConfig) {
+function getSharedApiKey() {
+  return process.env.AEGIS_API_KEY || null;
+}
+
+function checkApiKey(req) {
+  const provided = req.headers["x-api-key"] || (req.headers["authorization"] || "").replace("Bearer ", "");
+  const required = getSharedApiKey();
+
+  // No key configured: dev-mode, allow through (already logged loudly at startup).
+  if (!required) return true;
+
+  return Boolean(provided) && provided === required;
+}
+
+function createAuthMiddleware() {
   return function authMiddleware(req, res, next) {
-    const apiKey = req.headers["x-api-key"] || (req.headers["authorization"] || "").replace("Bearer ", "");
-    const config = getConfig();
-    
-    // If no API key is configured, allow all (backward compat for local dev)
-    if (!config.apiKey) {
-      return next();
-    }
-    
-    if (!apiKey || apiKey !== config.apiKey) {
+    if (!checkApiKey(req)) {
       res.setHeader("WWW-Authenticate", 'Bearer realm="AegisAgent"');
       return res.status(401).json({ success: false, message: "Unauthorized: invalid or missing API key." });
     }
-    
     next();
   };
 }
 
 module.exports = createAuthMiddleware;
+module.exports.getSharedApiKey = getSharedApiKey;
+module.exports.checkApiKey = checkApiKey;

@@ -28,6 +28,9 @@ import MetricsPanel from '@/components/MetricsPanel';
 import LogViewer from '@/components/LogViewer';
 import ScreenshotViewer from '@/components/ScreenshotViewer';
 import SettingsPanel from '@/components/SettingsPanel';
+import { installApiAuthFetch } from '@/lib/api-auth';
+
+installApiAuthFetch();
 
 export default function Dashboard() {
   return (
@@ -47,9 +50,14 @@ function DashboardInner() {
   const { speakText, queueSentence, startSession: startTtsSession, stopSpeaking } = useTTS(selectedVoice);
 
   // WebSocket goes through Next.js custom server proxy → backend:6800
+  // NEXT_PUBLIC_AEGIS_API_KEY is only needed if the backend has AEGIS_API_KEY set
+  // (see middleware/auth.js) — unset by default for local dev, matching the backend.
+  const wsKeyParam = process.env.NEXT_PUBLIC_AEGIS_API_KEY
+    ? `?key=${encodeURIComponent(process.env.NEXT_PUBLIC_AEGIS_API_KEY)}`
+    : '';
   const backendWsUrl = typeof window !== 'undefined'
-    ? `ws://${window.location.hostname}:${window.location.port || '6801'}/api/ws`
-    : 'ws://localhost:6801/api/ws';
+    ? `ws://${window.location.hostname}:${window.location.port || '6801'}/api/ws${wsKeyParam}`
+    : `ws://localhost:6801/api/ws${wsKeyParam}`;
 
   // ── WebSocket ──
   const { sendMessage, connectionState, setSessionId } = useWebSocket(backendWsUrl, {

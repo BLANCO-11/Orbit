@@ -1,7 +1,16 @@
 'use client';
 
-import { useRef, useCallback } from 'react';
+import { useRef, useCallback, useEffect } from 'react';
 import { useAegisState } from '@/providers/AegisProvider';
+
+// Releases a queue item's object URL exactly once, so it doesn't linger for the
+// life of the tab (blob URLs are never garbage-collected on their own).
+function revokeItem(item) {
+  if (item?.audioUrl) {
+    URL.revokeObjectURL(item.audioUrl);
+    item.audioUrl = null;
+  }
+}
 
 /**
  * useTTS — Streaming Text-to-Speech queue.
@@ -10,7 +19,7 @@ import { useAegisState } from '@/providers/AegisProvider';
  */
 export function useTTS(selectedVoice = 'alba') {
   const { voiceState } = useAegisState();
-  
+
   const spokenSentencesRef = useRef(new Set());
   const ttsQueueRef = useRef([]);
   const currentPlayingIndexRef = useRef(0);
@@ -24,6 +33,8 @@ export function useTTS(selectedVoice = 'alba') {
     if (audioRef.current) {
       try { audioRef.current.pause(); audioRef.current.src = ''; } catch {}
     }
+    // Release any object URLs from the previous session that never got to play.
+    ttsQueueRef.current.forEach(revokeItem);
     spokenSentencesRef.current = new Set();
     ttsQueueRef.current = [];
     currentPlayingIndexRef.current = 0;
@@ -78,22 +89,25 @@ export function useTTS(selectedVoice = 'alba') {
     
     const item = ttsQueueRef.current[currentPlayingIndexRef.current];
     if (item.session !== sessionRef.current) {
+      revokeItem(item);
       currentPlayingIndexRef.current++;
       playNext();
       return;
     }
-    
+
     if (item.status === 'ready') {
       isPlayingRef.current = true;
       const audio = new Audio(item.audioUrl);
       audioRef.current = audio;
       audio.play().catch(() => {
         isPlayingRef.current = false;
+        revokeItem(item);
         currentPlayingIndexRef.current++;
         playNext();
       });
       audio.onended = () => {
         isPlayingRef.current = false;
+        revokeItem(item);
         currentPlayingIndexRef.current++;
         playNext();
       };
@@ -107,9 +121,19 @@ export function useTTS(selectedVoice = 'alba') {
     if (audioRef.current) {
       try { audioRef.current.pause(); audioRef.current.src = ''; } catch {}
     }
+    // Anything still queued will never play now — release its object URL.
+    ttsQueueRef.current.slice(currentPlayingIndexRef.current).forEach(revokeItem);
     sessionRef.current = Symbol('tts-stopped');
     isPlayingRef.current = false;
   }, []);
+
+  // Muting (or any other non-'audio' voice state) should stop speech that's already
+  // in flight, not just gate future sentences from being queued.
+  useEffect(() => {
+    if (voiceState !== 'audio') {
+      stopSpeaking();
+    }
+  }, [voiceState, stopSpeaking]);
 
   return { speakText, queueSentence, startSession, stopSpeaking };
 }
