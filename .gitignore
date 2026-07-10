@@ -11,3 +11,4 @@ temp-test/
 test_tts.mp3
 *.log
 .DS_Store
+.next-verify/

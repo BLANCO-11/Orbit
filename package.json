@@ -1,15 +1,18 @@
 {
   "name": "llm-os-agent",
   "version": "1.0.0",
-  "description": "",
+  "description": "AegisAgent — local agent-operations console: harness orchestration, policy, observability.",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start:backend": "node agent-backend/server.js",
-    "start:frontend": "npm --prefix dashboard run dev -- --port 6801 --hostname 0.0.0.0",
-    "build:frontend": "npm --prefix dashboard run build",
-    "start:frontend-prod": "npm --prefix dashboard run start",
-    "prod": "npm run build:frontend && concurrently \"npm run start:backend\" \"npm run start:frontend-prod\""
+    "dev": "concurrently -k -n backend,dashboard -c blue,magenta \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:backend": "node agent-backend/server.js",
+    "dev:frontend": "npm --prefix dashboard run dev",
+    "build": "npm --prefix dashboard run build",
+    "start": "npm run build && concurrently -k -n backend,dashboard -c blue,magenta \"npm run dev:backend\" \"npm --prefix dashboard run start\"",
+    "verify": "npm run typecheck && NEXT_DIST_DIR=.next-verify npm --prefix dashboard run build",
+    "typecheck": "npm --prefix dashboard run typecheck",
+    "test": "node tests/test_security_guard.js",
+    "clean": "rm -rf dashboard/.next dashboard/.next-verify"
   },
   "keywords": [],
   "author": "",

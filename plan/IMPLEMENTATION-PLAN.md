@@ -1,24 +1,31 @@
 # AegisAgent — Phased Implementation Plan
 
-> **Date:** 2026-07-10
+> **Date:** 2026-07-10 (updated same day after Phases 0–3 landed)
 > **Companion doc:** [`INVESTIGATION-REPORT.md`](./INVESTIGATION-REPORT.md) — every item below traces to a verified finding there.
-> **Sequencing (confirmed):** correctness/security bugs first → UI overhaul → metrics accuracy → auth/multi-device pairing. Each phase is independently shippable; don't build the redesign or new subsystems on top of the known-broken state.
+> **Status legend:** ✅ done & committed · 🟡 partially done · ⬜ not started · ❌ blocked (with reason)
+
+## Where things stand
+
+| Phase | Status | Commit(s) |
+|---|---|---|
+| 0 — Correctness & security fixes | ✅ Done | `5d04ca4` |
+| 1 — UI overhaul (re-skin) | ✅ Superseded — re-skin didn't land visually; replaced by full rebuild | `f870834`, then `d35c4a7` |
+| 2 — Metrics accuracy | 🟡 Done except items blocked/deferred (see phase notes) | `740ee9e` |
+| 3 — Auth + device pairing | 🟡 Core done; per-device policy + session re-keying deferred (see phase notes) | `c236cb4` |
+| 4 — Visual overhaul v2 (NEW) | ⬜ Direction mocked up, awaiting sign-off | — |
+
+**Learned during implementation (corrections to the original plan):**
+- **Real token accounting is blocked externally** — the LLM calls happen inside the `pi` CLI (`@earendil-works/pi-coding-agent`, separate package), and its RPC protocol emits no `usage` event. Phase 2 item 1 is ❌ until the harness protocol grows a usage event; cost is a clearly-labeled estimate instead.
+- **`security-guard.js` is dead code in the live path** — `validatePath`/`validateCommand` are only referenced by their own test file; real enforcement goes through `ws/session-helpers.js`. Phase 3 item 5 (per-device policy) is pointless to wire into it as-is — the guard needs to be *connected* first. Promoted to its own workstream (Phase 5).
+- **`next build` and the dev server must never share `.next`** — mixing them corrupts Turbopack's chunk manifest and serves font-only CSS (the "raw HTML" incident). Verification builds now go to an isolated dir.
+- **The "re-skin" scope was the wrong call** — mechanically swapping inline styles for Tailwind preserved the old layout's lack of hierarchy. What was missing wasn't consistency but *design*: spacing rhythm, depth, state-at-a-glance. Hence Phase 4.
 
 ---
 
-## Design system for Phase 1 (confirmed direction)
-
-- **Single styling system**: shadcn/ui primitives + Tailwind tokens only. No hand-rolled `style={{...}}` objects. This directly kills the dual-system root cause (Investigation §4.2).
-- **Light theme is default and primary**; dark theme is a first-class second pass built on the same tokens — not the other way around, since the current dark-mode bug (§4.1) means light is the only theme that's ever actually been visually verified.
-- **Depth via layered surface tokens**, shared across both themes: `surface-0` (page background) → `surface-1` (cards/panels) → `surface-2` (raised panels, sidebars) → `surface-3` (overlays: modals, popovers, command palette, toasts). Each layer step gets a small shadow/border/elevation bump.
-- **Frost/blur reserved for `surface-3` only** — modals, the command palette, popovers, floating notification toasts, and the right detail panel when it's a mobile overlay. Everything below that is flat, clean shadcn. This gives "character" without the everything-is-glass look that reads as unfinished.
-- Fix `--radius` (Investigation §4.3) as part of standing up the token set — it's currently referenced but undefined.
-
----
-
-## Phase 0 — Correctness & Security Bug Fixes
+## Phase 0 — Correctness & Security Bug Fixes ✅ DONE (`5d04ca4`)
 
 **Goal:** stop building on top of known-broken state. All items here are small, mechanical, and independently testable — no architectural risk.
+**Outcome:** all items landed and verified (backend boot, tsc/next build, live curl auth matrix: 401/401/200). Auth stopgap uses `AEGIS_API_KEY` env var — deliberately *not* `security-config.json`, since that file is API-writable and must not be able to reset its own guard.
 
 | Item | File(s) | Why first |
 |---|---|---|
