@@ -70,6 +70,9 @@ db.exec(`
 `);
 
 // ── Backup ───────────────────────────────────────────────────────────
+const MAX_BACKUPS = 20;
+const BACKUP_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
 function performBackup() {
   try {
     const allRows = db.prepare("SELECT * FROM sessions").all();
@@ -81,10 +84,42 @@ function performBackup() {
     const backupPath = path.join(backupDir, `sessions-backup-${timestamp}.json`);
     fs.writeFileSync(backupPath, JSON.stringify(allRows, null, 2), "utf-8");
     console.log(`[DB Backup] Wrote ${allRows.length} sessions to ${backupPath}`);
+    
+    // Prune old backups after successful backup
+    pruneBackups();
+    
     return backupPath;
   } catch (err) {
     console.error("[DB Backup] Failed:", err.message);
     return null;
+  }
+}
+
+function pruneBackups() {
+  const backupDir = path.join(__dirname, "backups");
+  if (!fs.existsSync(backupDir)) return;
+  
+  let files = fs.readdirSync(backupDir)
+    .filter(f => f.startsWith("sessions-backup-") && f.endsWith(".json"))
+    .map(f => ({
+      name: f,
+      path: path.join(backupDir, f),
+      mtime: fs.statSync(path.join(backupDir, f)).mtimeMs,
+    }))
+    .sort((a, b) => b.mtime - a.mtime); // newest first
+  
+  const now = Date.now();
+  const agedOut = files.filter(f => now - f.mtime > BACKUP_MAX_AGE_MS);
+  const overCount = files.slice(MAX_BACKUPS);
+  
+  const toDelete = new Set([...agedOut, ...overCount]);
+  for (const file of toDelete) {
+    try {
+      fs.unlinkSync(file.path);
+      console.log(`[DB Backup] Pruned old backup: ${file.name}`);
+    } catch (e) {
+      console.error(`[DB Backup] Failed to prune ${file.name}:`, e.message);
+    }
   }
 }
 
