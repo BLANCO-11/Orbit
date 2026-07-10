@@ -153,13 +153,14 @@ export function useWebSocket(backendWsUrl) {
       }
     };
     
-    ws.onclose = () => {
-      console.log('WebSocket closed. Reconnecting...');
+    ws.onclose = (event) => {
+      console.log('WebSocket closed. Code:', event.code, 'Reason:', event.reason, '. Reconnecting...');
       setConnectionState('disconnected');
       reconnectTimerRef.current = setTimeout(connect, 5000);
     };
     
-    ws.onerror = () => {
+    ws.onerror = (err) => {
+      console.error('WebSocket error:', err);
       setConnectionState('disconnected');
     };
     

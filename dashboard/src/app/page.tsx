@@ -43,10 +43,8 @@ function DashboardInner() {
   const { theme, mounted, toggleTheme, setTheme } = useTheme();
   const { isMobile } = useResponsive();
 
-  // ── Backend WebSocket URL (computed synchronously, no race condition) ──
-  const backendWsUrl = typeof window !== 'undefined'
-    ? `ws://${window.location.hostname || 'localhost'}:6800/api/ws`
-    : 'ws://localhost:6800/api/ws';
+  // WebSocket connects directly to backend
+  const backendWsUrl = 'ws://localhost:6800/api/ws';
 
   // ── WebSocket ──
   const { sendMessage, connectionState, setSessionId } = useWebSocket(backendWsUrl);
