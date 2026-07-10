@@ -108,10 +108,15 @@ function SubAgentCard({ subagent, isExpanded, onToggle }) {
       overflow: 'hidden', transition: 'all 0.15s ease',
     }}>
       {/* Header */}
-      <div onClick={onToggle} style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '8px 10px', cursor: 'pointer', userSelect: 'none', gap: '8px',
-      }}>
+      <div
+        onClick={onToggle}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle(); } }}
+        style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '8px 10px', cursor: 'pointer', userSelect: 'none', gap: '8px',
+        }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, overflow: 'hidden' }}>
           <span style={{
             width: '6px', height: '6px', borderRadius: '50%', background: cfg.color,

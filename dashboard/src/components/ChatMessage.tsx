@@ -117,10 +117,15 @@ function ToolGroupInline({ tools, expandedTools, toggleTool, getToolSummary, get
       overflow: 'hidden',
       fontSize: '0.78rem',
     }}>
-      <div onClick={() => setIsExpanded(!isExpanded)} style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '6px 10px', cursor: 'pointer', userSelect: 'none',
-      }}>
+      <div
+        onClick={() => setIsExpanded(!isExpanded)}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setIsExpanded(!isExpanded); } }}
+        style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '6px 10px', cursor: 'pointer', userSelect: 'none',
+        }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1, overflow: 'hidden' }}>
           {isRunning
             ? <Loader2 size={12} className="animate-spin" style={{ color: 'var(--accent-warning)', flexShrink: 0 }} />
@@ -163,10 +168,15 @@ function ToolCallCard({ tool, isExpanded, onToggle, getToolSummary, getToolOutpu
 
   return (
     <div style={{ border: '1px solid var(--border-subtle)', borderRadius: '4px', overflow: 'hidden' }}>
-      <div onClick={onToggle} style={{
-        display: 'flex', alignItems: 'center', gap: '6px', padding: '4px 8px',
-        cursor: 'pointer', userSelect: 'none', fontSize: '0.75rem',
-        borderLeft: `2px solid ${accentColor}`,
+      <div
+        onClick={onToggle}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle(); } }}
+        style={{
+          display: 'flex', alignItems: 'center', gap: '6px', padding: '4px 8px',
+          cursor: 'pointer', userSelect: 'none', fontSize: '0.75rem',
+          borderLeft: `2px solid ${accentColor}`,
       }}>
         {isRunning
           ? <Loader2 size={10} className="animate-spin" style={{ color: accentColor }} />

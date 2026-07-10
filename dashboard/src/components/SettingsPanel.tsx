@@ -9,44 +9,20 @@ import { Switch } from "@/components/ui/switch";
 import { Plus, Trash2, Settings, Shield, Edit3, Zap } from "lucide-react";
 
 export default function SettingsPanel({
+  settings,
+  onSettingsChange,
   securityConfig,
   setSecurityConfig,
-  baseURL,
-  setBaseURL,
-  apiKey,
-  setApiKey,
-  selectedNormalModel,
-  setSelectedNormalModel,
-  selectedReasoningModel,
-  setSelectedReasoningModel,
-  selectedVoice,
-  setSelectedVoice,
-  taskMode,
-  setTaskMode,
   systemPromptType,
   setSystemPromptType,
   voiceResponse,
   setVoiceResponse,
-  autoCompactEnabled,
-  setAutoCompactEnabled,
-  autoCompactThreshold,
-  setAutoCompactThreshold,
   models,
   voices,
   onSave,
   onManualCompact,
   onAddConfigItem,
   onRemoveConfigItem,
-  newReadPath,
-  setNewReadPath,
-  newWritePath,
-  setNewWritePath,
-  newBlockedPath,
-  setNewBlockedPath,
-  newAllowedPrefix,
-  setNewAllowedPrefix,
-  newAutoApprove,
-  setNewAutoApprove,
   sessionMode,
   onSetSessionMode,
 }) {
@@ -146,11 +122,12 @@ export default function SettingsPanel({
     </div>
   );
 
-  const renderAddRow = (value, setter, placeholder, onAdd) => (
+  // settingsKey: which `settings` field this input reads/writes (e.g. "newReadPath")
+  const renderAddRow = (settingsKey, placeholder, onAdd) => (
     <div style={addRowStyle}>
       <Input
-        value={value}
-        onChange={(e) => setter(e.target.value)}
+        value={settings[settingsKey]}
+        onChange={(e) => onSettingsChange({ [settingsKey]: e.target.value })}
         placeholder={placeholder}
         style={smallInputStyle}
       />
@@ -206,8 +183,8 @@ export default function SettingsPanel({
         <div>
           <label style={fieldLabelStyle}>LITELLM BASE ENDPOINT</label>
           <Input
-            value={baseURL}
-            onChange={(e) => setBaseURL(e.target.value)}
+            value={settings.baseURL}
+            onChange={(e) => onSettingsChange({ baseURL: e.target.value })}
             style={{ height: "32px", fontSize: "0.8rem" }}
           />
         </div>
@@ -215,8 +192,8 @@ export default function SettingsPanel({
           <label style={fieldLabelStyle}>API KEY</label>
           <Input
             type="password"
-            value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
+            value={settings.apiKey}
+            onChange={(e) => onSettingsChange({ apiKey: e.target.value })}
             style={{ height: "32px", fontSize: "0.8rem" }}
           />
         </div>
@@ -226,7 +203,7 @@ export default function SettingsPanel({
       <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
         <div>
           <label style={fieldLabelStyle}>NORMAL EXECUTION MODEL</label>
-          <Select value={selectedNormalModel} onValueChange={setSelectedNormalModel}>
+          <Select value={settings.selectedNormalModel} onValueChange={(v) => onSettingsChange({ selectedNormalModel: v })}>
             <SelectTrigger style={{ width: "100%", height: "32px", fontSize: "0.8rem" }}>
               <SelectValue placeholder="Select model" />
             </SelectTrigger>
@@ -247,7 +224,7 @@ export default function SettingsPanel({
         </div>
         <div>
           <label style={fieldLabelStyle}>REASONING PLANNER MODEL</label>
-          <Select value={selectedReasoningModel} onValueChange={setSelectedReasoningModel}>
+          <Select value={settings.selectedReasoningModel} onValueChange={(v) => onSettingsChange({ selectedReasoningModel: v })}>
             <SelectTrigger style={{ width: "100%", height: "32px", fontSize: "0.8rem" }}>
               <SelectValue placeholder="Select model" />
             </SelectTrigger>
@@ -271,7 +248,7 @@ export default function SettingsPanel({
       {/* ── Agent Thinking Mode ── */}
       <div>
         <label style={fieldLabelStyle}>AGENT THINKING MODE</label>
-        <Select value={taskMode} onValueChange={setTaskMode}>
+        <Select value={settings.taskMode} onValueChange={(v) => onSettingsChange({ taskMode: v })}>
           <SelectTrigger style={{ width: "100%", height: "32px", fontSize: "0.8rem" }}>
             <SelectValue />
           </SelectTrigger>
@@ -300,7 +277,7 @@ export default function SettingsPanel({
       {/* ── TTS Voice Selection ── */}
       <div>
         <label style={fieldLabelStyle}>LOCAL TTS VOICE</label>
-        <Select value={selectedVoice} onValueChange={setSelectedVoice}>
+        <Select value={settings.selectedVoice} onValueChange={(v) => onSettingsChange({ selectedVoice: v })}>
           <SelectTrigger style={{ width: "100%", height: "32px", fontSize: "0.8rem" }}>
             <SelectValue />
           </SelectTrigger>
@@ -335,8 +312,8 @@ export default function SettingsPanel({
             AUTO COMPACTION
           </span>
           <Switch
-            checked={autoCompactEnabled}
-            onCheckedChange={setAutoCompactEnabled}
+            checked={settings.autoCompactEnabled}
+            onCheckedChange={(v) => onSettingsChange({ autoCompactEnabled: v })}
           />
         </div>
 
@@ -352,17 +329,17 @@ export default function SettingsPanel({
             }}
           >
             <span>COMPACTION THRESHOLD</span>
-            <span style={{ color: "var(--text-inverse)" }}>{autoCompactThreshold}%</span>
+            <span style={{ color: "var(--text-inverse)" }}>{settings.autoCompactThreshold}%</span>
           </div>
           <input
             type="range"
             min="30"
             max="90"
             step="5"
-            value={autoCompactThreshold}
-            onChange={(e) => setAutoCompactThreshold(parseInt(e.target.value))}
+            value={settings.autoCompactThreshold}
+            onChange={(e) => onSettingsChange({ autoCompactThreshold: parseInt(e.target.value) })}
             style={{ width: "100%", accentColor: "var(--accent-primary)", cursor: "pointer" }}
-            disabled={!autoCompactEnabled}
+            disabled={!settings.autoCompactEnabled}
           />
         </div>
 
@@ -451,10 +428,9 @@ export default function SettingsPanel({
               (i) => onRemoveConfigItem("shellCommands", "allowedPrefixes", i)
             )}
             {renderAddRow(
-              newAllowedPrefix,
-              setNewAllowedPrefix,
+              "newAllowedPrefix",
               "e.g. git",
-              () => onAddConfigItem("shellCommands", "allowedPrefixes", newAllowedPrefix, setNewAllowedPrefix)
+              () => onAddConfigItem("shellCommands", "allowedPrefixes", settings.newAllowedPrefix, "newAllowedPrefix")
             )}
           </div>
 
@@ -469,10 +445,9 @@ export default function SettingsPanel({
               tagGreenStyle
             )}
             {renderAddRow(
-              newAutoApprove,
-              setNewAutoApprove,
+              "newAutoApprove",
               "e.g. ls",
-              () => onAddConfigItem("shellCommands", "autoApprove", newAutoApprove, setNewAutoApprove)
+              () => onAddConfigItem("shellCommands", "autoApprove", settings.newAutoApprove, "newAutoApprove")
             )}
           </div>
 
@@ -488,10 +463,9 @@ export default function SettingsPanel({
               (i) => onRemoveConfigItem("fileSystem", "allowedReadPaths", i)
             )}
             {renderAddRow(
-              newReadPath,
-              setNewReadPath,
+              "newReadPath",
               "/absolute/path",
-              () => onAddConfigItem("fileSystem", "allowedReadPaths", newReadPath, setNewReadPath)
+              () => onAddConfigItem("fileSystem", "allowedReadPaths", settings.newReadPath, "newReadPath")
             )}
           </div>
 
@@ -507,10 +481,9 @@ export default function SettingsPanel({
               (i) => onRemoveConfigItem("fileSystem", "allowedWritePaths", i)
             )}
             {renderAddRow(
-              newWritePath,
-              setNewWritePath,
+              "newWritePath",
               "/absolute/path",
-              () => onAddConfigItem("fileSystem", "allowedWritePaths", newWritePath, setNewWritePath)
+              () => onAddConfigItem("fileSystem", "allowedWritePaths", settings.newWritePath, "newWritePath")
             )}
           </div>
 
@@ -527,10 +500,9 @@ export default function SettingsPanel({
               blockedPathRowStyle
             )}
             {renderAddRow(
-              newBlockedPath,
-              setNewBlockedPath,
+              "newBlockedPath",
               "/absolute/path",
-              () => onAddConfigItem("fileSystem", "blockedPaths", newBlockedPath, setNewBlockedPath)
+              () => onAddConfigItem("fileSystem", "blockedPaths", settings.newBlockedPath, "newBlockedPath")
             )}
           </div>
 

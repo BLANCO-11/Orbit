@@ -275,7 +275,7 @@ const themes = {
 };
 
 // Default theme ID
-const DEFAULT_THEME_ID = "deep-space";
+const DEFAULT_THEME_ID = "frost";
 
 // All valid CSS variable token names that themes must provide
 const THEME_TOKEN_NAMES = Object.keys(themes["deep-space"].colors);

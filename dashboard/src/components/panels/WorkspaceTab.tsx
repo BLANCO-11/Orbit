@@ -90,22 +90,32 @@ export default function WorkspaceTab({ }) {
             <div key={entry.path}>
               {entry.type === 'directory' ? (
                 <div>
-                  <div onClick={() => toggleDir(entry.path)} style={{
-                    display: 'flex', alignItems: 'center', gap: '4px', padding: '3px 12px',
-                    cursor: 'pointer', fontSize: '0.73rem', color: 'var(--text-secondary)',
-                  }}>
+                  <div
+                    onClick={() => toggleDir(entry.path)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleDir(entry.path); } }}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '4px', padding: '3px 12px',
+                      cursor: 'pointer', fontSize: '0.73rem', color: 'var(--text-secondary)',
+                    }}>
                     {expandedDirs.has(entry.path) ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
                     <Folder size={12} style={{ color: 'var(--accent-info)' }} />
                     <span>{entry.name}/</span>
                   </div>
                 </div>
               ) : (
-                <div onClick={() => openFile(entry.path)} style={{
-                  display: 'flex', alignItems: 'center', gap: '4px', padding: '3px 12px 3px 28px',
-                  cursor: 'pointer', fontSize: '0.73rem',
-                  color: activeFile === entry.path ? 'var(--accent-primary)' : 'var(--text-primary)',
-                  background: activeFile === entry.path ? 'var(--accent-primary-muted)' : 'transparent',
-                }}>
+                <div
+                  onClick={() => openFile(entry.path)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openFile(entry.path); } }}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '4px', padding: '3px 12px 3px 28px',
+                    cursor: 'pointer', fontSize: '0.73rem',
+                    color: activeFile === entry.path ? 'var(--accent-primary)' : 'var(--text-primary)',
+                    background: activeFile === entry.path ? 'var(--accent-primary-muted)' : 'transparent',
+                  }}>
                   <File size={12} />
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {entry.name}

@@ -5,6 +5,7 @@ export { useWebSocket } from './useWebSocket';
 export { useSessions } from './useSessions';
 export { useTTS } from './useTTS';
 export { useSTT } from './useSTT';
+export { useSettings } from './useSettings';
 
 export {
   AegisProvider,

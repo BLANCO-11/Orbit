@@ -76,13 +76,16 @@ export function useTheme() {
     }
   }, []);
 
-  // Toggle between dark and light built-in themes
+  // Toggle between dark and light built-in themes.
+  // Note: 'deep-space' (not DEFAULT_THEME_ID) is hardcoded as the dark target —
+  // DEFAULT_THEME_ID is 'frost' (light) since that's the app default, so it can't
+  // also stand in for "the default dark theme" here.
   const toggleTheme = useCallback(() => {
     setActiveThemeIdState(prev => {
       const current = getAllThemes()[prev];
       if (!current) return DEFAULT_THEME_ID;
       if (current.mode === 'dark') return 'frost'; // switch to light
-      return DEFAULT_THEME_ID; // switch to dark
+      return 'deep-space'; // switch to dark
     });
   }, []);
 

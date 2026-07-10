@@ -4,13 +4,13 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { MessageSquare, List, BarChart3, Cog } from 'lucide-react';
-import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { ErrorBoundary, ComponentErrorBoundary } from '@/components/ErrorBoundary';
 import CommandPalette from '@/components/widgets/CommandPalette';
 import NotificationCenter from '@/components/widgets/NotificationCenter';
 
 // Providers & Hooks
 import { AegisProvider, useAegisState, useAegisDispatch, actions } from '@/providers/AegisProvider';
-import { useTheme, useResponsive, useWebSocket, useSessions, useTTS, useSTT } from '@/hooks';
+import { useTheme, useResponsive, useWebSocket, useSessions, useTTS, useSTT, useSettings } from '@/hooks';
 
 // Layout
 import AppShell from '@/components/layout/AppShell';
@@ -46,8 +46,14 @@ function DashboardInner() {
   const { theme, mounted, toggleTheme, setTheme } = useTheme();
   const { isMobile } = useResponsive();
 
-  const [selectedVoice, setSelectedVoice] = useState('alba');
-  const { speakText, queueSentence, startSession: startTtsSession, stopSpeaking } = useTTS(selectedVoice);
+  const {
+    settings, updateSettings,
+    securityConfig, setSecurityConfig,
+    models, voices,
+    systemPromptType, setSystemPromptType,
+    saveAllSettings, addConfigItem, removeConfigItem,
+  } = useSettings();
+  const { speakText, queueSentence, startSession: startTtsSession, stopSpeaking } = useTTS(settings.selectedVoice);
 
   // WebSocket goes through Next.js custom server proxy → backend:6800
   // NEXT_PUBLIC_AEGIS_API_KEY is only needed if the backend has AEGIS_API_KEY set
@@ -81,68 +87,6 @@ function DashboardInner() {
   useEffect(() => {
     setSessionId(state.currentSessionId);
   }, [state.currentSessionId, setSessionId]);
-
-  // ── Config ──
-  const [securityConfig, setSecurityConfig] = useState(null);
-  const [models, setModels] = useState([]);
-  const [voices, setVoices] = useState([]);
-  const [systemPromptType, setSystemPromptType] = useState('standard');
-
-  // Config field states (passed to SettingsPanel)
-  const [baseURL, setBaseURL] = useState('');
-  const [apiKey, setApiKey] = useState('');
-  const [selectedNormalModel, setSelectedNormalModel] = useState('');
-  const [selectedReasoningModel, setSelectedReasoningModel] = useState('');
-  const [taskMode, setTaskMode] = useState('hybrid');
-  const [autoCompactEnabled, setAutoCompactEnabled] = useState(true);
-  const [autoCompactThreshold, setAutoCompactThreshold] = useState(70);
-  const [newReadPath, setNewReadPath] = useState('');
-  const [newWritePath, setNewWritePath] = useState('');
-  const [newBlockedPath, setNewBlockedPath] = useState('');
-  const [newAllowedPrefix, setNewAllowedPrefix] = useState('');
-  const [newAutoApprove, setNewAutoApprove] = useState('');
-
-  const fetchConfig = useCallback(() => {
-    fetch(`/api/config`)
-      .then(res => res.json())
-      .then(data => {
-        setSecurityConfig(data);
-        if (data.litellm) {
-          setBaseURL(data.litellm.baseURL || '');
-          setApiKey(data.litellm.apiKey || '');
-          setSelectedNormalModel(data.litellm.selectedNormalModel || '');
-          setSelectedReasoningModel(data.litellm.selectedReasoningModel || '');
-          setTaskMode(data.litellm.taskMode || 'hybrid');
-        }
-        if (data.systemPromptType) setSystemPromptType(data.systemPromptType);
-        fetchModels();
-      })
-      .catch(err => console.error('Error loading config:', err));
-  }, []);
-
-  const fetchModels = useCallback(() => {
-    fetch(`/api/models`)
-      .then(res => res.json())
-      .then(data => setModels(data))
-      .catch(() => {});
-  }, []);
-
-  const fetchVoices = useCallback(() => {
-    fetch(`/api/voices`)
-      .then(res => res.json())
-      .then(data => {
-        setVoices(data);
-        if (data.length > 0) {
-          const hasAlba = data.find(v => v.id === 'alba');
-          setSelectedVoice(hasAlba ? 'alba' : data[0].id);
-        }
-      })
-      .catch(() => {});
-  }, []);
-
-  useEffect(() => { fetchConfig(); fetchVoices(); }, [fetchConfig, fetchVoices]);
-
-  // ── TTS ──
 
   // ── STT ──
   const { isListening, isSupported: sttSupported, startListening, stopListening } = useSTT();
@@ -252,42 +196,6 @@ function DashboardInner() {
       }));
     }
   }, [sendMessage, state.currentSessionId, dispatch]);
-
-  const saveAllSettings = useCallback(() => {
-    const updatedConfig = {
-      ...securityConfig,
-      systemPromptType,
-      litellm: { baseURL, apiKey, selectedNormalModel, selectedReasoningModel, taskMode },
-    };
-    fetch(`/api/config`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updatedConfig),
-    })
-      .then(res => res.json())
-      .then(data => {
-        if (data.success) {
-          setSecurityConfig(updatedConfig);
-          fetchModels();
-        }
-      })
-      .catch(err => console.error('Error saving settings:', err));
-  }, [securityConfig, systemPromptType, baseURL, apiKey, selectedNormalModel, selectedReasoningModel, taskMode, fetchModels]);
-
-  const addConfigItem = useCallback((field, subfield, val, setVal) => {
-    if (!val.trim() || !securityConfig) return;
-    const updated = { ...securityConfig };
-    updated[field][subfield].push(val.trim());
-    setSecurityConfig(updated);
-    setVal('');
-  }, [securityConfig]);
-
-  const removeConfigItem = useCallback((field, subfield, index) => {
-    if (!securityConfig) return;
-    const updated = { ...securityConfig };
-    updated[field][subfield].splice(index, 1);
-    setSecurityConfig(updated);
-  }, [securityConfig]);
 
   // ── Markdown ──
   const renderMarkdown = useCallback((text: string) => {
@@ -407,71 +315,72 @@ function DashboardInner() {
     <ErrorBoundary>
     <AppShell
       sidebar={
-        <SessionList
-          sessions={sessions}
-          currentSessionId={state.currentSessionId}
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
-          groupedSessions={groupedSessions}
-          hoveredSessionId={hoveredSessionId}
-          onHover={setHoveredSessionId}
-          onLeave={() => setHoveredSessionId(null)}
-          onSwitch={handleSwitchSession}
-          onDelete={deleteSession}
-          onNewSession={createSession}
-          getSessionPreview={getSessionPreview}
-          sessionsLength={sessions.length}
-        />
+        <ComponentErrorBoundary label="Session list">
+          <SessionList
+            sessions={sessions}
+            currentSessionId={state.currentSessionId}
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            groupedSessions={groupedSessions}
+            hoveredSessionId={hoveredSessionId}
+            onHover={setHoveredSessionId}
+            onLeave={() => setHoveredSessionId(null)}
+            onSwitch={handleSwitchSession}
+            onDelete={deleteSession}
+            onNewSession={createSession}
+            getSessionPreview={getSessionPreview}
+            sessionsLength={sessions.length}
+          />
+        </ComponentErrorBoundary>
       }
       rightPanel={
         <DetailPanel activeTab={rightPanelTab} onTabChange={setRightPanelTab}>
           {rightPanelTab === 'agent' && (
-            <AgentTab
-              metrics={state.metrics}
-              status={state.status}
-              approvalsHistory={state.approvalsHistory}
-              subAgents={state.metrics.activeSubagents || []}
-            />
+            <ComponentErrorBoundary label="Agent panel">
+              <AgentTab
+                metrics={state.metrics}
+                status={state.status}
+                approvalsHistory={state.approvalsHistory}
+                subAgents={state.metrics.activeSubagents || []}
+              />
+            </ComponentErrorBoundary>
           )}
           {rightPanelTab === 'workspace' && (
-            <WorkspaceTab />
+            <ComponentErrorBoundary label="Workspace panel">
+              <WorkspaceTab />
+            </ComponentErrorBoundary>
           )}
           {rightPanelTab === 'plan' && (
-            <ExecutionPlan executionPlan={state.executionPlan} reasoningHistory={state.reasoningHistory} />
+            <ComponentErrorBoundary label="Plan panel">
+              <ExecutionPlan executionPlan={state.executionPlan} reasoningHistory={state.reasoningHistory} />
+            </ComponentErrorBoundary>
           )}
           {rightPanelTab === 'logs' && (
             <div style={{ padding: 'var(--space-4)', height: '100%', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-              <LogViewer logs={state.logs} logEndRef={logEndRef} />
+              <ComponentErrorBoundary label="Log viewer">
+                <LogViewer logs={state.logs} logEndRef={logEndRef} />
+              </ComponentErrorBoundary>
             </div>
           )}
           {rightPanelTab === 'settings' && (
             <div style={{ padding: 'var(--space-4)', height: '100%', overflowY: 'auto' }}>
+              <ComponentErrorBoundary label="Settings panel">
               <SettingsPanel
+                settings={settings}
+                onSettingsChange={updateSettings}
                 securityConfig={securityConfig}
                 setSecurityConfig={setSecurityConfig}
-                baseURL={baseURL} setBaseURL={setBaseURL}
-                apiKey={apiKey} setApiKey={setApiKey}
-                selectedNormalModel={selectedNormalModel} setSelectedNormalModel={setSelectedNormalModel}
-                selectedReasoningModel={selectedReasoningModel} setSelectedReasoningModel={setSelectedReasoningModel}
-                selectedVoice={selectedVoice} setSelectedVoice={setSelectedVoice}
-                taskMode={taskMode} setTaskMode={setTaskMode}
                 systemPromptType={systemPromptType} setSystemPromptType={setSystemPromptType}
                 voiceResponse={state.voiceState === 'audio'}
                 setVoiceResponse={(val) => dispatch(actions.setVoiceState(val ? 'audio' : 'disabled'))}
-                autoCompactEnabled={autoCompactEnabled} setAutoCompactEnabled={setAutoCompactEnabled}
-                autoCompactThreshold={autoCompactThreshold} setAutoCompactThreshold={setAutoCompactThreshold}
                 models={models} voices={voices}
                 onSave={saveAllSettings}
                 onManualCompact={handleManualCompact}
                 onAddConfigItem={addConfigItem} onRemoveConfigItem={removeConfigItem}
-                newReadPath={newReadPath} setNewReadPath={setNewReadPath}
-                newWritePath={newWritePath} setNewWritePath={setNewWritePath}
-                newBlockedPath={newBlockedPath} setNewBlockedPath={setNewBlockedPath}
-                newAllowedPrefix={newAllowedPrefix} setNewAllowedPrefix={setNewAllowedPrefix}
-                newAutoApprove={newAutoApprove} setNewAutoApprove={setNewAutoApprove}
                 sessionMode={state.sessionMode}
                 onSetSessionMode={handleSetSessionMode}
               />
+              </ComponentErrorBoundary>
             </div>
           )}
         </DetailPanel>
@@ -505,6 +414,7 @@ function DashboardInner() {
       activeNavTab={activeNavTab}
       onNavTabChange={handleNavTabChange}
     >
+      <ComponentErrorBoundary label="Chat">
       <ChatArea
         messages={state.messages.slice(-state.visibleCount)}
         hasMoreMessages={state.messages.length > state.visibleCount}
@@ -567,6 +477,7 @@ function DashboardInner() {
         inputHistoryIndexRef={inputHistoryIndexRef}
         showEmptyState={true}
       />
+      </ComponentErrorBoundary>
     </AppShell>
       <CommandPalette
         isOpen={cmdPaletteOpen}

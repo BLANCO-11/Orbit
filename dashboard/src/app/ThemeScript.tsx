@@ -9,7 +9,7 @@ export function ThemeScript() {
         __html: `
           (function() {
             try {
-              var id = localStorage.getItem('aegis-active-theme') || 'deep-space';
+              var id = localStorage.getItem('aegis-active-theme') || 'frost';
               // Map theme ID to mode class
               var darkThemes = ['deep-space','forest','ocean','high-contrast'];
               var isDark = darkThemes.indexOf(id) !== -1;

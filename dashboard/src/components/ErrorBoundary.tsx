@@ -64,12 +64,52 @@ export class ErrorBoundary extends React.Component<{ children: React.ReactNode }
 }
 
 /**
- * ComponentErrorBoundary — Lightweight wrapper for individual components.
+ * ComponentErrorBoundary — Lightweight wrapper for individual panels/widgets.
+ *
+ * Unlike ErrorBoundary (full-page takeover), this renders a compact inline
+ * fallback so a crash in one panel (e.g. the metrics panel) doesn't take the
+ * whole dashboard down with it.
  */
-export function ComponentErrorBoundary({ children, fallback }: { children: React.ReactNode; fallback?: React.ReactNode }) {
-  return (
-    <ErrorBoundary>
-      {children}
-    </ErrorBoundary>
-  );
+export class ComponentErrorBoundary extends React.Component<
+  { children: React.ReactNode; fallback?: React.ReactNode; label?: string },
+  ErrorBoundaryState
+> {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error(`ComponentErrorBoundary (${this.props.label || 'component'}) caught:`, error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      if (this.props.fallback) return this.props.fallback;
+      return (
+        <div style={{
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          gap: '8px', padding: '24px', textAlign: 'center',
+          color: 'var(--text-secondary)', fontSize: '0.8rem',
+        }}>
+          <span>{this.props.label ? `${this.props.label} failed to render.` : 'This panel failed to render.'}</span>
+          <button
+            onClick={() => this.setState({ hasError: false, error: null })}
+            style={{
+              padding: '4px 12px', borderRadius: 'var(--radius-sm)',
+              border: '1px solid var(--border-default)', background: 'transparent',
+              color: 'var(--text-primary)', cursor: 'pointer', fontSize: '0.75rem',
+            }}
+          >
+            Retry
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
 }
