@@ -3,6 +3,43 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAegisDispatch, useAegisState, actions } from '@/providers/AegisProvider';
 
+const EMPTY_METRICS = { toolCalls: 0, latency: 0, tokens: 0, cost: 0, activeSubagents: [], actionFeed: [] };
+
+/**
+ * Sessions loaded from the backend carry metrics in the *persisted* shape
+ * (agent-backend/metrics.js: tokens.total, toolCalls.total, latency.totalMs,
+ * subagents: [...]) — the reducer and every metrics-displaying component
+ * expect the *flat* live-stream shape instead (plain-number tokens/
+ * toolCalls/latency, see toFrontendUpdate()). Dumping the persisted shape
+ * straight into state renders as "[object Object]" / "NaN" until the next
+ * live update happens to overwrite it. Normalize on load instead.
+ */
+function normalizeMetricsForUI(raw) {
+  if (!raw || Object.keys(raw).length === 0) return EMPTY_METRICS;
+
+  // Already flat (e.g. the empty shape createSession/loadSessions seed with).
+  if (typeof raw.tokens === 'number' || typeof raw.toolCalls === 'number') {
+    return {
+      toolCalls: raw.toolCalls || 0,
+      latency: raw.latency || 0,
+      tokens: raw.tokens || 0,
+      cost: raw.cost || 0,
+      activeSubagents: raw.activeSubagents || [],
+      actionFeed: raw.actionFeed || [],
+    };
+  }
+
+  // Persisted (nested) shape from the backend DB row.
+  return {
+    toolCalls: raw.toolCalls?.total || 0,
+    latency: raw.latency?.totalMs || 0,
+    tokens: raw.tokens?.total || 0,
+    cost: raw.cost || 0,
+    activeSubagents: (raw.subagents || []).filter((sa) => sa.status === 'spawning' || sa.status === 'working'),
+    actionFeed: raw.actionFeed || [],
+  };
+}
+
 /**
  * useSessions - Session CRUD, persistence, search, grouping.
  */
@@ -60,7 +97,7 @@ export function useSessions() {
     dispatch(actions.setCurrentSession(active.id));
     dispatch(actions.setMessages(active.messages || []));
     dispatch(actions.setSessionMode(active.mode || ''));
-    dispatch(actions.setMetrics(active.metrics || {}));
+    dispatch(actions.setMetrics(normalizeMetricsForUI(active.metrics)));
     dispatch(actions.setExecutionPlan(active.executionPlan || ''));
 
     setIsLoading(false);
@@ -163,7 +200,7 @@ export function useSessions() {
       dispatch(actions.setCurrentSession(sessionId));
       dispatch(actions.setMessages(target.messages || []));
       dispatch(actions.setSessionMode(target.mode || ''));
-      dispatch(actions.setMetrics(target.metrics || {}));
+      dispatch(actions.setMetrics(normalizeMetricsForUI(target.metrics)));
       dispatch(actions.setExecutionPlan(target.executionPlan || ''));
 
       // Update URL
