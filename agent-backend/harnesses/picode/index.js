@@ -5,6 +5,7 @@
 const { spawn } = require("child_process");
 const fs = require("fs");
 const path = require("path");
+const os = require("os");
 const EventEmitter = require("events");
 const HarnessInterface = require("../interface");
 const { stripTuiChars, isMutatingTool, isReadOnlyTool, isConversationalPrompt } = require("./parser");
@@ -87,14 +88,18 @@ class PiCodeHarness extends HarnessInterface {
       "--system-prompt", combinedPrompt,
     ];
 
-    // Disable pi's native web/browser extension tools so the agent uses ONLY
-    // the Lightpanda MCP browser (fast, headless, pre-approved) instead of pi's
-    // native browser, which is slow and pops its own approval dialog. Applies
-    // to extension tools too (per `pi --help`). Configurable/extensible.
-    const excludeTools = (this.config.excludeTools) || ["web_search", "fetch_content", "get_search_content", "browser", "web"];
+    // Disable selected tools this session. Precedence: explicit per-session
+    // excludeTools (from a profile / composer) > config default > the built-in
+    // safe default (pi's native web/browser tools, so the agent uses ONLY the
+    // Lightpanda MCP browser — fast, headless, pre-approved). Applies to
+    // extension tools too (per `pi --help`).
+    const excludeTools = this.excludeTools
+      || this.config.excludeTools
+      || ["web_search", "fetch_content", "get_search_content", "browser", "web"];
     if (Array.isArray(excludeTools) && excludeTools.length > 0) {
       piArgs.push("--exclude-tools", excludeTools.join(","));
     }
+    this._excludeTools = excludeTools;
 
     const nodePath = (this.binaries && this.binaries.nodePath) || "node";
     const piPath = (this.binaries && this.binaries.piPath) || "pi";
@@ -276,6 +281,69 @@ class PiCodeHarness extends HarnessInterface {
       } catch (e) {
         console.error("[PiCodeHarness] Error disconnecting:", e);
       }
+    }
+  }
+
+  // ── Tool enumeration (harness contract) ─────────────────────────────
+  // Composes pi's tools from three sources so the console can render a
+  // tools/extensions manager: (1) built-in tools, statically known; (2) pi
+  // extension packages from ~/.pi/agent/settings.json, with a curated
+  // tool-name map for the ones we know provide agent tools; (3) tool names the
+  // agent has actually used (from the observed-tools catalog), which catches
+  // anything the first two miss. MCP connector tools are added by the route,
+  // not here (they're shared across harnesses).
+  async listTools() {
+    const { getObserved } = require("../../tool-catalog");
+
+    const builtins = [
+      { id: "read", name: "read", source: "built-in", description: "Read file contents" },
+      { id: "bash", name: "bash", source: "built-in", description: "Execute bash commands" },
+      { id: "edit", name: "edit", source: "built-in", description: "Edit files with find/replace" },
+      { id: "write", name: "write", source: "built-in", description: "Write files (create/overwrite)" },
+      { id: "grep", name: "grep", source: "built-in", description: "Search file contents" },
+      { id: "find", name: "find", source: "built-in", description: "Find files by glob pattern" },
+    ];
+
+    // Curated map of known pi extension packages → the agent tools they provide.
+    const EXTENSION_TOOLS = {
+      "npm:pi-web-access": ["web_search", "fetch_content", "get_search_content", "browser", "web"],
+      "npm:pi-subagents": ["subagent"],
+    };
+    const extensionTools = [];
+    for (const pkg of PiCodeHarness._listPiExtensions()) {
+      const short = pkg.replace(/^npm:/, "");
+      const tools = EXTENSION_TOOLS[pkg];
+      if (tools) {
+        for (const t of tools) {
+          extensionTools.push({ id: t, name: t, source: short, description: `Provided by ${short}` });
+        }
+      } else {
+        // Unknown extension — surface the package so the user knows it exists;
+        // its individual tools appear once observed.
+        extensionTools.push({ id: `ext:${short}`, name: short, source: short, description: "pi extension package", isExtensionPackage: true });
+      }
+    }
+
+    const known = new Set([...builtins, ...extensionTools].map((t) => t.name));
+    const observedTools = getObserved("picode")
+      .filter((name) => !known.has(name) && !name.startsWith("mcp_")) // mcp_* handled as connectors
+      .map((name) => ({ id: name, name, source: "observed", description: "Tool observed in use" }));
+
+    const excluded = new Set(this._excludeTools || this.config.excludeTools || []);
+    return [...builtins, ...extensionTools, ...observedTools].map((t) => ({
+      ...t,
+      enabledByDefault: !excluded.has(t.name),
+    }));
+  }
+
+  /** Installed pi extension packages from ~/.pi/agent/settings.json. */
+  static _listPiExtensions() {
+    try {
+      const settingsPath = path.join(os.homedir(), ".pi", "agent", "settings.json");
+      const settings = JSON.parse(fs.readFileSync(settingsPath, "utf-8"));
+      return Array.isArray(settings.packages) ? settings.packages : [];
+    } catch {
+      return [];
     }
   }
 }

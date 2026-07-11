@@ -26,6 +26,7 @@ const {
 } = require("./ws/session-helpers");
 const { isMutatingTool, isReadOnlyTool, isConversationalPrompt } = require("./harnesses/picode/parser");
 const policyEngine = require("./policy-engine");
+const { recordObserved } = require("./tool-catalog");
 
 // Middleware
 const errorHandler = require("./middleware/error-handler");
@@ -117,6 +118,40 @@ app.get("/api/harnesses", authMiddleware, (req, res) => {
   };
   res.json({ success: true, harnesses: [local, ...harnessRegistry.list()] });
 });
+
+// Tools a harness can offer, for the tools/extensions manager. Merges the
+// harness's own tools (built-ins + extensions + observed) with the shared MCP
+// connector tools (which every harness reaches). Harness-agnostic: the backend
+// never special-cases a harness type — it just asks it.
+app.get("/api/harnesses/:id/tools", authMiddleware, async (req, res) => {
+  try {
+    const id = req.params.id;
+    let harnessTools = [];
+    if (!id || id === "local") {
+      const probe = loadHarness("picode", {
+        events: new EventEmitter(), config: getConfig(), sessionId: "probe",
+        mode: "chat", binaries: { nodePath, piPath },
+      });
+      harnessTools = await probe.listTools();
+    } else {
+      const entry = harnessRegistry.get(id);
+      if (!entry) return res.status(404).json({ success: false, error: "harness not connected" });
+      const RemoteH = require("./harnesses/remote");
+      const probe = new RemoteH({ events: new EventEmitter(), config: getConfig(), sessionId: "probe", registryEntry: entry });
+      harnessTools = await probe.listTools();
+    }
+    // Shared MCP connector tools (one group per connected connector).
+    const connectorTools = mcpRegistry.list().flatMap((c) =>
+      (c.tools || []).map((t) => ({
+        id: t.name, name: t.name, source: `connector:${c.name}`,
+        description: t.description || `via ${c.name}`, enabledByDefault: true,
+      }))
+    );
+    res.json({ success: true, tools: [...harnessTools, ...connectorTools] });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
 app.use("/api/health", createHealthRouter({ db, mcpRegistry, getConfig, activeSessions }));
 app.use("/api", createDevicesRouter(db, authMiddleware, () => process.env.DASHBOARD_ORIGIN || "http://localhost:6801"));
 
@@ -133,7 +168,7 @@ wss.on("connection", (ws) => {
       
       // ── start_task ──────────────────────────────────────────
       if (data.type === "start_task") {
-        let { prompt, sessionId: sid, mode, systemPromptType, skills, effort, harnessId } = data;
+        let { prompt, sessionId: sid, mode, systemPromptType, skills, effort, harnessId, excludeTools } = data;
         const sessionId = sid || "default-session";
 
         // Device scope enforcement (scope is set at pairing time; ws.device is
@@ -155,7 +190,7 @@ wss.on("connection", (ws) => {
         // NOT killed (previously they were). Explicit switches still cancel the
         // old session via cancel_session; leaving a session running lets one
         // device drive several agents at once.
-        await handleStartTask(ws, prompt, sessionId, mode, systemPromptType, skills, effort, harnessId);
+        await handleStartTask(ws, prompt, sessionId, mode, systemPromptType, skills, effort, harnessId, excludeTools);
       }
       
       // ── approval_response ───────────────────────────────────
@@ -286,7 +321,7 @@ wss.on("connection", (ws) => {
 });
 
 // ── Agent Task Handler ──────────────────────────────────────────────
-async function handleStartTask(ws, userPrompt, sessionId, mode, systemPromptType, skills, effort, harnessId) {
+async function handleStartTask(ws, userPrompt, sessionId, mode, systemPromptType, skills, effort, harnessId, excludeTools) {
   ws.activeSessionId = sessionId;
   ws.currentPrompt = userPrompt;
   
@@ -414,11 +449,13 @@ async function handleStartTask(ws, userPrompt, sessionId, mode, systemPromptType
         ? new RemoteHarness({
             events, config: getConfig(), sessionId, mode: activeMode,
             systemPromptType, skills: skills || [], model: activeModelName,
+            excludeTools: excludeTools || null,
             registryEntry: remoteEntry,
           })
         : loadHarness("picode", {
             events, config: getConfig(), sessionId, mode: activeMode,
             systemPromptType, skills: skills || [], model: activeModelName,
+            excludeTools: excludeTools || null,
             binaries: { nodePath, piPath },
           });
 
@@ -518,6 +555,9 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
   events.on("tool_call_start", ({ id, name, arguments: args, subagentId }) => {
     const argsStr = JSON.stringify(args || {});
     sendLog(ws, `[Tool Call] ${name} ${argsStr}`);
+
+    // Learn tool names as they're used so the tools manager self-populates.
+    recordObserved("picode", name);
 
     metricsManager.startToolCall(sessionId, id, name);
     metricsManager.setToolCallArgs(sessionId, id, args);

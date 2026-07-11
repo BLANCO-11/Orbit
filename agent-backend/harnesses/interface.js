@@ -68,7 +68,18 @@ class HarnessInterface {
     this.systemPromptType = options.systemPromptType;
     this.skills = options.skills || [];
     this.model = options.model || null; // effort-profile-resolved model (overrides config default)
+    this.excludeTools = options.excludeTools || null; // tool names to disable this session (null = harness default)
     this.binaries = options.binaries || {};
+  }
+
+  /**
+   * Enumerate the tools this harness can offer, so the console can render a
+   * tools/extensions manager without knowing anything harness-specific.
+   * Returns [{ id, name, source, description, enabledByDefault }].
+   * Base implementation: none.
+   */
+  async listTools() {
+    return [];
   }
 
   /** Spawn and initialize the agent. Must resolve when agent is ready to receive prompts. */

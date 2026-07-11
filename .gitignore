@@ -15,3 +15,6 @@ test_tts.mp3
 
 # runtime user data — session DB snapshots rotate every 5 min
 agent-backend/backups/
+
+# runtime tool catalog (observed tool names)
+agent-backend/tool-catalog.json

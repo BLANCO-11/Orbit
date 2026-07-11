@@ -101,7 +101,8 @@ async function main() {
       const harness = new PiCodeHarness({
         events, config, sessionId,
         mode: msg.mode, systemPromptType: msg.systemPromptType,
-        skills: msg.skills || [], model: msg.model, binaries,
+        skills: msg.skills || [], model: msg.model,
+        excludeTools: msg.excludeTools || null, binaries,
       });
       harnesses.set(sessionId, harness);
       try {
@@ -110,6 +111,18 @@ async function main() {
       } catch (e) {
         console.error(`[adapter] Spawn failed for ${sessionId}:`, e.message);
         events.emit("error", { message: e.message });
+      }
+      return;
+    }
+
+    if (msg.type === "list_tools") {
+      // Enumerate this machine's local harness tools without a live session.
+      try {
+        const probe = new PiCodeHarness({ events: new EventEmitter(), config, sessionId: "probe", mode: "chat", binaries });
+        const tools = await probe.listTools();
+        ws.send(JSON.stringify({ type: "tools_list", reqId: msg.reqId, tools }));
+      } catch (e) {
+        ws.send(JSON.stringify({ type: "tools_list", reqId: msg.reqId, tools: [] }));
       }
       return;
     }

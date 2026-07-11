@@ -31,6 +31,30 @@ class RemoteHarness extends HarnessInterface {
     }
   }
 
+  /**
+   * Ask the adapter to enumerate its local harness's tools. Round-trips over
+   * the adapter socket with a short timeout; falls back to [] if unanswered.
+   */
+  async listTools() {
+    const entry = this.registryEntry;
+    const ws = entry?.ws;
+    if (!ws || ws.readyState !== ws.OPEN) return [];
+    return new Promise((resolve) => {
+      const reqId = `lt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      if (!entry._toolListWaiters) entry._toolListWaiters = new Map();
+      const timer = setTimeout(() => {
+        entry._toolListWaiters.delete(reqId);
+        resolve([]);
+      }, 5000);
+      entry._toolListWaiters.set(reqId, (tools) => {
+        clearTimeout(timer);
+        entry._toolListWaiters.delete(reqId);
+        resolve(Array.isArray(tools) ? tools : []);
+      });
+      ws.send(JSON.stringify({ type: "list_tools", reqId }));
+    });
+  }
+
   async connect() {
     const entry = this.registryEntry;
     if (!entry) throw new Error("remote harness is no longer connected");
@@ -49,6 +73,7 @@ class RemoteHarness extends HarnessInterface {
       systemPromptType: this.systemPromptType,
       skills: this.skills,
       model: this.model,
+      excludeTools: this.excludeTools,
     });
   }
 

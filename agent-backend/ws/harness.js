@@ -52,6 +52,12 @@ function createHarnessRegistry() {
         const handler = entry._eventHandlers?.get(msg.sessionId);
         if (handler) handler(msg.event, msg.data);
       }
+
+      // Reply to a listTools() request (RemoteHarness.listTools).
+      if (msg.type === "tools_list" && entry) {
+        const waiter = entry._toolListWaiters?.get(msg.reqId);
+        if (waiter) waiter(msg.tools);
+      }
     });
 
     ws.on("close", () => {
