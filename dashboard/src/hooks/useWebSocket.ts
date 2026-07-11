@@ -152,6 +152,16 @@ export function useWebSocket(
             dispatch(actions.updateMetrics(data));
             break;
 
+          case 'policy_blocked':
+            // The mode_suggestion that follows drives the existing banner; this
+            // just adds a precise log line about which capability was blocked.
+            dispatch(actions.addLog({
+              text: `[Policy] Blocked ${data.toolName} (${data.capability}) in ${data.mode} mode.`,
+              isSystem: true,
+              timestamp: new Date().toLocaleTimeString(),
+            }));
+            break;
+
           case 'scope_denied':
             dispatch(actions.addMessage({
               role: 'assistant',

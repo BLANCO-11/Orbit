@@ -51,6 +51,18 @@ function createDevicesRouter(db, authMiddleware, getDashboardOrigin) {
     res.json({ success: true });
   });
 
+  // Set per-device policy overrides (a partial capability × mode matrix). The
+  // engine applies these tighten-only, so this can only further restrict a
+  // device, never grant it more than the global matrix.
+  router.patch("/devices/:id/policy", authMiddleware, (req, res) => {
+    const { policyOverrides } = req.body || {};
+    if (policyOverrides && typeof policyOverrides !== "object") {
+      return res.status(400).json({ success: false, message: "policyOverrides must be an object." });
+    }
+    db.setDevicePolicyOverrides(req.params.id, policyOverrides || {});
+    res.json({ success: true });
+  });
+
   router.delete("/devices/:id", authMiddleware, (req, res) => {
     db.revokeDevice(req.params.id);
     res.json({ success: true });

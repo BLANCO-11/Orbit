@@ -25,6 +25,7 @@ const {
   resolveTargetPath, isPathAllowed, extractPathsFromArgs,
 } = require("./ws/session-helpers");
 const { isMutatingTool, isReadOnlyTool, isConversationalPrompt } = require("./harnesses/picode/parser");
+const policyEngine = require("./policy-engine");
 
 // Middleware
 const errorHandler = require("./middleware/error-handler");
@@ -526,63 +527,60 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
       subagentTracker.startToolCall(subagentId, id, name, args);
     }
     
-    // Mode enforcement
-    const isMutating = isMutatingTool(name);
-    
-    if (!mode || mode === "chat") {
-      const suggestedMode = isMutating ? "edit" : "plan";
-      sendLog(ws, `[Mode Enforcement] Blocked "${name}" in Chat mode. Suggest: ${suggestedMode}`, false);
+    // ── Policy-matrix enforcement ─────────────────────────────
+    // Map the tool to a capability (write in/out depends on the path), then
+    // evaluate it against the configurable capability × mode matrix, tightened
+    // by any per-device override. block → cancel; ask → surface a gate.
+    const activeMode = mode || "chat";
+    const toolPaths = extractPathsFromArgs(args);
+    const outsidePaths = toolPaths.filter(p => !isPathAllowed(p));
+    const isOutside = outsidePaths.length > 0;
+    const capability = policyEngine.toolToCapability(name, isOutside);
+    const deviceOverrides = ws.device?.policyOverrides || null;
+    const { decision } = policyEngine.evaluate(capability, activeMode, getConfig(), deviceOverrides);
+
+    if (decision === "block") {
+      // Suggest the least-privileged mode that would allow this capability.
+      const suggestion = ["plan", "edit", "yolo"].find(m =>
+        policyEngine.evaluate(capability, m, getConfig(), deviceOverrides).decision !== "block"
+      );
+      sendLog(ws, `[Policy] Blocked "${name}" (${capability}) in ${activeMode} mode.`, false);
       sendWithSession(ws, {
-        type: "mode_suggestion",
-        mode: suggestedMode,
-        reason: `The agent needs ${suggestedMode.toUpperCase()} mode to use "${name}".`
+        type: "policy_blocked",
+        toolName: name,
+        capability,
+        mode: activeMode,
+        suggestedMode: suggestion || null,
+        reason: suggestion
+          ? `"${name}" needs ${capability.replace(/_/g, " ")}, which ${activeMode} mode blocks. Switch to ${suggestion.toUpperCase()} mode.`
+          : `"${name}" needs ${capability.replace(/_/g, " ")}, which is blocked in every mode by policy.`,
       }, sessionId);
-      
+      // Keep the legacy mode_suggestion for the existing frontend banner.
+      if (suggestion) {
+        sendWithSession(ws, { type: "mode_suggestion", mode: suggestion, reason: `The agent needs ${suggestion.toUpperCase()} mode to use "${name}".` }, sessionId);
+      }
       const ses = activeSessions.get(sessionId);
       if (ses?.harness) ses.harness.cancel();
       sendStatus(ws, "done", sessionId);
       return;
     }
-    
-    if (mode === "plan" && isMutating) {
-      sendLog(ws, `[Mode Enforcement] Blocked "${name}" in Plan mode. Suggest: edit`, false);
-      sendWithSession(ws, {
-        type: "mode_suggestion",
-        mode: "edit",
-        reason: `The agent tried to use "${name}" (a write tool) in Plan mode. Switch to EDIT mode.`
-      }, sessionId);
-      
-      const ses = activeSessions.get(sessionId);
-      if (ses?.harness) ses.harness.cancel();
-      sendStatus(ws, "done", sessionId);
-      return;
-    }
-    
-    // Edit mode directory permission check
-    if (mode === "edit") {
-      const toolPaths = extractPathsFromArgs(args);
-      if (toolPaths.length > 0) {
-        const sessionPerms = sessionAllowedPaths.get(sessionId) || new Set();
-        const outsidePaths = toolPaths.filter(p => !isPathAllowed(p));
-        
-        if (outsidePaths.length > 0) {
-          const unresolvedPaths = outsidePaths.filter(p => {
-            const resolved = resolveTargetPath(p);
-            return !sessionPerms.has(resolved);
-          });
-          
-          if (unresolvedPaths.length > 0) {
-            sendLog(ws, `[Edit Mode] Tool "${name}" accessing path(s) outside safe zone: ${unresolvedPaths.join(", ")}`, false);
-            sendWithSession(ws, {
-              type: "edit_permission_request",
-              toolCallId: id,
-              toolName: name,
-              paths: unresolvedPaths,
-              outsidePaths: unresolvedPaths,
-              safeZone: require("./ws/session-helpers").PROJECT_ROOT,
-            }, sessionId);
-          }
-        }
+
+    if (decision === "ask") {
+      // Surface an approval gate in the timeline. For path-scoped writes we
+      // honor any session-granted allowances so we don't re-ask every time.
+      const sessionPerms = sessionAllowedPaths.get(sessionId) || new Set();
+      const unresolvedPaths = outsidePaths.filter(p => !sessionPerms.has(resolveTargetPath(p)));
+      if (capability !== "write_outside" || unresolvedPaths.length > 0) {
+        sendLog(ws, `[Policy] "${name}" (${capability}) requires approval in ${activeMode} mode.`, false);
+        sendWithSession(ws, {
+          type: "edit_permission_request",
+          toolCallId: id,
+          toolName: name,
+          capability,
+          paths: unresolvedPaths,
+          outsidePaths: unresolvedPaths,
+          safeZone: require("./ws/session-helpers").PROJECT_ROOT,
+        }, sessionId);
       }
     }
   });

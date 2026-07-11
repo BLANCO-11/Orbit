@@ -368,6 +368,12 @@ function revokeDevice(id) {
   db.prepare("UPDATE devices SET revoked_at = ? WHERE id = ?").run(Date.now(), id);
 }
 
+/** Set a device's per-capability policy overrides (a partial matrix; tighten-only, enforced in policy-engine). */
+function setDevicePolicyOverrides(id, overrides) {
+  const json = JSON.stringify(overrides && typeof overrides === "object" ? overrides : {});
+  db.prepare("UPDATE devices SET policy_overrides = ? WHERE id = ?").run(json, id);
+}
+
 function mapDeviceRow(row) {
   return {
     id: row.id,
@@ -396,4 +402,5 @@ module.exports = {
   listDevices,
   renameDevice,
   revokeDevice,
+  setDevicePolicyOverrides,
 };

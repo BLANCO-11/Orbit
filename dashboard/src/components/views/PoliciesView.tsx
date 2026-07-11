@@ -2,74 +2,112 @@
 
 import React, { useEffect, useState } from 'react';
 
-type PolicyValue = 'allow' | 'ask' | 'block' | 'n/a';
+type PolicyValue = 'allow' | 'ask' | 'block';
 
-const MATRIX: { capability: string; chat: PolicyValue; plan: PolicyValue; edit: PolicyValue; yolo: PolicyValue }[] = [
-  { capability: 'Read files in workspace', chat: 'block', plan: 'allow', edit: 'allow', yolo: 'allow' },
-  { capability: 'Write inside workspace', chat: 'block', plan: 'block', edit: 'allow', yolo: 'allow' },
-  { capability: 'Write outside workspace', chat: 'block', plan: 'block', edit: 'ask', yolo: 'allow' },
-  { capability: 'Run shell commands', chat: 'block', plan: 'block', edit: 'allow', yolo: 'allow' },
-  { capability: 'Browser (lightpanda MCP)', chat: 'block', plan: 'allow', edit: 'allow', yolo: 'allow' },
-  { capability: 'Spawn sub-agents', chat: 'n/a', plan: 'allow', edit: 'allow', yolo: 'allow' },
+const CAPABILITIES: { key: string; label: string }[] = [
+  { key: 'read_workspace', label: 'Read files in workspace' },
+  { key: 'write_workspace', label: 'Write inside workspace' },
+  { key: 'write_outside', label: 'Write outside workspace' },
+  { key: 'shell', label: 'Run shell commands' },
+  { key: 'network', label: 'Network / browser (MCP)' },
+  { key: 'spawn_subagent', label: 'Spawn sub-agents' },
 ];
+const MODES = ['chat', 'plan', 'edit', 'yolo'] as const;
+const CYCLE: PolicyValue[] = ['allow', 'ask', 'block'];
 
-function Pv({ v }: { v: PolicyValue }) {
+const DEFAULT_MATRIX: Record<string, Record<string, PolicyValue>> = {
+  read_workspace: { chat: 'block', plan: 'allow', edit: 'allow', yolo: 'allow' },
+  write_workspace: { chat: 'block', plan: 'block', edit: 'allow', yolo: 'allow' },
+  write_outside: { chat: 'block', plan: 'block', edit: 'ask', yolo: 'allow' },
+  shell: { chat: 'block', plan: 'block', edit: 'allow', yolo: 'allow' },
+  network: { chat: 'block', plan: 'allow', edit: 'allow', yolo: 'allow' },
+  spawn_subagent: { chat: 'block', plan: 'allow', edit: 'allow', yolo: 'allow' },
+};
+
+function PvButton({ v, onClick }: { v: PolicyValue; onClick: () => void }) {
   const cls =
     v === 'allow'
-      ? 'bg-success/10 text-success'
+      ? 'bg-success/10 text-success hover:bg-success/20'
       : v === 'ask'
-        ? 'bg-warning/10 text-warning'
-        : v === 'block'
-          ? 'bg-destructive/10 text-destructive'
-          : 'text-faint';
+        ? 'bg-warning/10 text-warning hover:bg-warning/20'
+        : 'bg-destructive/10 text-destructive hover:bg-destructive/20';
   return (
-    <span className={`inline-flex rounded-full px-2.5 py-px text-[11px] font-semibold ${cls}`}>{v}</span>
+    <button
+      onClick={onClick}
+      className={`inline-flex min-w-[54px] justify-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold transition-colors ${cls}`}
+      title="Click to cycle allow → ask → block"
+    >
+      {v}
+    </button>
   );
 }
 
 /**
- * PoliciesView — what each mode may do, before the agent ever runs. This
- * reflects the enforcement wired in the backend today (mode gates in
- * server.js + security-guard path/command validation). Editable matrix,
- * budgets, and per-device overrides land in Phase 4.
+ * PoliciesView — editable capability × mode matrix (the source of truth the
+ * backend policy engine enforces), plus enforced budgets and per-device
+ * scope/overrides. Click any cell to cycle allow → ask → block.
  */
-interface Budgets {
-  maxCostPerSession: number;
-  maxTokensPerSession: number;
-  maxSubagentDepth: number;
-}
-
-function BudgetsSection() {
+export default function PoliciesView() {
   const [config, setConfig] = useState<any>(null);
-  const [budgets, setBudgets] = useState<Budgets>({ maxCostPerSession: 0, maxTokensPerSession: 0, maxSubagentDepth: 2 });
+  const [matrix, setMatrix] = useState<Record<string, Record<string, PolicyValue>>>(DEFAULT_MATRIX);
+  const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [budgets, setBudgets] = useState({ maxCostPerSession: 0, maxTokensPerSession: 0, maxSubagentDepth: 2 });
+  const [budgetSaved, setBudgetSaved] = useState(false);
 
   useEffect(() => {
     fetch('/api/config')
       .then((r) => r.json())
       .then((c) => {
         setConfig(c);
+        if (c.policyMatrix) {
+          const merged: any = {};
+          for (const cap of CAPABILITIES) {
+            merged[cap.key] = { ...DEFAULT_MATRIX[cap.key], ...(c.policyMatrix[cap.key] || {}) };
+          }
+          setMatrix(merged);
+        }
         if (c.budgets) setBudgets({ maxSubagentDepth: 2, maxCostPerSession: 0, maxTokensPerSession: 0, ...c.budgets });
       })
       .catch(() => {});
   }, []);
 
-  const save = () => {
+  const cycle = (cap: string, mode: string) => {
+    setMatrix((m) => {
+      const cur = m[cap][mode];
+      const next = CYCLE[(CYCLE.indexOf(cur) + 1) % CYCLE.length];
+      return { ...m, [cap]: { ...m[cap], [mode]: next } };
+    });
+    setDirty(true);
+    setSaved(false);
+  };
+
+  const saveMatrix = () => {
     if (!config) return;
     setSaving(true);
-    setSaved(false);
+    fetch('/api/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...config, policyMatrix: matrix }),
+    })
+      .then((r) => r.json())
+      .then(() => { setSaved(true); setDirty(false); setConfig((c: any) => ({ ...c, policyMatrix: matrix })); setTimeout(() => setSaved(false), 2500); })
+      .finally(() => setSaving(false));
+  };
+
+  const saveBudgets = () => {
+    if (!config) return;
     fetch('/api/config', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...config, budgets }),
     })
       .then((r) => r.json())
-      .then(() => { setSaved(true); setTimeout(() => setSaved(false), 2500); })
-      .finally(() => setSaving(false));
+      .then(() => { setBudgetSaved(true); setConfig((c: any) => ({ ...c, budgets })); setTimeout(() => setBudgetSaved(false), 2500); });
   };
 
-  const field = (label: string, key: keyof Budgets, hint: string, step = 1) => (
+  const budgetField = (label: string, key: keyof typeof budgets, hint: string, step = 1) => (
     <div className="rounded-xl border border-border-soft bg-card px-4 py-3">
       <label className="block text-[11px] font-medium text-muted-foreground">{label}</label>
       <div className="mt-1.5 flex items-center gap-2">
@@ -87,75 +125,72 @@ function BudgetsSection() {
   );
 
   return (
-    <div className="mt-6">
-      <div className="mb-2 text-[10.5px] font-bold uppercase tracking-[0.08em] text-faint">
-        Budgets &amp; limits — enforced, not advisory
-      </div>
-      <div className="grid gap-2.5 sm:grid-cols-3">
-        {field('Max cost per session ($)', 'maxCostPerSession', 'halts the turn at this cost', 0.01)}
-        {field('Max tokens per session', 'maxTokensPerSession', 'halts the turn at this many tokens', 1000)}
-        {field('Max sub-agent depth', 'maxSubagentDepth', 'deeper spawns are blocked')}
-      </div>
-      <div className="mt-3 flex items-center gap-3">
-        <button
-          onClick={save}
-          disabled={saving || !config}
-          className="rounded-[9px] bg-primary px-4 py-1.5 text-[13px] font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50"
-        >
-          {saving ? 'Saving…' : 'Save budgets'}
-        </button>
-        {saved && <span className="text-xs text-success">Saved — applies on the next action.</span>}
-        <span className="text-xs text-faint">0 = unlimited (cost &amp; tokens).</span>
-      </div>
-    </div>
-  );
-}
-
-export default function PoliciesView() {
-  return (
     <div className="h-full overflow-y-auto">
       <div className="mx-auto max-w-[860px] px-7 py-7">
         <h2 className="text-lg font-semibold">Policies</h2>
         <p className="mb-5 mt-0.5 text-[13px] text-muted-foreground">
-          What each mode may do, before the agent ever runs. Approvals surface in the conversation
-          where the action happens; everything else is decided here.
+          What each mode may do, before the agent ever runs — enforced by the backend policy engine.
+          Click any cell to cycle allow → ask → block. Approvals surface in the conversation where the
+          action happens.
         </p>
 
-        <div className="mb-2 text-[10.5px] font-bold uppercase tracking-[0.08em] text-faint">
-          Capability × mode — enforced by the backend today
+        <div className="mb-2 flex items-center justify-between">
+          <div className="text-[10.5px] font-bold uppercase tracking-[0.08em] text-faint">Capability × mode</div>
+          <div className="flex items-center gap-3">
+            {saved && <span className="text-xs text-success">Saved — applies on the next action.</span>}
+            <button
+              onClick={saveMatrix}
+              disabled={!dirty || saving}
+              className="rounded-[9px] bg-primary px-4 py-1.5 text-[12.5px] font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-40"
+            >
+              {saving ? 'Saving…' : 'Save matrix'}
+            </button>
+          </div>
         </div>
         <div className="overflow-x-auto rounded-xl border border-border-soft">
           <table className="w-full border-collapse bg-card text-[12.5px]">
             <thead>
               <tr className="bg-muted text-left text-[10.5px] uppercase tracking-[0.07em] text-faint">
                 <th className="px-3.5 py-2.5 font-semibold">Capability</th>
-                <th className="px-3.5 py-2.5 font-semibold">Chat</th>
-                <th className="px-3.5 py-2.5 font-semibold">Plan</th>
-                <th className="px-3.5 py-2.5 font-semibold">Edit</th>
-                <th className="px-3.5 py-2.5 font-semibold">Yolo</th>
+                {MODES.map((m) => (
+                  <th key={m} className="px-3.5 py-2.5 font-semibold capitalize">{m}</th>
+                ))}
               </tr>
             </thead>
             <tbody>
-              {MATRIX.map((row) => (
-                <tr key={row.capability} className="border-t border-border-soft">
-                  <td className="px-3.5 py-2.5 font-medium">{row.capability}</td>
-                  <td className="px-3.5 py-2.5"><Pv v={row.chat} /></td>
-                  <td className="px-3.5 py-2.5"><Pv v={row.plan} /></td>
-                  <td className="px-3.5 py-2.5"><Pv v={row.edit} /></td>
-                  <td className="px-3.5 py-2.5"><Pv v={row.yolo} /></td>
+              {CAPABILITIES.map((cap) => (
+                <tr key={cap.key} className="border-t border-border-soft">
+                  <td className="px-3.5 py-2.5 font-medium">{cap.label}</td>
+                  {MODES.map((m) => (
+                    <td key={m} className="px-3.5 py-2">
+                      <PvButton v={matrix[cap.key][m]} onClick={() => cycle(cap.key, m)} />
+                    </td>
+                  ))}
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-
-        <p className="mt-3 text-xs leading-relaxed text-faint">
-          Edit mode additionally gates writes outside the workspace behind an in-conversation
-          approval (allow once / allow for session / deny). Editable per-cell policy and per-device
-          overrides are still ahead; budgets below are live and enforced.
+        <p className="mt-2 text-xs leading-relaxed text-faint">
+          Paired devices can be given a <span className="font-semibold">stricter</span> matrix than this
+          default (tighten-only) — set per device in Fleet. Read-only and chat+voice scopes apply on top.
         </p>
 
-        <BudgetsSection />
+        <div className="mt-6 flex items-center justify-between">
+          <div className="text-[10.5px] font-bold uppercase tracking-[0.08em] text-faint">Budgets &amp; limits — enforced</div>
+          <div className="flex items-center gap-3">
+            {budgetSaved && <span className="text-xs text-success">Saved.</span>}
+            <button onClick={saveBudgets} disabled={!config} className="rounded-[9px] bg-primary px-4 py-1.5 text-[12.5px] font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-40">
+              Save budgets
+            </button>
+          </div>
+        </div>
+        <div className="grid gap-2.5 sm:grid-cols-3">
+          {budgetField('Max cost per session ($)', 'maxCostPerSession', 'halts the turn at this cost', 0.01)}
+          {budgetField('Max tokens per session', 'maxTokensPerSession', 'halts the turn at this many tokens', 1000)}
+          {budgetField('Max sub-agent depth', 'maxSubagentDepth', 'deeper spawns are blocked')}
+        </div>
+        <p className="mt-2 text-xs text-faint">0 = unlimited (cost &amp; tokens). Budget/policy changes hot-reload — no restart.</p>
       </div>
     </div>
   );
