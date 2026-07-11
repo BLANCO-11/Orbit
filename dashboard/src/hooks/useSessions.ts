@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useAegisDispatch, useAegisState, actions } from '@/providers/AegisProvider';
+import { useOrbitDispatch, useOrbitState, actions } from '@/providers/OrbitProvider';
 
 const EMPTY_METRICS = { toolCalls: 0, latency: 0, tokens: 0, cost: 0, activeSubagents: [], actionFeed: [] };
 
@@ -44,8 +44,8 @@ function normalizeMetricsForUI(raw) {
  * useSessions - Session CRUD, persistence, search, grouping.
  */
 export function useSessions() {
-  const dispatch = useAegisDispatch();
-  const { currentSessionId, sessionMode } = useAegisState();
+  const dispatch = useOrbitDispatch();
+  const { currentSessionId, sessionMode } = useOrbitState();
 
   const [sessions, setSessions] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -72,7 +72,7 @@ export function useSessions() {
     } catch {
       // Fallback to localStorage
       try {
-        const stored = localStorage.getItem('aegis_sessions');
+        const stored = localStorage.getItem('orbit_sessions');
         if (stored) loaded = JSON.parse(stored);
       } catch {}
     }
@@ -123,11 +123,11 @@ export function useSessions() {
         body: JSON.stringify(session),
       }).catch(() => {});
       try {
-        const raw = localStorage.getItem('aegis_sessions');
+        const raw = localStorage.getItem('orbit_sessions');
         if (raw) {
           const list = JSON.parse(raw);
           const next = list.map(s => s.id === session.id ? session : s);
-          localStorage.setItem('aegis_sessions', JSON.stringify(next));
+          localStorage.setItem('orbit_sessions', JSON.stringify(next));
         }
       } catch {}
     };

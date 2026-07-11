@@ -30,7 +30,7 @@ function createSessionsRouter() {
     try {
       const all = db.getAllSessions();
       res.setHeader("Content-Type", "application/json");
-      res.setHeader("Content-Disposition", "attachment; filename=aegis-sessions-export.json");
+      res.setHeader("Content-Disposition", "attachment; filename=orbit-sessions-export.json");
       res.json(all);
     } catch (err) { next(err); }
   });

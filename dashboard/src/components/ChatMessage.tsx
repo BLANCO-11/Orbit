@@ -75,7 +75,7 @@ export default function ChatMessage({
       </div>
       <div className="min-w-0 flex-1">
         <div className="mb-1.5 flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-faint">
-          AegisAgent
+          Orbit
           {time && <span className="font-medium normal-case tracking-normal">{time}</span>}
           <button
             onClick={handleCopy}
@@ -253,7 +253,7 @@ export function ChatEmptyState() {
       <div className="mb-4 grid size-12 place-items-center rounded-2xl bg-gradient-to-br from-primary/80 to-primary text-white shadow-card">
         <Shield size={22} />
       </div>
-      <h3 className="mb-1.5 text-[17px] font-semibold tracking-tight">AegisAgent ready</h3>
+      <h3 className="mb-1.5 text-[17px] font-semibold tracking-tight">Orbit ready</h3>
       <p className="text-[13.5px] leading-relaxed text-muted-foreground">
         Delegate OS operations, write code, run audits, or browse the web — by voice or text.
       </p>

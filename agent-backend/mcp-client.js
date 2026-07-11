@@ -28,7 +28,7 @@ class LightpandaMcpClient {
       });
 
       this.client = new Client(
-        { name: "aegis-agent-backend", version: "1.0.0" },
+        { name: "orbit-agent-backend", version: "1.0.0" },
         { capabilities: {} }
       );
 

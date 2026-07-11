@@ -4,7 +4,7 @@ MESSAGE=$2
 SEVERITY=${3:-info}
 
 if [ -z "$TITLE" ] || [ -z "$MESSAGE" ]; then
-  echo "Usage: aegis-notify <title> <message> [severity]"
+  echo "Usage: orbit-notify <title> <message> [severity]"
   exit 1
 fi
 

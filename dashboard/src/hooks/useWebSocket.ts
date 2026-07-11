@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useCallback, useState } from 'react';
-import { useAegisDispatch, actions } from '@/providers/AegisProvider';
+import { useOrbitDispatch, actions } from '@/providers/OrbitProvider';
 
 /**
  * useWebSocket — WebSocket lifecycle + message dispatch.
@@ -16,7 +16,7 @@ export function useWebSocket(
     onIntelligentSpeech?: (text: string) => void;
   } = {}
 ) {
-  const dispatch = useAegisDispatch();
+  const dispatch = useOrbitDispatch();
   const socketRef = useRef(null);
   const reconnectTimerRef = useRef(null);
   const sessionIdRef = useRef('');

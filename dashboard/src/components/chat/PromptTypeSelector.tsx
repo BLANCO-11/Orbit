@@ -11,7 +11,7 @@ interface LibraryPrompt {
 }
 
 const FALLBACK: LibraryPrompt[] = [
-  { id: 'standard', label: 'Standard', description: 'Aegis default', isDefault: true },
+  { id: 'standard', label: 'Standard', description: 'Orbit default', isDefault: true },
 ];
 
 interface PromptTypeSelectorProps {

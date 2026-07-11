@@ -1,4 +1,4 @@
-# AegisAgent Wire Protocol
+# Orbit Wire Protocol
 
 Two boundaries, documented in one place:
 

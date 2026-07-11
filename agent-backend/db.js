@@ -3,7 +3,19 @@ const path = require("path");
 const fs = require("fs");
 const crypto = require("crypto");
 
-const dbPath = path.join(__dirname, "aegis.db");
+const dbPath = path.join(__dirname, "orbit.db");
+// Rebrand migration: carry the pre-rebrand database over so no data is lost.
+const legacyDbPath = path.join(__dirname, "aegis.db");
+if (!fs.existsSync(dbPath) && fs.existsSync(legacyDbPath)) {
+  try {
+    for (const suffix of ["", "-wal", "-shm"]) {
+      if (fs.existsSync(legacyDbPath + suffix)) fs.renameSync(legacyDbPath + suffix, dbPath + suffix);
+    }
+    console.log("[DB] Migrated aegis.db → orbit.db (rebrand).");
+  } catch (e) {
+    console.error("[DB] rebrand migration failed:", e.message);
+  }
+}
 const db = new DatabaseSync(dbPath);
 
 // ── Schema Versioning ───────────────────────────────────────────────

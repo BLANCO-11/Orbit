@@ -9,9 +9,9 @@ export { useSettings } from './useSettings';
 export { useDevices } from './useDevices';
 
 export {
-  AegisProvider,
-  useAegisState,
-  useAegisDispatch,
-  useAegis,
+  OrbitProvider,
+  useOrbitState,
+  useOrbitDispatch,
+  useOrbit,
   actions,
-} from '@/providers/AegisProvider';
+} from '@/providers/OrbitProvider';

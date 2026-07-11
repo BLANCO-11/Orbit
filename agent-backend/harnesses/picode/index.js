@@ -77,7 +77,7 @@ class PiCodeHarness extends HarnessInterface {
       ...process.env,
       LITELLM_KEY: apiKey,
       OPENAI_API_KEY: apiKey,
-      AEGIS_MODE: activeMode || "chat"
+      ORBIT_MODE: activeMode || "chat"
     };
     
     const piArgs = [

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 
-const THEME_KEY = 'aegis-theme'; // 'light' | 'dark'
+const THEME_KEY = 'orbit-theme'; // 'light' | 'dark'
 const DEFAULT_MODE = 'light';
 
 /**

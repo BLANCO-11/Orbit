@@ -16,7 +16,7 @@ function createNotificationsRouter(getConfig, wss) {
       console.log(`[Notification API] [${(severity || "info").toUpperCase()}] ${title}: ${message}`);
       
       // 1. Desktop Notification via notify-send
-      const escapedTitle = (title || "AegisAgent Alert").replace(/"/g, '\\"');
+      const escapedTitle = (title || "Orbit Alert").replace(/"/g, '\\"');
       const escapedMsg = (message || "").replace(/"/g, '\\"');
       const urgency = severity === "error" ? "critical" : severity === "warning" ? "normal" : "low";
       

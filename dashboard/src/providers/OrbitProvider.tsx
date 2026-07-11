@@ -76,7 +76,7 @@ const RESET_RUN = 'RESET_RUN';
 // Reducer
 // ═══════════════════════════════════════════════════════════
 
-function aegisReducer(state, action) {
+function orbitReducer(state, action) {
   switch (action.type) {
     case SET_STATUS:
       return { ...state, status: action.payload };
@@ -265,18 +265,18 @@ function aegisReducer(state, action) {
 // Context + Provider
 // ═══════════════════════════════════════════════════════════
 
-const AegisStateContext = createContext(null);
-const AegisDispatchContext = createContext(null);
+const OrbitStateContext = createContext(null);
+const OrbitDispatchContext = createContext(null);
 
-export function AegisProvider({ children }) {
-  const [state, dispatch] = useReducer(aegisReducer, initialState);
+export function OrbitProvider({ children }) {
+  const [state, dispatch] = useReducer(orbitReducer, initialState);
   
   return (
-    <AegisStateContext.Provider value={state}>
-      <AegisDispatchContext.Provider value={dispatch}>
+    <OrbitStateContext.Provider value={state}>
+      <OrbitDispatchContext.Provider value={dispatch}>
         {children}
-      </AegisDispatchContext.Provider>
-    </AegisStateContext.Provider>
+      </OrbitDispatchContext.Provider>
+    </OrbitStateContext.Provider>
   );
 }
 
@@ -284,20 +284,20 @@ export function AegisProvider({ children }) {
 // Hooks
 // ═══════════════════════════════════════════════════════════
 
-export function useAegisState() {
-  const ctx = useContext(AegisStateContext);
-  if (!ctx) throw new Error('useAegisState must be used within AegisProvider');
+export function useOrbitState() {
+  const ctx = useContext(OrbitStateContext);
+  if (!ctx) throw new Error('useOrbitState must be used within OrbitProvider');
   return ctx;
 }
 
-export function useAegisDispatch() {
-  const ctx = useContext(AegisDispatchContext);
-  if (!ctx) throw new Error('useAegisDispatch must be used within AegisProvider');
+export function useOrbitDispatch() {
+  const ctx = useContext(OrbitDispatchContext);
+  if (!ctx) throw new Error('useOrbitDispatch must be used within OrbitProvider');
   return ctx;
 }
 
-export function useAegis() {
-  return [useAegisState(), useAegisDispatch()];
+export function useOrbit() {
+  return [useOrbitState(), useOrbitDispatch()];
 }
 
 // ═══════════════════════════════════════════════════════════

@@ -1,4 +1,4 @@
-process.env.AEGIS_MODE = "edit"; // default for legacy tests
+process.env.ORBIT_MODE = "edit"; // default for legacy tests
 
 const { validatePath, validateCommand } = require("../agent-backend/security-guard");
 const assert = require("assert");

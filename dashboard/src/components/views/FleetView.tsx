@@ -155,7 +155,7 @@ export default function FleetView() {
                 </div>
               ))}
               <div className="rounded-xl border border-dashed border-border px-4 py-3 text-center text-xs text-faint">
-                Connect a remote harness: run <span className="font-mono">aegis-adapter --code &lt;pairing code&gt;</span> on any machine with pi installed.
+                Connect a remote harness: run <span className="font-mono">orbit-adapter --code &lt;pairing code&gt;</span> on any machine with pi installed.
               </div>
             </div>
 

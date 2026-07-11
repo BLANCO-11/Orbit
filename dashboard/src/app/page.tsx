@@ -9,7 +9,7 @@ import CommandPalette from '@/components/widgets/CommandPalette';
 import NotificationCenter from '@/components/widgets/NotificationCenter';
 
 // Providers & Hooks
-import { AegisProvider, useAegisState, useAegisDispatch, actions } from '@/providers/AegisProvider';
+import { OrbitProvider, useOrbitState, useOrbitDispatch, actions } from '@/providers/OrbitProvider';
 import { useTheme, useResponsive, useWebSocket, useSessions, useTTS, useSTT, useSettings } from '@/hooks';
 
 // Layout
@@ -50,15 +50,15 @@ export default function Dashboard() {
   }
 
   return (
-    <AegisProvider>
+    <OrbitProvider>
       <DashboardInner />
-    </AegisProvider>
+    </OrbitProvider>
   );
 }
 
 function DashboardInner() {
-  const dispatch = useAegisDispatch();
-  const state = useAegisState();
+  const dispatch = useOrbitDispatch();
+  const state = useOrbitState();
   const { theme, mounted, toggleTheme, setTheme } = useTheme();
   const { isMobile } = useResponsive();
 
@@ -78,8 +78,8 @@ function DashboardInner() {
   const deviceToken = getDeviceToken();
   const wsKeyParam = deviceToken
     ? `?deviceToken=${encodeURIComponent(deviceToken)}`
-    : process.env.NEXT_PUBLIC_AEGIS_API_KEY
-      ? `?key=${encodeURIComponent(process.env.NEXT_PUBLIC_AEGIS_API_KEY)}`
+    : (process.env.NEXT_PUBLIC_ORBIT_API_KEY || process.env.NEXT_PUBLIC_AEGIS_API_KEY)
+      ? `?key=${encodeURIComponent(process.env.NEXT_PUBLIC_ORBIT_API_KEY || process.env.NEXT_PUBLIC_AEGIS_API_KEY)}`
       : '';
   const backendWsUrl = typeof window !== 'undefined'
     ? `ws://${window.location.hostname}:${window.location.port || '6801'}/api/ws${wsKeyParam}`

@@ -1,13 +1,13 @@
 'use client';
 
 import { useRef, useCallback, useEffect, useState } from 'react';
-import { useAegisDispatch, actions } from '@/providers/AegisProvider';
+import { useOrbitDispatch, actions } from '@/providers/OrbitProvider';
 
 /**
  * useSTT — Browser Speech Recognition wrapper.
  */
 export function useSTT() {
-  const dispatch = useAegisDispatch();
+  const dispatch = useOrbitDispatch();
   const [isListening, setIsListening] = useState(false);
   const [isSupported, setIsSupported] = useState(false);
   const [error, setError] = useState(null);

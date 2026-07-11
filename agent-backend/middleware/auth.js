@@ -7,7 +7,9 @@
 // its own guard.
 
 function getSharedApiKey() {
-  return process.env.AEGIS_API_KEY || null;
+  // ORBIT_API_KEY is the current name; AEGIS_API_KEY kept as a fallback so
+  // pre-rebrand .env files keep working.
+  return process.env.ORBIT_API_KEY || process.env.AEGIS_API_KEY || null;
 }
 
 function checkApiKey(req, db) {
@@ -32,7 +34,7 @@ function checkApiKey(req, db) {
 function createAuthMiddleware(db) {
   return function authMiddleware(req, res, next) {
     if (!checkApiKey(req, db)) {
-      res.setHeader("WWW-Authenticate", 'Bearer realm="AegisAgent"');
+      res.setHeader("WWW-Authenticate", 'Bearer realm="Orbit"');
       return res.status(401).json({ success: false, message: "Unauthorized: invalid or missing API key." });
     }
     next();

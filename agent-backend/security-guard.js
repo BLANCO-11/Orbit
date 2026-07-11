@@ -17,7 +17,7 @@ function isUnderDirectory(parent, target) {
  */
 function validatePath(action, targetPath, config, mode) {
   const resolved = path.resolve(targetPath);
-  const activeMode = mode || process.env.AEGIS_MODE || (config && config.defaultMode) || "chat";
+  const activeMode = mode || process.env.ORBIT_MODE || (config && config.defaultMode) || "chat";
 
   // YOLO mode: full access (bypasses all allowed/blocked restrictions)
   if (activeMode === "yolo") {
@@ -144,7 +144,7 @@ function isReadOnlyCommand(commandString) {
  * @returns {object} { allowed: boolean, action: 'allow' | 'approve' | 'block', reason?: string }
  */
 function validateCommand(commandString, config, mode) {
-  const activeMode = mode || process.env.AEGIS_MODE || (config && config.defaultMode) || "chat";
+  const activeMode = mode || process.env.ORBIT_MODE || (config && config.defaultMode) || "chat";
   const cmd = commandString.trim();
   const tokens = cmd.split(/\s+/);
   const primaryCommand = tokens[0];

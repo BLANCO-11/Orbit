@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// aegis-adapter — connect a local pi harness to a remote AegisAgent console.
+// orbit-adapter — connect a local pi harness to a remote Orbit console.
 //
 // Run this on any machine that has `pi` installed to make it a harness the
 // console can drive, exactly like the console's own local pi. It pairs with
@@ -8,8 +8,8 @@
 // sends spawn/prompt/cancel, and every harness event streams back.
 //
 // Usage:
-//   node aegis-adapter.js --server ws://HOST:6800 --code AB3XK9 [--name "My workstation"]
-//   node aegis-adapter.js --server ws://HOST:6800 --token <deviceToken>
+//   node orbit-adapter.js --server ws://HOST:6800 --code AB3XK9 [--name "My workstation"]
+//   node orbit-adapter.js --server ws://HOST:6800 --token <deviceToken>
 //
 // LiteLLM creds come from this machine's env: LITELLM_KEY (or OPENAI_API_KEY),
 // LITELLM_BASE_URL, LITELLM_MODEL.

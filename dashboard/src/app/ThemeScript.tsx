@@ -9,7 +9,7 @@ export function ThemeScript() {
         __html: `
           (function() {
             try {
-              var mode = localStorage.getItem('aegis-theme') || 'light';
+              var mode = localStorage.getItem('orbit-theme') || 'light';
               document.documentElement.classList.toggle('dark', mode === 'dark');
               document.documentElement.style.colorScheme = mode;
             } catch(e) {}

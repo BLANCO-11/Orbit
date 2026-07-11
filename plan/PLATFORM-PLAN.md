@@ -1,4 +1,4 @@
-# AegisAgent — Platform Extensions Plan
+# Orbit — Platform Extensions Plan
 
 > **Date:** 2026-07-11
 > **Scope:** Session profiles, harness-agnostic tool/extension management, event channels, sandboxes, durable resume.
@@ -10,7 +10,7 @@
 
 ## 0. The boundary (non-negotiable)
 
-AegisAgent is a **local-first operator console** — a human watches and steers agents through a UI. It is **not** a deployable framework. Every feature below must land as something you *operate from the console*, not a code SDK.
+Orbit is a **local-first operator console** — a human watches and steers agents through a UI. It is **not** a deployable framework. Every feature below must land as something you *operate from the console*, not a code SDK.
 
 **Explicit non-goals** (what we will NOT copy from Flue):
 - No `defineAgent()` code API / TypeScript authoring surface for end users.
@@ -49,7 +49,7 @@ Make tool/extension enumeration and application a **harness responsibility**, so
   - `listTools()` = built-ins (`read/bash/edit/write/grep/find`, with descriptions) ∪ extensions parsed from `pi list` / `~/.pi/agent/settings.json` `packages[]` ∪ observed tool names.
   - `connect()` applies `--exclude-tools` (already added for the browser fix — generalize to read from options).
   - A per-harness-type **observed-tools cache**: when `tool_call_start` reports a tool name we haven't catalogued, record it (so the available list self-populates, incl. `mcp_*` connector tools). Persist to a small JSON.
-- `harnesses/remote/index.js` (`RemoteHarness`): `listTools()` sends `{type:'list_tools'}` over the adapter socket; the adapter replies by calling its *local* harness's `listTools()`. `adapter/aegis-adapter.js` handles that message.
+- `harnesses/remote/index.js` (`RemoteHarness`): `listTools()` sends `{type:'list_tools'}` over the adapter socket; the adapter replies by calling its *local* harness's `listTools()`. `adapter/orbit-adapter.js` handles that message.
 - `server.js`: `GET /api/harnesses/:id/tools` → routes to local pi or the right adapter, returns the merged list. `excludeTools` flows through `start_task` → `handleStartTask` → harness options (already partly wired).
 
 ### Frontend
@@ -113,7 +113,7 @@ Today `createHarnessEventEmitter(ws, …)` hardwires one dashboard socket. Refac
 - DB: `channels` table (`id, name, type, secret_hash, profile_id, prompt_template, enabled, created_at`).
 - `routes/channels.js`:
   - `GET/POST/PUT/DELETE /api/channels`.
-  - `POST /api/channels/:id/webhook` — the public receiver. Verify signature per type (GitHub HMAC-SHA256, Slack signing secret, generic bearer). On valid event: build a prompt from `prompt_template` + the event payload, create a session, run the profile **headlessly** via the session bus, and fire a notification (existing `aegis-notify` / notifications router) on completion.
+  - `POST /api/channels/:id/webhook` — the public receiver. Verify signature per type (GitHub HMAC-SHA256, Slack signing secret, generic bearer). On valid event: build a prompt from `prompt_template` + the event payload, create a session, run the profile **headlessly** via the session bus, and fire a notification (existing `orbit-notify` / notifications router) on completion.
 - Rate-limit + replay protection on the webhook.
 
 ### Frontend

@@ -1,6 +1,6 @@
 // agent-backend/harnesses/remote/index.js
 // RemoteHarness — a HarnessInterface implementation that drives a harness
-// running inside a connected `aegis-adapter` (see ws/harness.js) instead of a
+// running inside a connected `orbit-adapter` (see ws/harness.js) instead of a
 // local child process. connect/sendPrompt/cancel/disconnect become messages to
 // the adapter; the adapter relays the standard harness events back over the
 // same socket, and we re-emit them on our own EventEmitter so the rest of the

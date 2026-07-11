@@ -17,7 +17,7 @@ interface HarnessSelectorProps {
 
 /**
  * HarnessSelector — pick which harness runs this session: the local pi child
- * process, or any connected remote aegis-adapter. Sent as harnessId on
+ * process, or any connected remote orbit-adapter. Sent as harnessId on
  * start_task. Polls so remote adapters appear/disappear live.
  */
 export default function HarnessSelector({ harnessId, onSetHarnessId }: HarnessSelectorProps) {

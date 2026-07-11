@@ -1,6 +1,6 @@
-# AegisAgent — Implementation Plan
+# Orbit — Implementation Plan
 
-> Companion to `plan/REDESIGN-PLAN.md` (the what/why) and `plan/aegis-console-mock.html` (the approved look).
+> Companion to `plan/REDESIGN-PLAN.md` (the what/why) and `plan/orbit-console-mock.html` (the approved look).
 > Phases are ordered so each ships something visible and nothing blocks on a later phase. Commit per phase; run `npm run verify` + drive the real app before each commit.
 
 ---
@@ -38,7 +38,7 @@ Port the mock's structure into `dashboard/` (Next + Tailwind + shadcn tokens; li
 
 1. **Device identity:** `devices` table; `POST /api/pair/start` (issues 5-min OTP, owner-only), `POST /api/pair/claim` (code + name + scope → device token); token check on every HTTP route and WS upgrade (replaces fail-open middleware); revocation endpoint kills sockets.
 2. **Scopes:** `chat_voice` / `read_only` / `full` enforced server-side (read-only devices get events, no `start_task`/approvals).
-3. **Harness registry:** `harness_instances` (type, transport, machine, policy scope, status). Local = spawn (existing); remote = `aegis-adapter` CLI that claims an OTP, opens an authenticated WS, and bridges the harness's stdio protocol. Multiple instances per machine supported; session picker chooses instance.
+3. **Harness registry:** `harness_instances` (type, transport, machine, policy scope, status). Local = spawn (existing); remote = `orbit-adapter` CLI that claims an OTP, opens an authenticated WS, and bridges the harness's stdio protocol. Multiple instances per machine supported; session picker chooses instance.
 4. **Fleet UI** per the mock: pairing card (OTP + countdown + scope + adapter one-liner), harness list with per-instance spend + policy link, device list with revoke.
 5. Remove the kill-sibling-session-on-same-socket behavior; sessions keyed `(deviceId, sessionId)`.
 

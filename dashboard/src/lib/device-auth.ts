@@ -5,7 +5,7 @@
 // NEXT_PUBLIC_AEGIS_API_KEY shared-secret (lib/api-auth.ts) for simple
 // single-device setups that haven't paired anything.
 
-const DEVICE_TOKEN_KEY = 'aegis-device-token';
+const DEVICE_TOKEN_KEY = 'orbit-device-token';
 
 export function getDeviceToken() {
   if (typeof window === 'undefined') return null;
@@ -26,5 +26,5 @@ export function clearDeviceToken() {
 // one exists, otherwise the shared build-time key (may be undefined, in
 // which case the backend's own dev-mode fallback applies).
 export function getActiveCredential() {
-  return getDeviceToken() || process.env.NEXT_PUBLIC_AEGIS_API_KEY || null;
+  return getDeviceToken() || process.env.NEXT_PUBLIC_ORBIT_API_KEY || process.env.NEXT_PUBLIC_AEGIS_API_KEY || null;
 }

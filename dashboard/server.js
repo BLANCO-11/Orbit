@@ -80,6 +80,6 @@ app.prepare().then(() => {
   }
 
   server.listen(PORT, HOST, () => {
-    console.log(`AegisAgent Dashboard listening on ${HOST}:${PORT} (proxying /api/* to ${BACKEND})`);
+    console.log(`Orbit Dashboard listening on ${HOST}:${PORT} (proxying /api/* to ${BACKEND})`);
   });
 });

@@ -1,7 +1,7 @@
-# AegisAgent — Implementation Progress
+# Orbit — Implementation Progress
 
 > Tracks execution of `plan/IMPLEMENTATION-PLAN.md` against the approved mock
-> (`plan/aegis-console-mock.html`). Updated 2026-07-11.
+> (`plan/orbit-console-mock.html`). Updated 2026-07-11.
 
 ## Legend
 ✅ done & verified · 🟡 partial
@@ -26,7 +26,7 @@
 ## Phase 3 — Identity, pairing, scopes, remote ✅
 - Device identity + URL/OTP pairing (verified); **device scopes** (full / chat_voice / read_only) enforced on start_task
 - **Concurrent sessions** (kill-sibling removed)
-- **Remote harness adapter**: `aegis-adapter` CLI redeems a pairing code, connects over authenticated WS, runs a local pi and bridges every event; backend `RemoteHarness` + `/api/harnesses`; composer harness picker. Verified end-to-end: a remote adapter registered and a session ran through it, streaming back to the dashboard.
+- **Remote harness adapter**: `orbit-adapter` CLI redeems a pairing code, connects over authenticated WS, runs a local pi and bridges every event; backend `RemoteHarness` + `/api/harnesses`; composer harness picker. Verified end-to-end: a remote adapter registered and a session ran through it, streaming back to the dashboard.
 
 ## Phase 4 — Policies & budgets ✅
 - Enforced budgets (cost / token / sub-agent-depth caps); config hot-reload; save no longer kills sessions

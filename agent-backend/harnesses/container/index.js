@@ -19,7 +19,7 @@ const os = require("os");
 const path = require("path");
 const PiCodeHarness = require("../picode");
 
-const IMAGE = process.env.AEGIS_SANDBOX_IMAGE || "node:22-slim";
+const IMAGE = process.env.ORBIT_SANDBOX_IMAGE || "node:22-slim";
 const PI_RUNTIME_DIR = path.join(os.homedir(), ".local", "share", "pi-node");
 const PI_CONFIG_DIR = path.join(os.homedir(), ".pi");
 const WORKSPACE = path.resolve(__dirname, "../../../workspace");
@@ -44,7 +44,7 @@ class ContainerHarness extends PiCodeHarness {
     ];
     // Forward only the LLM creds + mode the agent needs.
     const envArgs = [];
-    for (const k of ["LITELLM_KEY", "OPENAI_API_KEY", "AEGIS_MODE", "LITELLM_BASE_URL"]) {
+    for (const k of ["LITELLM_KEY", "OPENAI_API_KEY", "ORBIT_MODE", "LITELLM_BASE_URL"]) {
       if (childEnv[k]) envArgs.push("-e", `${k}=${childEnv[k]}`);
     }
     const dockerArgs = [

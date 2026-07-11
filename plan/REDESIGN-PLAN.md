@@ -1,12 +1,12 @@
-# AegisAgent — Product Redesign Plan
+# Orbit — Product Redesign Plan
 
 > **Date:** 2026-07-10
-> **Source of truth for the target UI:** `plan/aegis-console-mock.html` (approved interactive mock, also published as a Claude artifact). Open it in a browser; toggle **Design notes** for the rationale behind each decision.
+> **Source of truth for the target UI:** `plan/orbit-console-mock.html` (approved interactive mock, also published as a Claude artifact). Open it in a browser; toggle **Design notes** for the rationale behind each decision.
 > Supersedes all earlier plan documents (deleted; recoverable from git history).
 
 ---
 
-## 1. What AegisAgent is
+## 1. What Orbit is
 
 A **local-first agent-operations console**. Think Cursor's agent panel, but harness-agnostic and self-hosted:
 
@@ -62,12 +62,12 @@ Four segments — **Overview / Workspace / Preview / Trace**:
 Single-line textarea + one quiet row of uniform accordion chips: **mode** (Chat/Plan/Edit/Yolo with one-line descriptions; yolo styled danger), **harness**, **prompt** (from the prompt library), **effort** (fast/balanced/deep), **skills** (attach/detach, "+ add skill"), then dictate mic, TTS toggle, Send.
 
 ### 3.4 Prompt library
-Stored system prompts, managed in Settings, selected per session from the composer. Ships with `standard` (aegis default) plus frontier-style prompts (`claude-style`, `gemini-style`, `codex-style` — the `prompts/` dir already holds early versions, e.g. `claude-fable-5.md`). The selected prompt is inherited by the main agent **and every sub-agent it spawns**; mode directives (plan/edit/yolo) are appended on top of it, not mixed into it. Users can add prompts by paste, file, or URL.
+Stored system prompts, managed in Settings, selected per session from the composer. Ships with `standard` (orbit default) plus frontier-style prompts (`claude-style`, `gemini-style`, `codex-style` — the `prompts/` dir already holds early versions, e.g. `claude-fable-5.md`). The selected prompt is inherited by the main agent **and every sub-agent it spawns**; mode directives (plan/edit/yolo) are appended on top of it, not mixed into it. Users can add prompts by paste, file, or URL.
 
 ## 4. Backend concepts the UI requires
 
 1. **Device identity** — `devices` table (id, name, scope, token-hash, created, last_seen). OTP pairing endpoint issues short-lived codes (~5 min); successful pairing mints a long-lived device token. WS upgrade authenticates the token. Revocation kills tokens + live sockets.
-2. **Harness identity & adapter protocol** — harnesses register like devices (same OTP flow, `aegis-adapter` CLI for remote). `harness_instances` table; several per machine, each with policy scope. Transport: local spawn (today) or authenticated WS (remote).
+2. **Harness identity & adapter protocol** — harnesses register like devices (same OTP flow, `orbit-adapter` CLI for remote). `harness_instances` table; several per machine, each with policy scope. Transport: local spawn (today) or authenticated WS (remote).
 3. **Real usage accounting** — parse provider `usage` (prompt/completion tokens) from LiteLLM responses; per-model pricing map → cost. Persist per turn AND per agent (main + each sub-agent). The word "estimated" disappears from the UI.
 4. **Sub-agent observability, end to end** — every spawn records task, parent, depth; `subagent_tool_start/end` and reasoning events are captured (the `SubagentTracker.startToolCall` / `metrics.addSubagent` family exists but is currently never invoked — wire it); tracker state serialized with the session so traces survive restarts.
 5. **Policy engine v2** — capability × mode matrix replaces the global config blob; scoped per device and per harness; `ask` results emit an `approval_request` event that renders as a timeline gate; budgets enforced server-side (pause at cap, ask to continue).

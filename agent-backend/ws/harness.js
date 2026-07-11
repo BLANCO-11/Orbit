@@ -1,6 +1,6 @@
 // agent-backend/ws/harness.js
-// Remote-harness transport. An `aegis-adapter` process (see
-// agent-backend/adapter/aegis-adapter.js), running on any machine, dials in
+// Remote-harness transport. An `orbit-adapter` process (see
+// agent-backend/adapter/orbit-adapter.js), running on any machine, dials in
 // here over an authenticated WebSocket. Once registered it becomes a harness
 // the console can run sessions on, exactly like the local pi child process —
 // the RemoteHarness (harnesses/remote/index.js) bridges over this socket.

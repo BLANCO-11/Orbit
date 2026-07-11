@@ -1,6 +1,6 @@
-# AegisAgent OS Assistant & Dashboard
+# Orbit OS Assistant & Dashboard
 
-AegisAgent is a local-first, **harness-agnostic agent-operations console**: a Next.js dashboard talks over one WebSocket to an Express backend that drives a local CLI agent ("harness" — pi/PiCode today, others via the adapter contract) and streams everything it does back for you to watch and steer. It runs on your host OS within user-configurable security guardrails, with real usage/cost observability, end-to-end sub-agent tracing, a voice (STT+TTS) layer, and live browsing via the **Lightpanda headless browser** (an MCP server).
+Orbit is a local-first, **harness-agnostic agent-operations console**: a Next.js dashboard talks over one WebSocket to an Express backend that drives a local CLI agent ("harness" — pi/PiCode today, others via the adapter contract) and streams everything it does back for you to watch and steer. It runs on your host OS within user-configurable security guardrails, with real usage/cost observability, end-to-end sub-agent tracing, a voice (STT+TTS) layer, and live browsing via the **Lightpanda headless browser** (an MCP server).
 
 ## Key Features
 
@@ -9,7 +9,7 @@ AegisAgent is a local-first, **harness-agnostic agent-operations console**: a Ne
 3. **Editable policy matrix + enforced budgets** — a capability × mode matrix (allow/ask/block) is the source of truth the backend enforces; per-device overrides tighten it further. Per-session cost/token caps and a sub-agent-depth cap halt work before it overruns (Policies view; hot-reloaded, no restart).
 4. **Prompt library + skills** — swap the system prompt per session from stored `prompts/*.md` (incl. frontier-style prompts); attach reusable `skills/*/SKILL.md` instruction packs. Both are inherited by every sub-agent.
 5. **Effort profiles** — fast / balanced / deep routes the model and planning depth per session, orthogonal to the permission mode.
-6. **Fleet: devices + remote harnesses** — pair devices via URL + OTP (with scopes: full / chat+voice / read-only). Any machine with pi can dial in as a **remote harness** via `aegis-adapter` and the same pairing flow; pick which harness runs a session from the composer.
+6. **Fleet: devices + remote harnesses** — pair devices via URL + OTP (with scopes: full / chat+voice / read-only). Any machine with pi can dial in as a **remote harness** via `orbit-adapter` and the same pairing flow; pick which harness runs a session from the composer.
 7. **Connector registry** — MCP tool servers (the Lightpanda headless browser today; any stdio or remote-HTTP MCP server) are managed in the Connectors view with live status and tool listings.
 8. **Agents: profiles + channels** — save reusable session setups (harness · mode · effort · prompt · skills · tools · sandbox) and pick one in a click; per-profile tool control (e.g. disable pi's native browser, keep Lightpanda). **Channels** trigger a profile unattended — on a schedule or from a verified webhook (GitHub/Slack HMAC) — and the run lands in the session list with its full timeline.
 9. **Sandboxes** — a profile runs on the host, in an ephemeral Docker container (real filesystem isolation), or on a paired remote harness.
@@ -21,11 +21,11 @@ AegisAgent is a local-first, **harness-agnostic agent-operations console**: a Ne
 ## Folder Structure
 
 - `mcp-server-lightpanda/`: MCP server connecting to Lightpanda CDP.
-- `agent-backend/`: Node.js/Express server, harness abstraction (`harnesses/` — local pi + `remote/`), the `aegis-adapter` CLI (`adapter/`), MCP connector registry (`mcp-registry.js`), policy engine (`policy-engine.js`), metrics + sub-agent tracker, Security Guard, and route handlers. Wire protocol documented in `agent-backend/PROTOCOL.md`.
+- `agent-backend/`: Node.js/Express server, harness abstraction (`harnesses/` — local pi + `remote/`), the `orbit-adapter` CLI (`adapter/`), MCP connector registry (`mcp-registry.js`), policy engine (`policy-engine.js`), metrics + sub-agent tracker, Security Guard, and route handlers. Wire protocol documented in `agent-backend/PROTOCOL.md`.
 - `dashboard/`: Next.js 16 + React 19 + Tailwind 4 dashboard (custom server with WS proxy).
 - `prompts/`: System-prompt library (`standard.md`, `claude-fable-5.md`, …) plus mode directives (`plan/edit/yolo-mode.md`).
 - `skills/`: Reusable instruction packs (`<name>/SKILL.md`).
-- `plan/`: Product redesign + implementation plans and the approved UI mock (`aegis-console-mock.html`).
+- `plan/`: Product redesign + implementation plans and the approved UI mock (`orbit-console-mock.html`).
 - `workspace/`: The designated file workspace for the assistant's filesystem operations.
 
 ---
@@ -81,7 +81,7 @@ machine (which needs `pi` and its LiteLLM creds in env), generate a pairing code
 in the console's **Fleet** view, then:
 
 ```bash
-LITELLM_KEY=... node agent-backend/adapter/aegis-adapter.js \
+LITELLM_KEY=... node agent-backend/adapter/orbit-adapter.js \
   --server ws://CONSOLE_HOST:6800 --code <PAIRING_CODE> --name "My workstation"
 ```
 

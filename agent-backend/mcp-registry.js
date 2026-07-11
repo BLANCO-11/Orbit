@@ -62,7 +62,7 @@ class McpRegistry {
         throw new Error("connector needs either a command (stdio) or url (remote)");
       }
 
-      const client = new Client({ name: "aegis-registry", version: "1.0.0" }, { capabilities: {} });
+      const client = new Client({ name: "orbit-registry", version: "1.0.0" }, { capabilities: {} });
       await client.connect(transport);
       const listed = await client.listTools();
 

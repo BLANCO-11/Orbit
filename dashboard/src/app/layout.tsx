@@ -10,7 +10,7 @@ const inter = Inter({
 });
 
 export const metadata = {
-  title: "AegisAgent - Personal Assistant Console",
+  title: "Orbit - Personal Assistant Console",
   description:
     "Advanced Personal Assistant OS framework with access controls and headless browsing console",
 };

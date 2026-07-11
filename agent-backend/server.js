@@ -1,5 +1,5 @@
 // agent-backend/server.js
-// AegisAgent Backend — entry point
+// Orbit Backend — entry point
 // Modular architecture: routes, WebSocket, harness abstraction, middleware
 
 require("dotenv").config();
@@ -89,14 +89,14 @@ mcpRegistry.connectAll().catch(err => console.error("MCP registry connect failed
 
 // ── HTTP + WebSocket Server ─────────────────────────────────────────
 const server = http.createServer(app);
-const harnessRegistry = createHarnessRegistry(); // remote aegis-adapter connections
+const harnessRegistry = createHarnessRegistry(); // remote orbit-adapter connections
 const wss = createWebSocketServer(server, db, harnessRegistry);
 
 // ── Auth ────────────────────────────────────────────────────────────
 const authMiddleware = createAuthMiddleware(db);
 if (!createAuthMiddleware.getSharedApiKey()) {
-  console.warn("[SECURITY] AEGIS_API_KEY is not set — the API and WebSocket are UNAUTHENTICATED.");
-  console.warn("[SECURITY] Fine for local-only dev; set AEGIS_API_KEY before exposing this server beyond 127.0.0.1.");
+  console.warn("[SECURITY] ORBIT_API_KEY is not set — the API and WebSocket are UNAUTHENTICATED.");
+  console.warn("[SECURITY] Fine for local-only dev; set ORBIT_API_KEY before exposing this server beyond 127.0.0.1.");
 }
 
 // ── Mount Routes ────────────────────────────────────────────────────
@@ -123,7 +123,7 @@ app.use("/api/channels", (req, res, next) => {
 }, channelsRouter);
 
 // Harness registry: the always-present local pi-code plus any connected remote
-// aegis-adapters. Sessions can target a specific harness by id on start_task.
+// orbit-adapters. Sessions can target a specific harness by id on start_task.
 app.get("/api/harnesses", authMiddleware, (req, res) => {
   const local = {
     id: "local",
@@ -483,7 +483,7 @@ async function handleStartTask(ws, userPrompt, sessionId, mode, systemPromptType
   
   // ── Spawn or reuse harness ────────────────────────────────
   // A session may target a specific harness by id: "local" (or unset) runs the
-  // local pi child process; a remote id runs on the connected aegis-adapter of
+  // local pi child process; a remote id runs on the connected orbit-adapter of
   // that id, via RemoteHarness. Both implement the same interface downstream.
   let sessionItem = activeSessions.get(sessionId);
   if (!sessionItem || !sessionItem.harness) {
@@ -954,7 +954,7 @@ process.on("SIGINT", () => shutdown("SIGINT"));
 
 // ── Start ───────────────────────────────────────────────────────────
 server.listen(PORT, '127.0.0.1', () => {
-  console.log(`AegisAgent Backend Server listening on 127.0.0.1:${PORT} (internal only)`);
+  console.log(`Orbit Backend Server listening on 127.0.0.1:${PORT} (internal only)`);
   // Fire schedule-type channels locally (no inbound exposure needed).
   startScheduler({ db, runProfileHeadless });
   // Any session still marked running at startup was interrupted (this process

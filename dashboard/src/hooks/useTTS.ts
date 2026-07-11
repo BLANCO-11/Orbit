@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useCallback, useEffect } from 'react';
-import { useAegisState, useAegisDispatch, actions } from '@/providers/AegisProvider';
+import { useOrbitState, useOrbitDispatch, actions } from '@/providers/OrbitProvider';
 
 // Releases a queue item's object URL exactly once, so it doesn't linger for the
 // life of the tab (blob URLs are never garbage-collected on their own).
@@ -18,8 +18,8 @@ function revokeItem(item) {
  * Manages sentence splitting, TTS API fetching, and sequential playback.
  */
 export function useTTS(selectedVoice = 'alba') {
-  const { voiceState } = useAegisState();
-  const dispatch = useAegisDispatch();
+  const { voiceState } = useOrbitState();
+  const dispatch = useOrbitDispatch();
   // Browsers block audio.play() until the user has interacted with the page.
   // Warn once so a blocked first sentence reads as "needs a click", not broken.
   const autoplayWarnedRef = useRef(false);
