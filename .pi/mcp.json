@@ -5,7 +5,9 @@
   "mcpServers": {
     "lightpanda": {
       "command": "node",
-      "args": ["/home/blanco/builds/LLM-OS-AGENT/mcp-server-lightpanda/index.js"],
+      "args": [
+        "/home/blanco/builds/LLM-OS-AGENT/mcp-server-lightpanda/index.js"
+      ],
       "transport": "stdio",
       "lifecycle": "eager",
       "env": {
