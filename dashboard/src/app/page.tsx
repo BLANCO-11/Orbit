@@ -482,6 +482,12 @@ function DashboardInner() {
           const userMsgs = state.messages.filter(m => m.role === 'user');
           const lastPrompt = userMsgs.length > 0 ? userMsgs[userMsgs.length - 1].content : null;
           if (lastPrompt && sendMessage) {
+            // Drop the mode-suggestion card and clear the composer so the fresh
+            // answer streams into a clean assistant bubble (previously it
+            // overwrote the suggestion card, which kept rendering as a banner —
+            // so the reply was invisible even though TTS spoke it).
+            dispatch(actions.removeModeSuggestions());
+            setPrompt('');
             dispatch(actions.resetRun());
             startTtsSession();
             startTimeRef.current = Date.now();

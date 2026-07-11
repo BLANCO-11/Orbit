@@ -622,7 +622,7 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
     const resultStr = typeof result === "string" ? result : JSON.stringify(result || "");
     const latencyMs = metricsManager.endToolCall(sessionId, id, name, resultStr);
 
-    sendWithSession(ws, { type: "tool_end", toolCallId: id, name, result }, sessionId);
+    sendWithSession(ws, { type: "tool_end", toolCallId: id, name, result, latencyMs }, sessionId);
 
     // Handle nested tool calls made BY a subagent
     if (subagentId && subagentTracker.getAgent(subagentId)) {

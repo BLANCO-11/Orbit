@@ -86,7 +86,16 @@ class PiCodeHarness extends HarnessInterface {
       "--mode", "rpc",
       "--system-prompt", combinedPrompt,
     ];
-    
+
+    // Disable pi's native web/browser extension tools so the agent uses ONLY
+    // the Lightpanda MCP browser (fast, headless, pre-approved) instead of pi's
+    // native browser, which is slow and pops its own approval dialog. Applies
+    // to extension tools too (per `pi --help`). Configurable/extensible.
+    const excludeTools = (this.config.excludeTools) || ["web_search", "fetch_content", "get_search_content", "browser", "web"];
+    if (Array.isArray(excludeTools) && excludeTools.length > 0) {
+      piArgs.push("--exclude-tools", excludeTools.join(","));
+    }
+
     const nodePath = (this.binaries && this.binaries.nodePath) || "node";
     const piPath = (this.binaries && this.binaries.piPath) || "pi";
     const spawnArgs = [piPath, ...piArgs];

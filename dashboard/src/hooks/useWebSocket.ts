@@ -56,16 +56,12 @@ export function useWebSocket(
             break;
             
           case 'tool_start':
-            dispatch(actions.updateLastMessage({
-              tools: data, // handled by ChatMessage's tools array logic
-            }));
+            dispatch(actions.toolStart(data));
             dispatch(actions.incrementToolCalls());
             break;
-            
+
           case 'tool_end':
-            dispatch(actions.updateLastMessage({
-              toolEnd: data, // handled by ChatMessage
-            }));
+            dispatch(actions.toolEnd(data));
             break;
             
           case 'plan':

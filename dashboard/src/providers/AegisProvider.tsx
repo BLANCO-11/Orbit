@@ -56,6 +56,9 @@ const UPDATE_REASONING_ENTRY = 'UPDATE_REASONING_ENTRY';
 const SET_METRICS = 'SET_METRICS';
 const UPDATE_METRICS = 'UPDATE_METRICS';
 const INCREMENT_TOOL_CALLS = 'INCREMENT_TOOL_CALLS';
+const TOOL_START = 'TOOL_START';
+const TOOL_END = 'TOOL_END';
+const REMOVE_MODE_SUGGESTIONS = 'REMOVE_MODE_SUGGESTIONS';
 const TOGGLE_TOOL = 'TOGGLE_TOOL';
 const SET_VISIBLE_COUNT = 'SET_VISIBLE_COUNT';
 const SET_APPROVAL_REQUEST = 'SET_APPROVAL_REQUEST';
@@ -137,6 +140,47 @@ function aegisReducer(state, action) {
 
     case INCREMENT_TOOL_CALLS:
       return { ...state, metrics: { ...state.metrics, toolCalls: (state.metrics.toolCalls || 0) + 1 } };
+
+    // Accumulate tool calls onto the trailing assistant message so they render
+    // as inline tool cards. Creates the assistant message if a tool call
+    // arrives before any assistant text (the common case for browsing/news).
+    case TOOL_START: {
+      const t = action.payload;
+      const tool = { id: t.toolCallId, name: t.name, arguments: t.arguments || {}, status: 'running' };
+      const msgs = [...state.messages];
+      const last = msgs[msgs.length - 1];
+      if (last && last.role === 'assistant') {
+        const tools = last.tools ? [...last.tools] : [];
+        if (!tools.some((x) => x.id === tool.id)) tools.push(tool);
+        msgs[msgs.length - 1] = { ...last, tools };
+      } else {
+        msgs.push({ role: 'assistant', content: '', tools: [tool] });
+      }
+      return { ...state, messages: msgs };
+    }
+
+    case TOOL_END: {
+      const t = action.payload;
+      const msgs = [...state.messages];
+      for (let i = msgs.length - 1; i >= 0; i--) {
+        if (msgs[i].role === 'assistant' && Array.isArray(msgs[i].tools)) {
+          const idx = msgs[i].tools.findIndex((x) => x.id === t.toolCallId);
+          if (idx !== -1) {
+            const tools = [...msgs[i].tools];
+            tools[idx] = { ...tools[idx], result: t.result, status: 'done', latencyMs: t.latencyMs };
+            msgs[i] = { ...msgs[i], tools };
+            break;
+          }
+        }
+      }
+      return { ...state, messages: msgs };
+    }
+
+    // Drop mode-suggestion cards (e.g. when the user clicks "switch & re-run"),
+    // so the fresh streamed answer lands in a clean assistant bubble instead of
+    // overwriting — and being hidden behind — the suggestion card.
+    case REMOVE_MODE_SUGGESTIONS:
+      return { ...state, messages: state.messages.filter((m) => !m.isModeSuggestion) };
 
     case UPDATE_METRICS: {
       const next = { ...state.metrics };
@@ -273,6 +317,9 @@ export const actions = {
   setMetrics: (metrics) => ({ type: SET_METRICS, payload: metrics }),
   updateMetrics: (metrics) => ({ type: UPDATE_METRICS, payload: metrics }),
   incrementToolCalls: () => ({ type: INCREMENT_TOOL_CALLS }),
+  toolStart: (data) => ({ type: TOOL_START, payload: data }),
+  toolEnd: (data) => ({ type: TOOL_END, payload: data }),
+  removeModeSuggestions: () => ({ type: REMOVE_MODE_SUGGESTIONS }),
   toggleTool: (id) => ({ type: TOGGLE_TOOL, payload: id }),
   setVisibleCount: (count) => ({ type: SET_VISIBLE_COUNT, payload: count }),
   setApprovalRequest: (req) => ({ type: SET_APPROVAL_REQUEST, payload: req }),
