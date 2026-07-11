@@ -15,7 +15,7 @@ const { loadConfig } = require("./config");
 const db = require("./db");
 const { metricsManager } = require("./metrics");
 const { SubagentTracker, STATUS } = require("./subagent-tracker");
-const LightpandaMcpClient = require("./mcp-client");
+const { McpRegistry } = require("./mcp-registry");
 const { loadHarness } = require("./harnesses");
 const { generateIntelligentSpeech } = require("./services/tts");
 const { generatePlan } = require("./services/plan-generator");
@@ -41,6 +41,7 @@ const createWorkspaceRouter = require("./routes/workspace");
 const createDevicesRouter = require("./routes/devices");
 const { createPromptsRouter } = require("./routes/prompts");
 const { createSkillsRouter } = require("./routes/skills");
+const createConnectorsRouter = require("./routes/connectors");
 
 // WebSocket
 const createWebSocketServer = require("./ws/index");
@@ -69,9 +70,11 @@ app.use(express.json({ limit: "50mb" }));
 app.use("/screenshots", express.static(path.join(__dirname, "../workspace/screenshots")));
 app.use(requestIdMiddleware);
 
-// ── MCP Client ──────────────────────────────────────────────────────
-const mcpClient = new LightpandaMcpClient();
-mcpClient.connect().catch(err => console.error("MCP connect failed:", err.message));
+// ── MCP Connector Registry ──────────────────────────────────────────
+// Owns .pi/mcp.json (the servers the agent reaches) and keeps a backend-side
+// client to each for live status + tool listing.
+const mcpRegistry = new McpRegistry();
+mcpRegistry.connectAll().catch(err => console.error("MCP registry connect failed:", err.message));
 
 // ── HTTP + WebSocket Server ─────────────────────────────────────────
 const server = http.createServer(app);
@@ -94,7 +97,8 @@ app.use("/api/notify", authMiddleware, createNotificationsRouter(getConfig, wss)
 app.use("/api/workspace", authMiddleware, createWorkspaceRouter());
 app.use("/api/prompts", authMiddleware, createPromptsRouter());
 app.use("/api/skills", authMiddleware, createSkillsRouter());
-app.use("/api/health", createHealthRouter({ db, mcpClient, getConfig, activeSessions }));
+app.use("/api/connectors", authMiddleware, createConnectorsRouter(mcpRegistry));
+app.use("/api/health", createHealthRouter({ db, mcpRegistry, getConfig, activeSessions }));
 app.use("/api", createDevicesRouter(db, authMiddleware, () => process.env.DASHBOARD_ORIGIN || "http://localhost:6801"));
 
 // Error handler (must be last middleware)
@@ -732,7 +736,7 @@ async function shutdown(signal) {
   wss.close();
   
   // Disconnect MCP
-  await mcpClient.disconnect().catch(() => {});
+  await mcpRegistry.disconnectAll().catch(() => {});
   
   console.log("[Shutdown] Cleanup complete. Exiting.");
   process.exit(0);

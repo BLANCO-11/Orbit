@@ -4,9 +4,9 @@
 const { Router } = require("express");
 const os = require("os");
 
-function createHealthRouter({ db, mcpClient, getConfig, activeSessions }) {
+function createHealthRouter({ db, mcpRegistry, getConfig, activeSessions }) {
   const router = Router();
-  
+
   router.get("/", async (req, res) => {
     let dbStatus = "ok";
     try {
@@ -14,11 +14,18 @@ function createHealthRouter({ db, mcpClient, getConfig, activeSessions }) {
     } catch (e) {
       dbStatus = "error: " + e.message;
     }
-    
+
+    // MCP status is a rollup across all registered connectors: "connected" if
+    // any connector is up, "disconnected" if some are registered but none are.
     let mcpStatus = "not_configured";
-    if (mcpClient && typeof mcpClient.healthCheck === "function") {
+    let connectorCount = 0;
+    if (mcpRegistry && typeof mcpRegistry.list === "function") {
       try {
-        mcpStatus = await mcpClient.healthCheck() ? "connected" : "disconnected";
+        const connectors = mcpRegistry.list();
+        connectorCount = connectors.length;
+        if (connectorCount > 0) {
+          mcpStatus = connectors.some(c => c.status === "connected") ? "connected" : "disconnected";
+        }
       } catch {
         mcpStatus = "error";
       }
@@ -46,6 +53,7 @@ function createHealthRouter({ db, mcpClient, getConfig, activeSessions }) {
       checks: {
         database: dbStatus,
         mcp: mcpStatus,
+        connectors: connectorCount,
         tts: ttsStatus,
         activeSessions: activeSessions ? activeSessions.size : 0,
       },
