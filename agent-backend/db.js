@@ -7,7 +7,7 @@ const dbPath = path.join(__dirname, "aegis.db");
 const db = new DatabaseSync(dbPath);
 
 // ── Schema Versioning ───────────────────────────────────────────────
-const CURRENT_SCHEMA_VERSION = 6;
+const CURRENT_SCHEMA_VERSION = 7;
 const BACKUP_INTERVAL = 10; // auto-backup every N saves
 let saveCount = 0;
 
@@ -102,6 +102,25 @@ if (currentSchemaVersion < 6) {
   // Per-device scope chosen at pairing time: 'full' | 'chat_voice' | 'read_only'.
   try { db.exec("ALTER TABLE devices ADD COLUMN scope TEXT NOT NULL DEFAULT 'full'"); } catch (e) {}
   try { db.exec("ALTER TABLE pairing_codes ADD COLUMN scope TEXT NOT NULL DEFAULT 'full'"); } catch (e) {}
+  db.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)").run(
+    "schema_version",
+    String(CURRENT_SCHEMA_VERSION)
+  );
+  console.log(`[DB] Migrated sessions schema to version ${CURRENT_SCHEMA_VERSION}`);
+}
+
+if (currentSchemaVersion < 7) {
+  // Session profiles: named, reusable bundles of harness/mode/effort/prompt/
+  // skills/tools (see routes/profiles.js).
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS profiles (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      config_json TEXT NOT NULL DEFAULT '{}',
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
+  `);
   db.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)").run(
     "schema_version",
     String(CURRENT_SCHEMA_VERSION)
@@ -386,6 +405,49 @@ function mapDeviceRow(row) {
   };
 }
 
+// ── Session profiles ────────────────────────────────────────────────
+
+function mapProfileRow(row) {
+  return {
+    id: row.id,
+    name: row.name,
+    ...JSON.parse(row.config_json || "{}"),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function listProfiles() {
+  return db.prepare("SELECT * FROM profiles ORDER BY created_at ASC").all().map(mapProfileRow);
+}
+
+function getProfile(id) {
+  const row = db.prepare("SELECT * FROM profiles WHERE id = ?").get(id);
+  return row ? mapProfileRow(row) : null;
+}
+
+/** Upsert a profile. `profile` = { id?, name, ...config }. Returns the stored profile. */
+function saveProfile(profile) {
+  const id = profile.id || crypto.randomUUID();
+  const now = Date.now();
+  const { id: _i, name, createdAt, updatedAt, ...config } = profile;
+  const existing = db.prepare("SELECT created_at FROM profiles WHERE id = ?").get(id);
+  db.prepare(`
+    INSERT INTO profiles (id, name, config_json, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET name = excluded.name, config_json = excluded.config_json, updated_at = excluded.updated_at
+  `).run(id, name || "Untitled profile", JSON.stringify(config), existing ? existing.created_at : now, now);
+  return getProfile(id);
+}
+
+function deleteProfile(id) {
+  db.prepare("DELETE FROM profiles WHERE id = ?").run(id);
+}
+
+function countProfiles() {
+  return db.prepare("SELECT COUNT(*) AS n FROM profiles").get().n;
+}
+
 module.exports = {
   saveSession,
   getSession,
@@ -403,4 +465,9 @@ module.exports = {
   renameDevice,
   revokeDevice,
   setDevicePolicyOverrides,
+  listProfiles,
+  getProfile,
+  saveProfile,
+  deleteProfile,
+  countProfiles,
 };

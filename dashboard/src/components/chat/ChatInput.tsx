@@ -17,6 +17,7 @@ export default function ChatInput({
   isListening,
   onSubmit,
   onStop,
+  profileButton,
   harnessButton,
   modeButton,
   promptTypeButton,
@@ -108,6 +109,7 @@ export default function ChatInput({
 
       <div className="flex items-center justify-between border-t border-border-soft px-3 py-2">
         <div className="flex flex-wrap items-center gap-[7px]">
+          {profileButton}
           {harnessButton}
           {modeButton}
           {promptTypeButton}

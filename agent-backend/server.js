@@ -44,6 +44,7 @@ const createDevicesRouter = require("./routes/devices");
 const { createPromptsRouter } = require("./routes/prompts");
 const { createSkillsRouter } = require("./routes/skills");
 const createConnectorsRouter = require("./routes/connectors");
+const createProfilesRouter = require("./routes/profiles");
 
 // WebSocket
 const createWebSocketServer = require("./ws/index");
@@ -103,6 +104,7 @@ app.use("/api/workspace", authMiddleware, createWorkspaceRouter());
 app.use("/api/prompts", authMiddleware, createPromptsRouter());
 app.use("/api/skills", authMiddleware, createSkillsRouter());
 app.use("/api/connectors", authMiddleware, createConnectorsRouter(mcpRegistry));
+app.use("/api/profiles", authMiddleware, createProfilesRouter(db));
 
 // Harness registry: the always-present local pi-code plus any connected remote
 // aegis-adapters. Sessions can target a specific harness by id on start_task.
@@ -168,8 +170,23 @@ wss.on("connection", (ws) => {
       
       // ── start_task ──────────────────────────────────────────
       if (data.type === "start_task") {
-        let { prompt, sessionId: sid, mode, systemPromptType, skills, effort, harnessId, excludeTools } = data;
+        let { prompt, sessionId: sid, mode, systemPromptType, skills, effort, harnessId, excludeTools, profileId } = data;
         const sessionId = sid || "default-session";
+
+        // Expand a profile server-side: its fields are DEFAULTS; any field the
+        // client sent explicitly overrides (the composer chips are per-session
+        // overrides). Also lets event channels (Phase 3) run a profile with no
+        // UI. `??` so an explicit override wins but omitted fields fall back.
+        if (profileId) {
+          const profile = db.getProfile(profileId);
+          if (profile) {
+            mode = mode ?? profile.mode;
+            effort = effort ?? profile.effort;
+            systemPromptType = systemPromptType ?? profile.promptId;
+            skills = skills ?? profile.skills;
+            excludeTools = excludeTools ?? profile.toolPolicy?.excluded;
+          }
+        }
 
         // Device scope enforcement (scope is set at pairing time; ws.device is
         // null for the local dev / shared-secret path, which is unrestricted).

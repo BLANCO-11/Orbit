@@ -28,6 +28,7 @@ import MissionView from '@/components/panels/MissionView';
 import FleetView from '@/components/views/FleetView';
 import ConnectorsView from '@/components/views/ConnectorsView';
 import PoliciesView from '@/components/views/PoliciesView';
+import ProfilesView from '@/components/views/ProfilesView';
 
 // Components
 import SessionList from '@/components/SessionList';
@@ -115,10 +116,25 @@ function DashboardInner() {
   const [attachedSkills, setAttachedSkills] = useState<string[]>([]);
   const [effort, setEffort] = useState('balanced');
   const [harnessId, setHarnessId] = useState('local');
+  const [activeProfileId, setActiveProfileId] = useState<string | null>(null);
+  const [excludeTools, setExcludeTools] = useState<string[]>([]);
   const [centerView, setCenterView] = useState('timeline'); // timeline | mission
+
+  // Applying a profile sets the chips to its values; they stay editable after
+  // (per-session overrides). Picking "None" clears the active profile marker
+  // but leaves the current chip values as-is.
+  const applyProfile = useCallback((p) => {
+    if (!p) { setActiveProfileId(null); return; }
+    setActiveProfileId(p.id);
+    if (p.mode !== undefined) dispatch(actions.setSessionMode(p.mode));
+    if (p.effort) setEffort(p.effort);
+    if (p.promptId) setSystemPromptType(p.promptId);
+    if (Array.isArray(p.skills)) setAttachedSkills(p.skills);
+    if (p.toolPolicy?.excluded) setExcludeTools(p.toolPolicy.excluded);
+  }, [dispatch, setSystemPromptType]);
   const [showThinking, setShowThinking] = useState(true);
   const [rightPanelTab, setRightPanelTab] = useState('agent');
-  const [activeView, setActiveView] = useState<'console' | 'fleet' | 'connectors' | 'policies' | 'settings'>('console');
+  const [activeView, setActiveView] = useState<'console' | 'agents' | 'fleet' | 'connectors' | 'policies' | 'settings'>('console');
   const [activeNavTab, setActiveNavTab] = useState('chat');
   const [cmdPaletteOpen, setCmdPaletteOpen] = useState(false);
   const inputHistoryRef = useRef([]);
@@ -161,10 +177,12 @@ function DashboardInner() {
       skills: attachedSkills,
       effort,
       harnessId,
+      excludeTools,
+      profileId: activeProfileId,
       sessionId: state.currentSessionId,
       mode: state.sessionMode,
     });
-  }, [sendMessage, stopSpeaking, startTtsSession, dispatch, state.messages, state.currentSessionId, state.sessionMode, systemPromptType, attachedSkills, effort, harnessId, updateCurrentSession]);
+  }, [sendMessage, stopSpeaking, startTtsSession, dispatch, state.messages, state.currentSessionId, state.sessionMode, systemPromptType, attachedSkills, effort, harnessId, excludeTools, activeProfileId, updateCurrentSession]);
 
   const handleStopAgent = useCallback(() => {
     if (sendMessage) {
@@ -361,6 +379,7 @@ function DashboardInner() {
       />
     )}
     <div className="relative min-w-0 flex-1">
+    {activeView === 'agents' && <ComponentErrorBoundary label="Agents"><ProfilesView /></ComponentErrorBoundary>}
     {activeView === 'fleet' && <ComponentErrorBoundary label="Fleet"><FleetView /></ComponentErrorBoundary>}
     {activeView === 'connectors' && <ComponentErrorBoundary label="Connectors"><ConnectorsView /></ComponentErrorBoundary>}
     {activeView === 'policies' && <ComponentErrorBoundary label="Policies"><PoliciesView /></ComponentErrorBoundary>}
@@ -463,6 +482,8 @@ function DashboardInner() {
         onSetEffort={setEffort}
         harnessId={harnessId}
         onSetHarnessId={setHarnessId}
+        activeProfileId={activeProfileId}
+        onApplyProfile={applyProfile}
         status={state.status}
         renderMarkdown={renderMarkdown}
         expandedTools={state.expandedTools}
@@ -500,6 +521,8 @@ function DashboardInner() {
               skills: attachedSkills,
               effort,
               harnessId,
+              excludeTools,
+              profileId: activeProfileId,
             });
           }
         }}
