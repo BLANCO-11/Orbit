@@ -7,7 +7,7 @@ const dbPath = path.join(__dirname, "aegis.db");
 const db = new DatabaseSync(dbPath);
 
 // ── Schema Versioning ───────────────────────────────────────────────
-const CURRENT_SCHEMA_VERSION = 7;
+const CURRENT_SCHEMA_VERSION = 8;
 const BACKUP_INTERVAL = 10; // auto-backup every N saves
 let saveCount = 0;
 
@@ -119,6 +119,26 @@ if (currentSchemaVersion < 7) {
       config_json TEXT NOT NULL DEFAULT '{}',
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL
+    )
+  `);
+  db.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)").run(
+    "schema_version",
+    String(CURRENT_SCHEMA_VERSION)
+  );
+  console.log(`[DB] Migrated sessions schema to version ${CURRENT_SCHEMA_VERSION}`);
+}
+
+if (currentSchemaVersion < 8) {
+  // Event channels: inbound triggers (webhook / schedule) that run a profile
+  // headlessly (see routes/channels.js).
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS channels (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      config_json TEXT NOT NULL DEFAULT '{}',
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      last_triggered INTEGER
     )
   `);
   db.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)").run(
@@ -448,6 +468,49 @@ function countProfiles() {
   return db.prepare("SELECT COUNT(*) AS n FROM profiles").get().n;
 }
 
+// ── Event channels ──────────────────────────────────────────────────
+
+function mapChannelRow(row) {
+  return {
+    id: row.id,
+    name: row.name,
+    ...JSON.parse(row.config_json || "{}"),
+    lastTriggered: row.last_triggered,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function listChannels() {
+  return db.prepare("SELECT * FROM channels ORDER BY created_at ASC").all().map(mapChannelRow);
+}
+
+function getChannel(id) {
+  const row = db.prepare("SELECT * FROM channels WHERE id = ?").get(id);
+  return row ? mapChannelRow(row) : null;
+}
+
+function saveChannel(channel) {
+  const id = channel.id || crypto.randomUUID();
+  const now = Date.now();
+  const { id: _i, name, lastTriggered, createdAt, updatedAt, ...config } = channel;
+  const existing = db.prepare("SELECT created_at FROM channels WHERE id = ?").get(id);
+  db.prepare(`
+    INSERT INTO channels (id, name, config_json, created_at, updated_at, last_triggered)
+    VALUES (?, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET name = excluded.name, config_json = excluded.config_json, updated_at = excluded.updated_at
+  `).run(id, name || "Untitled channel", JSON.stringify(config), existing ? existing.created_at : now, now, null);
+  return getChannel(id);
+}
+
+function touchChannelTriggered(id) {
+  db.prepare("UPDATE channels SET last_triggered = ? WHERE id = ?").run(Date.now(), id);
+}
+
+function deleteChannel(id) {
+  db.prepare("DELETE FROM channels WHERE id = ?").run(id);
+}
+
 module.exports = {
   saveSession,
   getSession,
@@ -470,4 +533,9 @@ module.exports = {
   saveProfile,
   deleteProfile,
   countProfiles,
+  listChannels,
+  getChannel,
+  saveChannel,
+  touchChannelTriggered,
+  deleteChannel,
 };

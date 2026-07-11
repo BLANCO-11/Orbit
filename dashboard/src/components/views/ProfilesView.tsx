@@ -35,7 +35,7 @@ const EMPTY: Profile = {
  * bundles harness · mode · effort · prompt · skills · tool policy · sandbox.
  * Picked in one click from the composer; the chips override it per session.
  */
-export default function ProfilesView() {
+export default function ProfilesView({ embedded = false }: { embedded?: boolean }) {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [editing, setEditing] = useState<Profile | null>(null);
   const [prompts, setPrompts] = useState<{ id: string; label: string }[]>([]);
@@ -83,16 +83,9 @@ export default function ProfilesView() {
     (acc[t.source] ||= []).push(t); return acc;
   }, {});
 
-  return (
-    <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-[860px] px-7 py-7">
-        <h2 className="text-lg font-semibold">Agents</h2>
-        <p className="mb-5 mt-0.5 text-[13px] text-muted-foreground">
-          Reusable session setups — harness, mode, effort, prompt, skills, and which tools are on.
-          Pick one from the composer in a click; the chips still override it per session.
-        </p>
-
-        {editing ? (
+  const inner = (
+    <>
+      {editing ? (
           <div className="rounded-2xl border border-border bg-card p-5">
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="text-[12px] font-medium text-muted-foreground">Name
@@ -192,6 +185,19 @@ export default function ProfilesView() {
             </button>
           </div>
         )}
+    </>
+  );
+
+  if (embedded) return inner;
+  return (
+    <div className="h-full overflow-y-auto">
+      <div className="mx-auto max-w-[860px] px-7 py-7">
+        <h2 className="text-lg font-semibold">Agents</h2>
+        <p className="mb-5 mt-0.5 text-[13px] text-muted-foreground">
+          Reusable session setups — harness, mode, effort, prompt, skills, and which tools are on.
+          Pick one from the composer in a click; the chips still override it per session.
+        </p>
+        {inner}
       </div>
     </div>
   );

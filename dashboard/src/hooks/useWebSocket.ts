@@ -181,6 +181,15 @@ export function useWebSocket(
             dispatch(actions.setStatus('done'));
             break;
             
+          case 'notification':
+            // Headless (channel) runs and other backend events broadcast here.
+            dispatch(actions.addLog({
+              text: `[${data.severity || 'info'}] ${data.title}${data.body ? ` — ${data.body}` : ''}`,
+              isSystem: true,
+              timestamp: new Date().toLocaleTimeString(),
+            }));
+            break;
+
           case 'screenshot_updated':
             dispatch(actions.setScreenshot(`/screenshots/${data.file}?t=${Date.now()}`));
             break;

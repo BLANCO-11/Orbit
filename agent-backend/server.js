@@ -50,6 +50,9 @@ const createProfilesRouter = require("./routes/profiles");
 const createWebSocketServer = require("./ws/index");
 const createHarnessRegistry = require("./ws/harness");
 const RemoteHarness = require("./harnesses/remote");
+const HeadlessSocket = require("./ws/headless-socket");
+const createChannelsRouter = require("./routes/channels");
+const { startScheduler } = require("./channel-scheduler");
 
 // ── Startup Validation ──────────────────────────────────────────────
 validateEnv();
@@ -71,7 +74,9 @@ const { nodePath, piPath } = discoverPiBinaries();
 // ── Express App ─────────────────────────────────────────────────────
 const app = express();
 app.use(cors({ origin: process.env.DASHBOARD_ORIGIN || "http://localhost:6801" }));
-app.use(express.json({ limit: "50mb" }));
+// Capture the raw body so webhook HMAC signatures (GitHub/Slack) can be
+// verified against the exact bytes, not a re-serialized object.
+app.use(express.json({ limit: "50mb", verify: (req, _res, buf) => { req.rawBody = buf; } }));
 app.use("/screenshots", express.static(path.join(__dirname, "../workspace/screenshots")));
 app.use(requestIdMiddleware);
 
@@ -105,6 +110,16 @@ app.use("/api/prompts", authMiddleware, createPromptsRouter());
 app.use("/api/skills", authMiddleware, createSkillsRouter());
 app.use("/api/connectors", authMiddleware, createConnectorsRouter(mcpRegistry));
 app.use("/api/profiles", authMiddleware, createProfilesRouter(db));
+
+// Channels: CRUD + test-fire are authed; the /:id/webhook receiver is public
+// (external senders can't present a device token) and self-verifies per channel.
+const channelOrigin = () => process.env.DASHBOARD_ORIGIN || "http://localhost:6801";
+const channelsRouter = createChannelsRouter({ db, runProfileHeadless, getOrigin: channelOrigin });
+app.use("/api/channels", (req, res, next) => {
+  // Let the public webhook path through without auth; gate everything else.
+  if (/^\/[^/]+\/webhook$/.test(req.path) && req.method === "POST") return next();
+  return authMiddleware(req, res, next);
+}, channelsRouter);
 
 // Harness registry: the always-present local pi-code plus any connected remote
 // aegis-adapters. Sessions can target a specific harness by id on start_task.
@@ -504,9 +519,53 @@ async function handleStartTask(ws, userPrompt, sessionId, mode, systemPromptType
   }, saveInterval);
   
   sessionItem._metricsAutoSave = metricsAutoSave;
-  
+
   // Send the prompt
   await sessionItem.harness.sendPrompt(userPrompt);
+}
+
+// ── Headless run (event channels) ──────────────────────────────────
+// Run a profile with no dashboard attached: a HeadlessSocket records the
+// transcript and persists the session, so the run shows up in the session
+// list and replays in the timeline. Used by event channels (routes/channels).
+async function runProfileHeadless({ profileId, prompt, title, source }) {
+  const sessionId = `channel-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  const profile = profileId ? db.getProfile(profileId) : null;
+
+  // Persist an initial row so the session is visible immediately.
+  try {
+    db.saveSession({
+      id: sessionId,
+      title: title || (prompt || "Channel run").slice(0, 60),
+      messages: [{ role: "user", content: prompt }],
+      logs: [], executionPlan: "", mode: profile?.mode || "",
+      metrics: {}, subagentTree: {}, timestamp: Date.now(),
+    });
+  } catch (e) {
+    console.error("[Headless] initial save failed:", e.message);
+  }
+
+  const socket = new HeadlessSocket(sessionId, db, {
+    title: title || (prompt || "Channel run").slice(0, 60),
+    source,
+    notify: (n) => broadcastNotification(n),
+  });
+  socket.addUserMessage(prompt);
+
+  // Expand the profile → handleStartTask fields (it doesn't take profileId).
+  await handleStartTask(
+    socket, prompt, sessionId,
+    profile?.mode, profile?.promptId, profile?.skills || [],
+    profile?.effort, "local", profile?.toolPolicy?.excluded || null
+  );
+  return { sessionId };
+}
+
+/** Broadcast a notification to every connected dashboard. */
+function broadcastNotification({ title, body, severity }) {
+  const msg = JSON.stringify({ type: "notification", title, body, severity, timestamp: new Date().toISOString() });
+  wss.clients.forEach((c) => { if (c.readyState === 1) { try { c.send(msg); } catch {} } });
+  console.log(`[Notify] ${severity || "info"}: ${title} — ${body || ""}`);
 }
 
 // ── Harness Event Emitter Factory ──────────────────────────────────
@@ -857,4 +916,6 @@ process.on("SIGINT", () => shutdown("SIGINT"));
 // ── Start ───────────────────────────────────────────────────────────
 server.listen(PORT, '127.0.0.1', () => {
   console.log(`AegisAgent Backend Server listening on 127.0.0.1:${PORT} (internal only)`);
+  // Fire schedule-type channels locally (no inbound exposure needed).
+  startScheduler({ db, runProfileHeadless });
 });

@@ -28,7 +28,7 @@ import MissionView from '@/components/panels/MissionView';
 import FleetView from '@/components/views/FleetView';
 import ConnectorsView from '@/components/views/ConnectorsView';
 import PoliciesView from '@/components/views/PoliciesView';
-import ProfilesView from '@/components/views/ProfilesView';
+import AgentsView from '@/components/views/AgentsView';
 
 // Components
 import SessionList from '@/components/SessionList';
@@ -379,7 +379,7 @@ function DashboardInner() {
       />
     )}
     <div className="relative min-w-0 flex-1">
-    {activeView === 'agents' && <ComponentErrorBoundary label="Agents"><ProfilesView /></ComponentErrorBoundary>}
+    {activeView === 'agents' && <ComponentErrorBoundary label="Agents"><AgentsView /></ComponentErrorBoundary>}
     {activeView === 'fleet' && <ComponentErrorBoundary label="Fleet"><FleetView /></ComponentErrorBoundary>}
     {activeView === 'connectors' && <ComponentErrorBoundary label="Connectors"><ConnectorsView /></ComponentErrorBoundary>}
     {activeView === 'policies' && <ComponentErrorBoundary label="Policies"><PoliciesView /></ComponentErrorBoundary>}
