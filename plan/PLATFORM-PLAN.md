@@ -3,6 +3,8 @@
 > **Date:** 2026-07-11
 > **Scope:** Session profiles, harness-agnostic tool/extension management, event channels, sandboxes, durable resume.
 > **Prompted by:** studying [withastro/flue](https://github.com/withastro/flue) — a code-first agent *framework*. We borrow its concepts (agent definitions, channels, sandboxes) and keep our *form* (a human-in-the-loop operator console).
+>
+> **STATUS: all five phases ✅ implemented and verified live** (commits `748e113`, `ccf73ca`, `3f7e4e6`, `9d745d9`, `68b0efb`). See per-phase "Verify" notes — each was driven against the running app, not just typechecked.
 
 ---
 

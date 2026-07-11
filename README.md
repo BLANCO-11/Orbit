@@ -11,7 +11,10 @@ AegisAgent is a local-first, **harness-agnostic agent-operations console**: a Ne
 5. **Effort profiles** — fast / balanced / deep routes the model and planning depth per session, orthogonal to the permission mode.
 6. **Fleet: devices + remote harnesses** — pair devices via URL + OTP (with scopes: full / chat+voice / read-only). Any machine with pi can dial in as a **remote harness** via `aegis-adapter` and the same pairing flow; pick which harness runs a session from the composer.
 7. **Connector registry** — MCP tool servers (the Lightpanda headless browser today; any stdio or remote-HTTP MCP server) are managed in the Connectors view with live status and tool listings.
-8. **Voice** — mic STT with barge-in (speaking stops the agent's audio), streamed sentence-level TTS.
+8. **Agents: profiles + channels** — save reusable session setups (harness · mode · effort · prompt · skills · tools · sandbox) and pick one in a click; per-profile tool control (e.g. disable pi's native browser, keep Lightpanda). **Channels** trigger a profile unattended — on a schedule or from a verified webhook (GitHub/Slack HMAC) — and the run lands in the session list with its full timeline.
+9. **Sandboxes** — a profile runs on the host, in an ephemeral Docker container (real filesystem isolation), or on a paired remote harness.
+10. **Durable resume** — a session interrupted mid-run (crash/restart) is detected and resumed from where it left off.
+11. **Voice** — mic STT with barge-in (speaking stops the agent's audio), streamed sentence-level TTS.
 
 ---
 
