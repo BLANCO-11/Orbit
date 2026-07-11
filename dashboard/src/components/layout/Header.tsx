@@ -41,6 +41,8 @@ export default function Header({
   isMobile,
   notificationCenter,
   connectionState,
+  centerView,
+  onSetCenterView,
 }) {
   // Connection problems take priority over the agent's own status.
   const meta = connectionState === 'connecting'
@@ -71,6 +73,21 @@ export default function Header({
 
       {/* ── Status + controls ── */}
       <div className="flex items-center gap-2">
+        {onSetCenterView && (
+          <div className="mr-1 inline-flex rounded-lg border border-border-soft bg-background p-0.5">
+            {['timeline', 'mission'].map((v) => (
+              <button
+                key={v}
+                onClick={() => onSetCenterView(v)}
+                className={`rounded-md px-2.5 py-1 text-[11px] font-semibold capitalize transition-colors ${
+                  centerView === v ? 'bg-card text-foreground shadow-card' : 'text-faint hover:text-foreground'
+                }`}
+              >
+                {v}
+              </button>
+            ))}
+          </div>
+        )}
         <div className={`flex items-center gap-[7px] rounded-full py-[5px] pl-2.5 pr-3 text-xs font-semibold ${meta.cls}`}>
           {showDot && <span className="size-1.5 rounded-full bg-current shadow-[0_0_8px_currentColor]" />}
           {meta.label}

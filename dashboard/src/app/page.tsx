@@ -22,6 +22,7 @@ import DetailPanel from '@/components/panels/DetailPanel';
 import AgentTab from '@/components/panels/AgentTab';
 import WorkspaceTab from '@/components/panels/WorkspaceTab';
 import TraceTab from '@/components/panels/TraceTab';
+import MissionView from '@/components/panels/MissionView';
 
 // Views
 import FleetView from '@/components/views/FleetView';
@@ -114,6 +115,7 @@ function DashboardInner() {
   const [attachedSkills, setAttachedSkills] = useState<string[]>([]);
   const [effort, setEffort] = useState('balanced');
   const [harnessId, setHarnessId] = useState('local');
+  const [centerView, setCenterView] = useState('timeline'); // timeline | mission
   const [showThinking, setShowThinking] = useState(true);
   const [rightPanelTab, setRightPanelTab] = useState('agent');
   const [activeView, setActiveView] = useState<'console' | 'fleet' | 'connectors' | 'policies' | 'settings'>('console');
@@ -430,12 +432,23 @@ function DashboardInner() {
         onToggleSettings: () => setActiveView('settings'),
         theme, mounted, onToggleTheme: toggleTheme,
         connectionState,
+        centerView,
+        onSetCenterView: setCenterView,
         notificationCenter: <NotificationCenter logs={state.logs} />,
       }}
       bottomNavItems={bottomNavItems}
       activeNavTab={activeNavTab}
       onNavTabChange={handleNavTabChange}
     >
+      {centerView === 'mission' ? (
+        <ComponentErrorBoundary label="Mission">
+          <MissionView
+            executionPlan={state.executionPlan}
+            subAgents={state.metrics.subagentTrace || state.metrics.activeSubagents || []}
+            status={state.status}
+          />
+        </ComponentErrorBoundary>
+      ) : (
       <ComponentErrorBoundary label="Chat">
       <ChatArea
         messages={state.messages.slice(-state.visibleCount)}
@@ -513,6 +526,7 @@ function DashboardInner() {
         showEmptyState={true}
       />
       </ComponentErrorBoundary>
+      )}
     </AppShell>
     )}
     </div>
