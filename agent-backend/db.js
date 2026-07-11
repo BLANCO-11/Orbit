@@ -7,7 +7,7 @@ const dbPath = path.join(__dirname, "aegis.db");
 const db = new DatabaseSync(dbPath);
 
 // ── Schema Versioning ───────────────────────────────────────────────
-const CURRENT_SCHEMA_VERSION = 8;
+const CURRENT_SCHEMA_VERSION = 9;
 const BACKUP_INTERVAL = 10; // auto-backup every N saves
 let saveCount = 0;
 
@@ -148,6 +148,18 @@ if (currentSchemaVersion < 8) {
   console.log(`[DB] Migrated sessions schema to version ${CURRENT_SCHEMA_VERSION}`);
 }
 
+if (currentSchemaVersion < 9) {
+  // Durable resume: run_state = { running, activePrompt, mode, startedAt }.
+  // A session left `running` (harness died / server restarted mid-turn) is
+  // detected as interrupted and can be resumed (see server.js resume handler).
+  try { db.exec("ALTER TABLE sessions ADD COLUMN run_state TEXT NOT NULL DEFAULT '{}'"); } catch (e) {}
+  db.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)").run(
+    "schema_version",
+    String(CURRENT_SCHEMA_VERSION)
+  );
+  console.log(`[DB] Migrated sessions schema to version ${CURRENT_SCHEMA_VERSION}`);
+}
+
 // ── Initialize tables ────────────────────────────────────────────────
 db.exec(`
   CREATE TABLE IF NOT EXISTS sessions (
@@ -237,9 +249,27 @@ function mapRow(row) {
     metrics: JSON.parse(row.metrics || "{}"),
     mode: row.mode || "",
     subagentTree: JSON.parse(row.subagent_tree || "{}"),
+    runState: JSON.parse(row.run_state || "{}"),
     timestamp: row.timestamp,
     schemaVersion: row.schema_version || 0,
   };
+}
+
+/** Mark a session as running (a turn is in flight). Used for interrupted-run detection. */
+function setSessionRunning(id, info) {
+  db.prepare("UPDATE sessions SET run_state = ? WHERE id = ?").run(
+    JSON.stringify({ running: true, ...info, startedAt: Date.now() }), id
+  );
+}
+
+/** Clear a session's running flag (turn finished cleanly). */
+function clearSessionRunning(id) {
+  try { db.prepare("UPDATE sessions SET run_state = '{}' WHERE id = ?").run(id); } catch {}
+}
+
+/** Sessions left in the running state (interrupted) — no live harness owns them after a restart. */
+function listInterruptedSessions() {
+  return db.prepare("SELECT * FROM sessions").all().map(mapRow).filter((s) => s.runState && s.runState.running);
 }
 
 // ── TTL: 30 days ───────────────────────────────────────────────────
@@ -538,4 +568,7 @@ module.exports = {
   saveChannel,
   touchChannelTriggered,
   deleteChannel,
+  setSessionRunning,
+  clearSessionRunning,
+  listInterruptedSessions,
 };

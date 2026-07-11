@@ -62,6 +62,10 @@ export default function ChatArea({
   activeProfileId,
   onApplyProfile,
 
+  // Resume
+  canResume,
+  onResume,
+
   // Input
   prompt,
   setPrompt,
@@ -98,6 +102,17 @@ export default function ChatArea({
             onApprove={(decision) => onApprove(decision !== undefined ? decision : true)}
             onDeny={() => onDeny(approvalRequest?.type === 'edit_permission' ? 'deny' : false)}
           />
+
+          {canResume && (
+            <div className="flex items-center gap-3 rounded-[11px] border border-warning/40 bg-warning/8 px-4 py-3">
+              <span className="text-[13px] text-muted-foreground">
+                This session was <span className="font-semibold text-warning">interrupted</span> mid-run. Resume to continue where it left off.
+              </span>
+              <button onClick={onResume} className="ml-auto shrink-0 rounded-lg bg-primary px-3.5 py-1.5 text-[12.5px] font-semibold text-primary-foreground hover:opacity-90">
+                Resume
+              </button>
+            </div>
+          )}
 
           {sessionMode && !showModePrompt && <ModeBadge sessionMode={sessionMode} />}
           {showModePrompt && <ModePrompt onSetMode={onSetSessionMode} />}

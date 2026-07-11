@@ -484,6 +484,13 @@ function DashboardInner() {
         onSetHarnessId={setHarnessId}
         activeProfileId={activeProfileId}
         onApplyProfile={applyProfile}
+        canResume={Boolean(sessions.find((s) => s.id === state.currentSessionId)?.runState?.running) && state.status !== 'thinking' && state.status !== 'executing'}
+        onResume={() => {
+          if (sendMessage) {
+            startTtsSession();
+            sendMessage({ type: 'resume', sessionId: state.currentSessionId });
+          }
+        }}
         status={state.status}
         renderMarkdown={renderMarkdown}
         expandedTools={state.expandedTools}

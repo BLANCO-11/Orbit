@@ -294,6 +294,26 @@ wss.on("connection", (ws) => {
         }
       }
       
+      // ── resume ──────────────────────────────────────────────
+      // Continue an interrupted turn (harness died / server restarted).
+      // pi restores its own conversation context via --session-id, so we just
+      // respawn and re-issue the prompt that was in flight.
+      else if (data.type === "resume") {
+        const sid = data.sessionId;
+        const session = db.getSession(sid);
+        const rs = session?.runState;
+        if (rs?.running && rs.activePrompt) {
+          ws.activeSessionId = sid;
+          sendLog(ws, `[Resume] Resuming interrupted turn for ${sid}...`, false, sid);
+          const ses = activeSessions.get(sid);
+          if (ses?.harness) { try { ses.harness.disconnect(); } catch {} }
+          activeSessions.delete(sid);
+          await handleStartTask(ws, rs.activePrompt, sid, rs.mode);
+        } else {
+          sendWithSession(ws, { type: "error", message: "Nothing to resume for this session." }, sid);
+        }
+      }
+
       // ── cancel_session ──────────────────────────────────────
       else if (data.type === "cancel_session") {
         const ses = activeSessions.get(data.sessionId);
@@ -532,6 +552,10 @@ async function handleStartTask(ws, userPrompt, sessionId, mode, systemPromptType
   }, saveInterval);
   
   sessionItem._metricsAutoSave = metricsAutoSave;
+
+  // Mark the session as running so an interrupted turn (harness death / server
+  // restart) is detectable and resumable. Cleared on agent_end / close.
+  try { db.setSessionRunning(sessionId, { activePrompt: userPrompt, mode: activeMode }); } catch {}
 
   // Send the prompt
   await sessionItem.harness.sendPrompt(userPrompt);
@@ -843,10 +867,12 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
         sendWithSession(ws, { type: "intelligent_speech", content: ttsText }, sessionId);
       }
     }
-    
+
+    // Turn finished cleanly — no longer resumable.
+    try { db.clearSessionRunning(sessionId); } catch {}
     sendStatus(ws, "done", sessionId);
   });
-  
+
   events.on("stderr", ({ text }) => {
     sendLog(ws, `[Pi Stderr] ${text}`, false, sessionId);
   });
@@ -931,4 +957,12 @@ server.listen(PORT, '127.0.0.1', () => {
   console.log(`AegisAgent Backend Server listening on 127.0.0.1:${PORT} (internal only)`);
   // Fire schedule-type channels locally (no inbound exposure needed).
   startScheduler({ db, runProfileHeadless });
+  // Any session still marked running at startup was interrupted (this process
+  // replaced the one that owned it). The dashboard offers to resume them.
+  try {
+    const interrupted = db.listInterruptedSessions();
+    if (interrupted.length) {
+      console.log(`[Resume] ${interrupted.length} interrupted session(s) detected — resumable from the console.`);
+    }
+  } catch {}
 });
