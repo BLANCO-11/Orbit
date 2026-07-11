@@ -30,7 +30,8 @@ class PiCodeHarness extends HarnessInterface {
   async connect() {
     const activeMode = this.mode;
     const activePromptType = this.systemPromptType || this.config.systemPromptType || "standard";
-    const normalModel = this.config.litellm.selectedNormalModel;
+    // Effort-profile-resolved model wins; falls back to the config default.
+    const normalModel = this.model || this.config.litellm.selectedNormalModel;
     const apiKey = this.config.litellm.apiKey;
     
     // Select and combine prompt files. The base prompt comes from the prompt

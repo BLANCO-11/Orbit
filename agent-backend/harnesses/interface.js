@@ -67,6 +67,7 @@ class HarnessInterface {
     this.mode = options.mode;
     this.systemPromptType = options.systemPromptType;
     this.skills = options.skills || [];
+    this.model = options.model || null; // effort-profile-resolved model (overrides config default)
     this.binaries = options.binaries || {};
   }
 

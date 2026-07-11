@@ -21,6 +21,7 @@ export default function ChatInput({
   modeButton,
   promptTypeButton,
   skillButton,
+  effortButton,
   inputHistoryRef,
   inputHistoryIndexRef,
 }) {
@@ -109,6 +110,7 @@ export default function ChatInput({
         <div className="flex flex-wrap items-center gap-[7px]">
           {modeButton}
           {promptTypeButton}
+          {effortButton}
           {skillButton}
         </div>
 

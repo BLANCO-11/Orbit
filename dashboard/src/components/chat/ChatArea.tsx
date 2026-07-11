@@ -10,6 +10,7 @@ import ChatInput from './ChatInput';
 import ModeSelector from './ModeSelector';
 import PromptTypeSelector from './PromptTypeSelector';
 import SkillSelector from './SkillSelector';
+import EffortSelector from './EffortSelector';
 
 /**
  * ChatArea — the central conversation column.
@@ -47,6 +48,10 @@ export default function ChatArea({
   // Skills
   attachedSkills,
   onSetAttachedSkills,
+
+  // Effort
+  effort,
+  onSetEffort,
 
   // Input
   prompt,
@@ -172,6 +177,9 @@ export default function ChatArea({
             }
             skillButton={
               <SkillSelector attachedSkills={attachedSkills || []} onSetAttachedSkills={onSetAttachedSkills} />
+            }
+            effortButton={
+              <EffortSelector effort={effort} onSetEffort={onSetEffort} />
             }
           />
         </div>

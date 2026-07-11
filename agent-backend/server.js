@@ -114,7 +114,7 @@ wss.on("connection", (ws) => {
       
       // ── start_task ──────────────────────────────────────────
       if (data.type === "start_task") {
-        let { prompt, sessionId: sid, mode, systemPromptType, skills } = data;
+        let { prompt, sessionId: sid, mode, systemPromptType, skills, effort } = data;
         const sessionId = sid || "default-session";
 
         // Device scope enforcement (scope is set at pairing time; ws.device is
@@ -136,7 +136,7 @@ wss.on("connection", (ws) => {
         // NOT killed (previously they were). Explicit switches still cancel the
         // old session via cancel_session; leaving a session running lets one
         // device drive several agents at once.
-        await handleStartTask(ws, prompt, sessionId, mode, systemPromptType, skills);
+        await handleStartTask(ws, prompt, sessionId, mode, systemPromptType, skills, effort);
       }
       
       // ── approval_response ───────────────────────────────────
@@ -267,7 +267,7 @@ wss.on("connection", (ws) => {
 });
 
 // ── Agent Task Handler ──────────────────────────────────────────────
-async function handleStartTask(ws, userPrompt, sessionId, mode, systemPromptType, skills) {
+async function handleStartTask(ws, userPrompt, sessionId, mode, systemPromptType, skills, effort) {
   ws.activeSessionId = sessionId;
   ws.currentPrompt = userPrompt;
   
@@ -299,11 +299,27 @@ async function handleStartTask(ws, userPrompt, sessionId, mode, systemPromptType
   
   sendStatus(ws, "thinking", sessionId);
   sendLog(ws, `Processing prompt: "${userPrompt}"`, true, sessionId);
-  
+
+  // ── Effort profile → model + planning depth ────────────────
+  // fast:     normal model, no pre-planning (chat/QA/quick research)
+  // balanced: normal model, config's taskMode (the default)
+  // deep:     reasoning model + hybrid pre-planning (dense planner/responder)
+  const litellmConfig = getConfig().litellm || {};
+  const configTaskMode = litellmConfig.taskMode || "normal";
+  let taskMode = configTaskMode;
+  let activeModelName = litellmConfig.selectedNormalModel;
+  if (effort === "deep") {
+    taskMode = "hybrid";
+    activeModelName = litellmConfig.selectedReasoningModel || litellmConfig.selectedNormalModel;
+  } else if (effort === "fast") {
+    taskMode = "normal";
+  } else if (configTaskMode === "reasoning") {
+    activeModelName = litellmConfig.selectedReasoningModel || litellmConfig.selectedNormalModel;
+  }
+
   // ── Hybrid planning ───────────────────────────────────────
-  const taskMode = getConfig().litellm?.taskMode || "normal";
   const isChat = !activeMode || activeMode === "chat";
-  
+
   if (taskMode === "hybrid" && !isChat && !isConversationalPrompt(userPrompt)) {
     sendLog(ws, "Generating execution plan...", true, sessionId);
     const plan = await generatePlan(userPrompt, getConfig);
@@ -313,12 +329,8 @@ async function handleStartTask(ws, userPrompt, sessionId, mode, systemPromptType
       sendWithSession(ws, { type: "reasoning_update", content: plan }, sessionId);
     }
   }
-  
+
   // ── Initialize metrics ────────────────────────────────────
-  const litellmConfig = getConfig().litellm || {};
-  const activeModelName = taskMode === "reasoning"
-    ? litellmConfig.selectedReasoningModel
-    : litellmConfig.selectedNormalModel;
   metricsManager.initSession(sessionId, activeMode, activeModelName);
 
   // ── Budget gate ───────────────────────────────────────────────────
@@ -374,6 +386,7 @@ async function handleStartTask(ws, userPrompt, sessionId, mode, systemPromptType
         mode: activeMode,
         systemPromptType,
         skills: skills || [],
+        model: activeModelName,
         binaries: { nodePath, piPath },
       });
       

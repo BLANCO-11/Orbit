@@ -112,6 +112,7 @@ function DashboardInner() {
   // ── UI State (local) ──
   const [prompt, setPrompt] = useState('');
   const [attachedSkills, setAttachedSkills] = useState<string[]>([]);
+  const [effort, setEffort] = useState('balanced');
   const [showThinking, setShowThinking] = useState(true);
   const [rightPanelTab, setRightPanelTab] = useState('agent');
   const [activeView, setActiveView] = useState<'console' | 'fleet' | 'connectors' | 'policies' | 'settings'>('console');
@@ -155,10 +156,11 @@ function DashboardInner() {
       prompt: finalPrompt,
       systemPromptType,
       skills: attachedSkills,
+      effort,
       sessionId: state.currentSessionId,
       mode: state.sessionMode,
     });
-  }, [sendMessage, stopSpeaking, startTtsSession, dispatch, state.messages, state.currentSessionId, state.sessionMode, systemPromptType, attachedSkills, updateCurrentSession]);
+  }, [sendMessage, stopSpeaking, startTtsSession, dispatch, state.messages, state.currentSessionId, state.sessionMode, systemPromptType, attachedSkills, effort, updateCurrentSession]);
 
   const handleStopAgent = useCallback(() => {
     if (sendMessage) {
@@ -442,6 +444,8 @@ function DashboardInner() {
         onSetSystemPromptType={setSystemPromptType}
         attachedSkills={attachedSkills}
         onSetAttachedSkills={setAttachedSkills}
+        effort={effort}
+        onSetEffort={setEffort}
         status={state.status}
         renderMarkdown={renderMarkdown}
         expandedTools={state.expandedTools}
@@ -471,6 +475,7 @@ function DashboardInner() {
               prompt: lastPrompt,
               systemPromptType,
               skills: attachedSkills,
+              effort,
             });
           }
         }}
