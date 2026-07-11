@@ -127,7 +127,7 @@ export default function ProfilesView({ embedded = false }: { embedded?: boolean 
               <div className="mb-1.5 flex items-center gap-2">
                 <span className="text-[12px] font-medium text-muted-foreground">Sandbox</span>
                 <Segment inline value={editing.sandbox} options={SANDBOXES.map((s) => s.id)} onChange={(v) => setEditing({ ...editing, sandbox: v })} />
-                {editing.sandbox !== 'host' && <span className="text-[11px] text-faint">{editing.sandbox === 'remote' ? 'runs on a paired remote harness' : 'ephemeral container (ships in a later phase)'}</span>}
+                {editing.sandbox !== 'host' && <span className="text-[11px] text-faint">{editing.sandbox === 'remote' ? 'runs on a paired remote harness' : 'ephemeral Docker container — writes outside the workspace stay contained (requires Docker)'}</span>}
               </div>
             </div>
 

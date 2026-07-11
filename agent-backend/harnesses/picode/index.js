@@ -103,13 +103,15 @@ class PiCodeHarness extends HarnessInterface {
 
     const nodePath = (this.binaries && this.binaries.nodePath) || "node";
     const piPath = (this.binaries && this.binaries.piPath) || "pi";
-    const spawnArgs = [piPath, ...piArgs];
-    
-    console.log(`[PiCodeHarness] Spawning: ${nodePath} ${spawnArgs[0]} (mode=${activeMode}, model=${normalModel})`);
-    
-    this.piProcess = spawn(nodePath, spawnArgs, {
-      env: childEnv,
-      cwd: process.cwd(),
+
+    // A subclass (ContainerHarness) can wrap this to run pi inside a sandbox.
+    const { command, args, spawnEnv, cwd } = this._buildSpawnCommand({ nodePath, piPath, piArgs, childEnv });
+
+    console.log(`[PiCodeHarness] Spawning: ${command} (mode=${activeMode}, model=${normalModel})`);
+
+    this.piProcess = spawn(command, args, {
+      env: spawnEnv,
+      cwd,
       stdio: ['pipe', 'pipe', 'pipe']
     });
     
@@ -133,6 +135,14 @@ class PiCodeHarness extends HarnessInterface {
     });
   }
   
+  /**
+   * Build the process to spawn. Default: run pi directly on the host.
+   * Overridden by ContainerHarness to wrap it in `docker run`.
+   */
+  _buildSpawnCommand({ nodePath, piPath, piArgs, childEnv }) {
+    return { command: nodePath, args: [piPath, ...piArgs], spawnEnv: childEnv, cwd: process.cwd() };
+  }
+
   _setupStdout() {
     this.piProcess.stdout.on("data", (data) => {
       const str = data.toString();

@@ -51,6 +51,7 @@ const createWebSocketServer = require("./ws/index");
 const createHarnessRegistry = require("./ws/harness");
 const RemoteHarness = require("./harnesses/remote");
 const HeadlessSocket = require("./ws/headless-socket");
+const ContainerHarness = require("./harnesses/container");
 const createChannelsRouter = require("./routes/channels");
 const { startScheduler } = require("./channel-scheduler");
 
@@ -185,7 +186,7 @@ wss.on("connection", (ws) => {
       
       // ── start_task ──────────────────────────────────────────
       if (data.type === "start_task") {
-        let { prompt, sessionId: sid, mode, systemPromptType, skills, effort, harnessId, excludeTools, profileId } = data;
+        let { prompt, sessionId: sid, mode, systemPromptType, skills, effort, harnessId, excludeTools, profileId, sandbox } = data;
         const sessionId = sid || "default-session";
 
         // Expand a profile server-side: its fields are DEFAULTS; any field the
@@ -200,6 +201,7 @@ wss.on("connection", (ws) => {
             systemPromptType = systemPromptType ?? profile.promptId;
             skills = skills ?? profile.skills;
             excludeTools = excludeTools ?? profile.toolPolicy?.excluded;
+            sandbox = sandbox ?? profile.sandbox;
           }
         }
 
@@ -222,7 +224,7 @@ wss.on("connection", (ws) => {
         // NOT killed (previously they were). Explicit switches still cancel the
         // old session via cancel_session; leaving a session running lets one
         // device drive several agents at once.
-        await handleStartTask(ws, prompt, sessionId, mode, systemPromptType, skills, effort, harnessId, excludeTools);
+        await handleStartTask(ws, prompt, sessionId, mode, systemPromptType, skills, effort, harnessId, excludeTools, sandbox);
       }
       
       // ── approval_response ───────────────────────────────────
@@ -353,7 +355,7 @@ wss.on("connection", (ws) => {
 });
 
 // ── Agent Task Handler ──────────────────────────────────────────────
-async function handleStartTask(ws, userPrompt, sessionId, mode, systemPromptType, skills, effort, harnessId, excludeTools) {
+async function handleStartTask(ws, userPrompt, sessionId, mode, systemPromptType, skills, effort, harnessId, excludeTools, sandbox) {
   ws.activeSessionId = sessionId;
   ws.currentPrompt = userPrompt;
   
@@ -465,34 +467,45 @@ async function handleStartTask(ws, userPrompt, sessionId, mode, systemPromptType
   // that id, via RemoteHarness. Both implement the same interface downstream.
   let sessionItem = activeSessions.get(sessionId);
   if (!sessionItem || !sessionItem.harness) {
-    const useRemote = harnessId && harnessId !== "local";
-    const remoteEntry = useRemote ? harnessRegistry.get(harnessId) : null;
-    if (useRemote && !remoteEntry) {
-      sendLog(ws, `[Harness] Remote harness "${harnessId}" is not connected.`, false, sessionId);
-      sendWithSession(ws, { type: "error", message: `Remote harness "${harnessId}" is not connected. Pick another in Fleet.` }, sessionId);
+    const activeSandbox = sandbox || "host";
+    // Sandbox 'remote' runs on a paired remote harness; an explicit remote
+    // harnessId does too. 'container' runs in an ephemeral Docker container.
+    const wantRemote = activeSandbox === "remote" || (harnessId && harnessId !== "local");
+    const remoteEntry = wantRemote
+      ? (harnessRegistry.get(harnessId) || harnessRegistry.list()[0] && harnessRegistry.get(harnessRegistry.list()[0].id))
+      : null;
+    if (wantRemote && !remoteEntry) {
+      sendLog(ws, `[Sandbox] No remote harness connected for ${activeSandbox === "remote" ? "sandbox=remote" : `harness "${harnessId}"`}.`, false, sessionId);
+      sendWithSession(ws, { type: "error", message: `No remote harness is connected. Pair one in Fleet, or pick host/container.` }, sessionId);
       sendStatus(ws, "error", sessionId);
       return;
     }
-    sendLog(ws, `Spawning agent session for ${sessionId} (mode=${activeMode}, harness=${harnessId || "local"})...`, false, sessionId);
+    if (activeSandbox === "container" && !ContainerHarness.dockerAvailable()) {
+      sendLog(ws, `[Sandbox] Docker is not available; cannot run sandbox=container.`, false, sessionId);
+      sendWithSession(ws, { type: "error", message: `Docker isn't available, so the container sandbox can't run. Use host or remote.` }, sessionId);
+      sendStatus(ws, "error", sessionId);
+      return;
+    }
+    sendLog(ws, `Spawning agent session for ${sessionId} (mode=${activeMode}, sandbox=${activeSandbox}, harness=${remoteEntry ? remoteEntry.id : "local"})...`, false, sessionId);
 
     try {
       const events = createHarnessEventEmitter(ws, sessionId, activeMode, subagentTracker);
-      const harness = remoteEntry
-        ? new RemoteHarness({
-            events, config: getConfig(), sessionId, mode: activeMode,
-            systemPromptType, skills: skills || [], model: activeModelName,
-            excludeTools: excludeTools || null,
-            registryEntry: remoteEntry,
-          })
-        : loadHarness("picode", {
-            events, config: getConfig(), sessionId, mode: activeMode,
-            systemPromptType, skills: skills || [], model: activeModelName,
-            excludeTools: excludeTools || null,
-            binaries: { nodePath, piPath },
-          });
+      const commonOpts = {
+        events, config: getConfig(), sessionId, mode: activeMode,
+        systemPromptType, skills: skills || [], model: activeModelName,
+        excludeTools: excludeTools || null,
+      };
+      let harness;
+      if (remoteEntry) {
+        harness = new RemoteHarness({ ...commonOpts, registryEntry: remoteEntry });
+      } else if (activeSandbox === "container") {
+        harness = new ContainerHarness({ ...commonOpts, binaries: { nodePath, piPath } });
+      } else {
+        harness = loadHarness("picode", { ...commonOpts, binaries: { nodePath, piPath } });
+      }
 
       await harness.connect();
-      sessionItem = { harness, ws, mode: activeMode, subagentTracker, deviceId: ws.device?.id || null, harnessId: harnessId || "local" };
+      sessionItem = { harness, ws, mode: activeMode, subagentTracker, deviceId: ws.device?.id || null, harnessId: remoteEntry ? remoteEntry.id : "local", sandbox: activeSandbox };
       activeSessions.set(sessionId, sessionItem);
     } catch (err) {
       console.error(`[handleStartTask] Failed to spawn harness:`, err);
