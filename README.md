@@ -6,19 +6,19 @@ AegisAgent is a local-first, **harness-agnostic agent-operations console**: a Ne
 
 1. **Console with a unified activity view** — an icon-rail app (Console / Fleet / Connectors / Policies / Settings). Chat, reasoning (per-turn, collapsible, never spoken), tools, and sub-agents stream in one place; the inspector has Overview / Workspace / Trace / Logs segments.
 2. **Real observability** — provider-reported token usage (not estimates) with directional cost, a per-turn ledger + tokens-per-turn chart, and a **Trace** view giving each sub-agent its own task, reasoning, tool calls, and token counters (persisted across restarts).
-3. **Permission modes + enforced budgets** — Chat / Plan / Edit / Yolo gate what the agent may do; per-session cost/token caps and a sub-agent-depth cap halt work before it overruns (Policies view; hot-reloaded, no restart).
+3. **Editable policy matrix + enforced budgets** — a capability × mode matrix (allow/ask/block) is the source of truth the backend enforces; per-device overrides tighten it further. Per-session cost/token caps and a sub-agent-depth cap halt work before it overruns (Policies view; hot-reloaded, no restart).
 4. **Prompt library + skills** — swap the system prompt per session from stored `prompts/*.md` (incl. frontier-style prompts); attach reusable `skills/*/SKILL.md` instruction packs. Both are inherited by every sub-agent.
-5. **Fleet pairing** — pair devices via URL + OTP with a live countdown; the same flow is the path for remote harnesses.
-6. **Dynamic Security Guard (HITL)** — filters file paths and shell commands; risky actions pause for in-conversation approval.
-7. **Voice** — mic STT with barge-in (speaking stops the agent's audio), streamed sentence-level TTS.
-8. **Lightpanda headless browser** — fast CDP browsing wrapped as an MCP connector.
+5. **Effort profiles** — fast / balanced / deep routes the model and planning depth per session, orthogonal to the permission mode.
+6. **Fleet: devices + remote harnesses** — pair devices via URL + OTP (with scopes: full / chat+voice / read-only). Any machine with pi can dial in as a **remote harness** via `aegis-adapter` and the same pairing flow; pick which harness runs a session from the composer.
+7. **Connector registry** — MCP tool servers (the Lightpanda headless browser today; any stdio or remote-HTTP MCP server) are managed in the Connectors view with live status and tool listings.
+8. **Voice** — mic STT with barge-in (speaking stops the agent's audio), streamed sentence-level TTS.
 
 ---
 
 ## Folder Structure
 
 - `mcp-server-lightpanda/`: MCP server connecting to Lightpanda CDP.
-- `agent-backend/`: Node.js/Express server, harness abstraction (`harnesses/`), metrics + sub-agent tracker, Security Guard, and route handlers. Wire protocol documented in `agent-backend/PROTOCOL.md`.
+- `agent-backend/`: Node.js/Express server, harness abstraction (`harnesses/` — local pi + `remote/`), the `aegis-adapter` CLI (`adapter/`), MCP connector registry (`mcp-registry.js`), policy engine (`policy-engine.js`), metrics + sub-agent tracker, Security Guard, and route handlers. Wire protocol documented in `agent-backend/PROTOCOL.md`.
 - `dashboard/`: Next.js 16 + React 19 + Tailwind 4 dashboard (custom server with WS proxy).
 - `prompts/`: System-prompt library (`standard.md`, `claude-fable-5.md`, …) plus mode directives (`plan/edit/yolo-mode.md`).
 - `skills/`: Reusable instruction packs (`<name>/SKILL.md`).
@@ -70,6 +70,20 @@ Run these from the repo root:
 | `npm run typecheck` | `tsc --noEmit` on the dashboard |
 | `npm test` | Security-guard test suite |
 | `npm run clean` | Delete `dashboard/.next` and `.next-verify` — the fix for a corrupted/stale build cache |
+
+### Connecting a remote harness
+
+Run the agent on another machine and drive it from this console. On the remote
+machine (which needs `pi` and its LiteLLM creds in env), generate a pairing code
+in the console's **Fleet** view, then:
+
+```bash
+LITELLM_KEY=... node agent-backend/adapter/aegis-adapter.js \
+  --server ws://CONSOLE_HOST:6800 --code <PAIRING_CODE> --name "My workstation"
+```
+
+The harness appears in Fleet and in the composer's harness picker; select it to
+run a session on that machine.
 
 ---
 
