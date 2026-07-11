@@ -152,6 +152,15 @@ export function useWebSocket(
             dispatch(actions.updateMetrics(data));
             break;
 
+          case 'scope_denied':
+            dispatch(actions.addMessage({
+              role: 'assistant',
+              content: `🔒 **Read-only device** — ${data.message || 'This device cannot start tasks.'}`,
+              isScopeNotice: true,
+            }));
+            dispatch(actions.setStatus('done'));
+            break;
+
           case 'budget_exceeded':
             dispatch(actions.addMessage({
               role: 'assistant',

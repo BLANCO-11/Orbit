@@ -23,10 +23,17 @@ function DeviceIcon({ label }: { label: string }) {
  * FleetView — everything that can talk to this console: harnesses that do the
  * work, devices you drive it from, one OTP pairing flow for both.
  */
+const SCOPES: { id: string; label: string; hint: string }[] = [
+  { id: 'full', label: 'Full control', hint: 'run tasks in any mode' },
+  { id: 'chat_voice', label: 'Chat + voice', hint: 'converse only, no tools' },
+  { id: 'read_only', label: 'Read-only', hint: 'watch, cannot start tasks' },
+];
+
 export default function FleetView() {
   const { devices, pairing, startPairing, clearPairing, revokeDevice, refreshDevices } = useDevices();
   const [health, setHealth] = useState<any>(null);
   const [now, setNow] = useState(Date.now());
+  const [scope, setScope] = useState('full');
   const isThisDevice = Boolean(getDeviceToken());
 
   useEffect(() => {
@@ -65,12 +72,15 @@ export default function FleetView() {
                 <div className="rounded-xl border border-border bg-background px-6 py-3.5 font-mono text-[28px] font-bold tracking-[0.18em] text-accent-foreground">
                   {pairing.code}
                 </div>
-                <div className="mt-3 flex items-center gap-2 text-xs text-faint">
+                <div className="mt-2 text-[11px] text-faint">
+                  grants <span className="font-semibold text-muted-foreground">{SCOPES.find((s) => s.id === (pairing.scope || 'full'))?.label}</span>
+                </div>
+                <div className="mt-2 flex items-center gap-2 text-xs text-faint">
                   expires in{' '}
                   <span className="font-mono tabular-nums text-warning">
                     {Math.floor(secondsLeft / 60)}:{String(secondsLeft % 60).padStart(2, '0')}
                   </span>
-                  <button onClick={() => startPairing('New device')} className="text-accent-foreground hover:underline">
+                  <button onClick={() => startPairing('New device', scope)} className="text-accent-foreground hover:underline">
                     regenerate
                   </button>
                   <button onClick={clearPairing} className="text-faint hover:text-muted-foreground">
@@ -84,12 +94,31 @@ export default function FleetView() {
                 )}
               </>
             ) : (
-              <button
-                onClick={() => startPairing('New device')}
-                className="rounded-[9px] bg-primary px-4 py-2 text-[13px] font-semibold text-primary-foreground hover:opacity-90"
-              >
-                Generate pairing code
-              </button>
+              <>
+                <div className="mb-3 w-full">
+                  <div className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.08em] text-faint">Scope granted at pairing</div>
+                  <div className="flex gap-1.5">
+                    {SCOPES.map((s) => (
+                      <button
+                        key={s.id}
+                        onClick={() => setScope(s.id)}
+                        title={s.hint}
+                        className={`flex-1 rounded-lg border px-2 py-1.5 text-[11px] font-semibold ${
+                          scope === s.id ? 'border-primary text-accent-foreground' : 'border-border text-muted-foreground hover:bg-muted'
+                        }`}
+                      >
+                        {s.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <button
+                  onClick={() => startPairing('New device', scope)}
+                  className="rounded-[9px] bg-primary px-4 py-2 text-[13px] font-semibold text-primary-foreground hover:opacity-90"
+                >
+                  Generate pairing code
+                </button>
+              </>
             )}
           </div>
 
@@ -137,10 +166,15 @@ export default function FleetView() {
                     <DeviceIcon label={d.label} />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="text-[13px] font-semibold">{d.label || 'Unnamed device'}</div>
+                    <div className="flex items-center gap-2 text-[13px] font-semibold">
+                      {d.label || 'Unnamed device'}
+                      <span className="rounded-full border border-border px-2 py-px text-[10px] font-medium text-muted-foreground">
+                        {SCOPES.find((s) => s.id === (d.scope || 'full'))?.label || d.scope}
+                      </span>
+                    </div>
                     <div className="mt-0.5 font-mono text-[11px] text-faint">
                       paired {d.createdAt ? new Date(d.createdAt).toLocaleDateString() : '—'}
-                      {d.lastSeenAt ? ` · last seen ${new Date(d.lastSeenAt).toLocaleString()}` : ''}
+                      {d.lastSeen ? ` · last seen ${new Date(d.lastSeen).toLocaleString()}` : ''}
                     </div>
                   </div>
                   <button

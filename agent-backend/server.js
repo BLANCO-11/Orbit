@@ -114,18 +114,28 @@ wss.on("connection", (ws) => {
       
       // ── start_task ──────────────────────────────────────────
       if (data.type === "start_task") {
-        const { prompt, sessionId: sid, mode, systemPromptType, skills } = data;
+        let { prompt, sessionId: sid, mode, systemPromptType, skills } = data;
         const sessionId = sid || "default-session";
-        
-        // Session isolation: kill other sessions on this WS
-        for (const [eid, ses] of activeSessions.entries()) {
-          if (eid !== sessionId && ses.ws === ws) {
-            console.log(`[Session Isolation] Killing session ${eid} on this WS before starting ${sessionId}...`);
-            try { ses.harness?.disconnect(); } catch {}
-            activeSessions.delete(eid);
-          }
+
+        // Device scope enforcement (scope is set at pairing time; ws.device is
+        // null for the local dev / shared-secret path, which is unrestricted).
+        const scope = ws.device?.scope || "full";
+        if (scope === "read_only") {
+          sendLog(ws, "[Scope] This device is read-only and cannot start tasks.", false, sessionId);
+          sendWithSession(ws, { type: "scope_denied", scope, message: "This device is paired read-only. It can watch sessions but not start them." }, sessionId);
+          sendStatus(ws, "done", sessionId);
+          return;
         }
-        
+        if (scope === "chat_voice" && mode && mode !== "chat") {
+          // chat+voice devices may converse but not run tools — pin to chat mode.
+          sendLog(ws, `[Scope] chat+voice device: forcing chat mode (requested "${mode}").`, false, sessionId);
+          mode = "chat";
+        }
+
+        // Concurrent sessions are allowed: sibling sessions on this socket are
+        // NOT killed (previously they were). Explicit switches still cancel the
+        // old session via cancel_session; leaving a session running lets one
+        // device drive several agents at once.
         await handleStartTask(ws, prompt, sessionId, mode, systemPromptType, skills);
       }
       

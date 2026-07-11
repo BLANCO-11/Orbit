@@ -7,7 +7,7 @@ const dbPath = path.join(__dirname, "aegis.db");
 const db = new DatabaseSync(dbPath);
 
 // ── Schema Versioning ───────────────────────────────────────────────
-const CURRENT_SCHEMA_VERSION = 5;
+const CURRENT_SCHEMA_VERSION = 6;
 const BACKUP_INTERVAL = 10; // auto-backup every N saves
 let saveCount = 0;
 
@@ -91,6 +91,17 @@ if (currentSchemaVersion < 5) {
       redeemed_at INTEGER
     )
   `);
+  db.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)").run(
+    "schema_version",
+    String(CURRENT_SCHEMA_VERSION)
+  );
+  console.log(`[DB] Migrated sessions schema to version ${CURRENT_SCHEMA_VERSION}`);
+}
+
+if (currentSchemaVersion < 6) {
+  // Per-device scope chosen at pairing time: 'full' | 'chat_voice' | 'read_only'.
+  try { db.exec("ALTER TABLE devices ADD COLUMN scope TEXT NOT NULL DEFAULT 'full'"); } catch (e) {}
+  try { db.exec("ALTER TABLE pairing_codes ADD COLUMN scope TEXT NOT NULL DEFAULT 'full'"); } catch (e) {}
   db.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)").run(
     "schema_version",
     String(CURRENT_SCHEMA_VERSION)
@@ -277,6 +288,8 @@ function searchSessions(query) {
 
 const PAIRING_CODE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 const PAIRING_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no 0/O/1/I ambiguity
+const VALID_SCOPES = new Set(["full", "chat_voice", "read_only"]);
+const normalizeScope = (s) => (VALID_SCOPES.has(s) ? s : "full");
 
 function hashToken(token) {
   return crypto.createHash("sha256").update(token).digest("hex");
@@ -292,15 +305,15 @@ function generatePairingCode(length = 6) {
 }
 
 /** Create a new pairing code for a device that's about to connect. */
-function createPairingCode(label) {
+function createPairingCode(label, scope) {
   const code = generatePairingCode();
   const now = Date.now();
   const expiresAt = now + PAIRING_CODE_TTL_MS;
   db.prepare(`
-    INSERT INTO pairing_codes (code, label, created_at, expires_at, redeemed_at)
-    VALUES (?, ?, ?, ?, NULL)
-  `).run(code, label || "New device", now, expiresAt);
-  return { code, expiresAt };
+    INSERT INTO pairing_codes (code, label, created_at, expires_at, redeemed_at, scope)
+    VALUES (?, ?, ?, ?, NULL, ?)
+  `).run(code, label || "New device", now, expiresAt, normalizeScope(scope));
+  return { code, expiresAt, scope: normalizeScope(scope) };
 }
 
 /**
@@ -316,17 +329,18 @@ function redeemPairingCode(code, deviceLabel) {
   if (Date.now() > row.expires_at) return null;
 
   db.prepare("UPDATE pairing_codes SET redeemed_at = ? WHERE code = ?").run(Date.now(), code);
-  return createDevice(deviceLabel || row.label);
+  return createDevice(deviceLabel || row.label, row.scope);
 }
 
-function createDevice(label) {
+function createDevice(label, scope) {
   const id = crypto.randomUUID();
   const token = crypto.randomBytes(32).toString("hex");
+  const deviceScope = normalizeScope(scope);
   db.prepare(`
-    INSERT INTO devices (id, label, token_hash, created_at, last_seen, revoked_at, policy_overrides)
-    VALUES (?, ?, ?, ?, NULL, NULL, '{}')
-  `).run(id, label || "New device", hashToken(token), Date.now());
-  return { id, label: label || "New device", token };
+    INSERT INTO devices (id, label, token_hash, created_at, last_seen, revoked_at, policy_overrides, scope)
+    VALUES (?, ?, ?, ?, NULL, NULL, '{}', ?)
+  `).run(id, label || "New device", hashToken(token), Date.now(), deviceScope);
+  return { id, label: label || "New device", token, scope: deviceScope };
 }
 
 /** Look up a device by its raw token (as presented over WS/HTTP). Returns null if unknown or revoked. */
@@ -361,6 +375,7 @@ function mapDeviceRow(row) {
     createdAt: row.created_at,
     lastSeen: row.last_seen,
     revoked: Boolean(row.revoked_at),
+    scope: row.scope || "full",
     policyOverrides: JSON.parse(row.policy_overrides || "{}"),
   };
 }

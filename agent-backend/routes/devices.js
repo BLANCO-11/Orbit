@@ -14,12 +14,14 @@ function createDevicesRouter(db, authMiddleware, getDashboardOrigin) {
 
   router.post("/pair/start", authMiddleware, (req, res) => {
     const label = (req.body && req.body.label) || "New device";
-    const { code, expiresAt } = db.createPairingCode(String(label).slice(0, 100));
+    const scope = (req.body && req.body.scope) || "full";
+    const { code, expiresAt, scope: grantedScope } = db.createPairingCode(String(label).slice(0, 100), scope);
     const origin = getDashboardOrigin();
     res.json({
       success: true,
       code,
       expiresAt,
+      scope: grantedScope,
       pairingUrl: `${origin}/pair?code=${code}`,
     });
   });

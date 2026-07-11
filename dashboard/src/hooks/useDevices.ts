@@ -20,11 +20,11 @@ export function useDevices() {
 
   useEffect(() => { fetchDevices(); }, [fetchDevices]);
 
-  const startPairing = useCallback((label) => {
+  const startPairing = useCallback((label, scope = 'full') => {
     fetch('/api/pair/start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ label: label || 'New device' }),
+      body: JSON.stringify({ label: label || 'New device', scope }),
     })
       .then(res => res.json())
       .then(data => { if (data.success) setPairing(data); })
