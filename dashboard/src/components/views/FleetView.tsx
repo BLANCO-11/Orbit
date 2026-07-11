@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import { Terminal, Laptop, Smartphone, Tablet, RefreshCw } from 'lucide-react';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Terminal, Globe, Laptop, Smartphone, Tablet, RefreshCw } from 'lucide-react';
 import { useDevices } from '@/hooks/useDevices';
 import { getDeviceToken } from '@/lib/device-auth';
 
@@ -31,14 +31,19 @@ const SCOPES: { id: string; label: string; hint: string }[] = [
 
 export default function FleetView() {
   const { devices, pairing, startPairing, clearPairing, revokeDevice, refreshDevices } = useDevices();
-  const [health, setHealth] = useState<any>(null);
+  const [harnesses, setHarnesses] = useState<any[]>([]);
   const [now, setNow] = useState(Date.now());
   const [scope, setScope] = useState('full');
   const isThisDevice = Boolean(getDeviceToken());
 
-  useEffect(() => {
-    fetch('/api/health').then((r) => r.json()).then(setHealth).catch(() => {});
+  const refreshHarnesses = useCallback(() => {
+    fetch('/api/harnesses').then((r) => r.json()).then((d) => { if (d.success) setHarnesses(d.harnesses); }).catch(() => {});
   }, []);
+  useEffect(() => {
+    refreshHarnesses();
+    const t = setInterval(refreshHarnesses, 5000); // remote adapters connect/leave live
+    return () => clearInterval(t);
+  }, [refreshHarnesses]);
 
   // Countdown tick while a pairing code is showing
   useEffect(() => {
@@ -48,7 +53,6 @@ export default function FleetView() {
   }, [pairing]);
 
   const secondsLeft = pairing ? Math.max(0, Math.floor((new Date(pairing.expiresAt).getTime() - now) / 1000)) : 0;
-  const activeSessions = health?.activeSessions ?? health?.sessions ?? null;
 
   return (
     <div className="h-full overflow-y-auto">
@@ -124,27 +128,34 @@ export default function FleetView() {
 
           {/* ── Harnesses + devices ── */}
           <div>
-            <SectionHead>Harnesses</SectionHead>
+            <SectionHead>
+              Harnesses · {harnesses.length}
+              <button onClick={refreshHarnesses} aria-label="Refresh harnesses" className="ml-2 align-middle text-faint hover:text-muted-foreground">
+                <RefreshCw size={11} />
+              </button>
+            </SectionHead>
             <div className="flex flex-col gap-2">
-              <div className="flex items-center gap-3 rounded-xl border border-border-soft bg-card px-4 py-3">
-                <div className="grid size-9 shrink-0 place-items-center rounded-[10px] border border-border bg-muted text-muted-foreground">
-                  <Terminal size={16} />
-                </div>
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 text-[13px] font-semibold">
-                    pi-code
-                    <span className="inline-flex items-center gap-1 text-[11px] font-medium text-success">
-                      <i className="size-[7px] rounded-full bg-success" /> local
-                    </span>
+              {harnesses.map((h) => (
+                <div key={h.id} className="flex items-center gap-3 rounded-xl border border-border-soft bg-card px-4 py-3">
+                  <div className="grid size-9 shrink-0 place-items-center rounded-[10px] border border-border bg-muted text-muted-foreground">
+                    {h.transport === 'remote' ? <Globe size={16} /> : <Terminal size={16} />}
                   </div>
-                  <div className="mt-0.5 font-mono text-[11px] text-faint">
-                    child process
-                    {activeSessions !== null ? ` · ${activeSessions} active session${activeSessions === 1 ? '' : 's'}` : ''}
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 text-[13px] font-semibold">
+                      {h.name}
+                      <span className="inline-flex items-center gap-1 text-[11px] font-medium text-success">
+                        <i className="size-[7px] rounded-full bg-success" /> {h.transport}
+                      </span>
+                    </div>
+                    <div className="mt-0.5 font-mono text-[11px] text-faint">
+                      {h.transport === 'remote' ? `${h.machine} · via adapter` : 'child process'}
+                      {typeof h.activeSessions === 'number' ? ` · ${h.activeSessions} active session${h.activeSessions === 1 ? '' : 's'}` : ''}
+                    </div>
                   </div>
                 </div>
-              </div>
+              ))}
               <div className="rounded-xl border border-dashed border-border px-4 py-3 text-center text-xs text-faint">
-                Remote harnesses (opencode, custom adapters) connect via the same pairing flow — Phase 3 of the plan.
+                Connect a remote harness: run <span className="font-mono">aegis-adapter --code &lt;pairing code&gt;</span> on any machine with pi installed.
               </div>
             </div>
 

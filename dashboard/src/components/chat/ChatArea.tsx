@@ -10,6 +10,7 @@ import ModeSelector from './ModeSelector';
 import PromptTypeSelector from './PromptTypeSelector';
 import SkillSelector from './SkillSelector';
 import EffortSelector from './EffortSelector';
+import HarnessSelector from './HarnessSelector';
 
 /**
  * ChatArea — the central conversation column.
@@ -51,6 +52,10 @@ export default function ChatArea({
   // Effort
   effort,
   onSetEffort,
+
+  // Harness
+  harnessId,
+  onSetHarnessId,
 
   // Input
   prompt,
@@ -170,6 +175,7 @@ export default function ChatArea({
             onStop={onStop}
             inputHistoryRef={inputHistoryRef}
             inputHistoryIndexRef={inputHistoryIndexRef}
+            harnessButton={<HarnessSelector harnessId={harnessId} onSetHarnessId={onSetHarnessId} />}
             modeButton={<ModeSelector sessionMode={sessionMode} onSetSessionMode={onSetSessionMode} />}
             promptTypeButton={
               <PromptTypeSelector systemPromptType={systemPromptType} onSetSystemPromptType={onSetSystemPromptType} />

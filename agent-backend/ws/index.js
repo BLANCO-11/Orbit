@@ -4,12 +4,14 @@
 const WebSocket = require("ws");
 const { getSharedApiKey } = require("../middleware/auth");
 
-function createWebSocketServer(httpServer, db) {
+function createWebSocketServer(httpServer, db, harnessRegistry) {
   const wss = new WebSocket.Server({ noServer: true });
 
   httpServer.on("upgrade", (request, socket, head) => {
     const url = new URL(request.url, "http://internal");
-    if (url.pathname !== "/api/ws") {
+    const isDashboard = url.pathname === "/api/ws";
+    const isHarness = url.pathname === "/api/harness";
+    if (!isDashboard && !isHarness) {
       socket.destroy();
       return;
     }
@@ -19,7 +21,7 @@ function createWebSocketServer(httpServer, db) {
     // middleware/auth.js) for simple single-device local setups that haven't
     // paired anything. Browsers can't set custom headers on a WS upgrade
     // request, so both travel as query params instead of headers.
-    const deviceToken = url.searchParams.get("deviceToken");
+    const deviceToken = url.searchParams.get("deviceToken") || url.searchParams.get("token");
     let device = null;
 
     if (deviceToken) {
@@ -31,12 +33,26 @@ function createWebSocketServer(httpServer, db) {
       }
       db.touchDeviceLastSeen(device.id);
     } else {
+      // A harness adapter MUST present a device token; only the dashboard may
+      // fall back to the shared-secret / dev-mode path.
+      if (isHarness) {
+        socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
+        socket.destroy();
+        return;
+      }
       const required = getSharedApiKey();
       if (required && url.searchParams.get("key") !== required) {
         socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
         socket.destroy();
         return;
       }
+    }
+
+    if (isHarness && harnessRegistry) {
+      harnessRegistry.wss.handleUpgrade(request, socket, head, (ws) => {
+        harnessRegistry.wss.emit("connection", ws, request, device);
+      });
+      return;
     }
 
     wss.handleUpgrade(request, socket, head, (ws) => {

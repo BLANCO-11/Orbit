@@ -46,6 +46,8 @@ const createConnectorsRouter = require("./routes/connectors");
 
 // WebSocket
 const createWebSocketServer = require("./ws/index");
+const createHarnessRegistry = require("./ws/harness");
+const RemoteHarness = require("./harnesses/remote");
 
 // ── Startup Validation ──────────────────────────────────────────────
 validateEnv();
@@ -79,7 +81,8 @@ mcpRegistry.connectAll().catch(err => console.error("MCP registry connect failed
 
 // ── HTTP + WebSocket Server ─────────────────────────────────────────
 const server = http.createServer(app);
-const wss = createWebSocketServer(server, db);
+const harnessRegistry = createHarnessRegistry(); // remote aegis-adapter connections
+const wss = createWebSocketServer(server, db, harnessRegistry);
 
 // ── Auth ────────────────────────────────────────────────────────────
 const authMiddleware = createAuthMiddleware(db);
@@ -99,6 +102,21 @@ app.use("/api/workspace", authMiddleware, createWorkspaceRouter());
 app.use("/api/prompts", authMiddleware, createPromptsRouter());
 app.use("/api/skills", authMiddleware, createSkillsRouter());
 app.use("/api/connectors", authMiddleware, createConnectorsRouter(mcpRegistry));
+
+// Harness registry: the always-present local pi-code plus any connected remote
+// aegis-adapters. Sessions can target a specific harness by id on start_task.
+app.get("/api/harnesses", authMiddleware, (req, res) => {
+  const local = {
+    id: "local",
+    name: "pi-code",
+    machine: "local",
+    transport: "local",
+    status: "connected",
+    capabilities: ["chat", "plan", "edit", "yolo", "subagents", "tools", "browser"],
+    activeSessions: [...activeSessions.values()].filter(s => !s.harnessId || s.harnessId === "local").length,
+  };
+  res.json({ success: true, harnesses: [local, ...harnessRegistry.list()] });
+});
 app.use("/api/health", createHealthRouter({ db, mcpRegistry, getConfig, activeSessions }));
 app.use("/api", createDevicesRouter(db, authMiddleware, () => process.env.DASHBOARD_ORIGIN || "http://localhost:6801"));
 
@@ -115,7 +133,7 @@ wss.on("connection", (ws) => {
       
       // ── start_task ──────────────────────────────────────────
       if (data.type === "start_task") {
-        let { prompt, sessionId: sid, mode, systemPromptType, skills, effort } = data;
+        let { prompt, sessionId: sid, mode, systemPromptType, skills, effort, harnessId } = data;
         const sessionId = sid || "default-session";
 
         // Device scope enforcement (scope is set at pairing time; ws.device is
@@ -137,7 +155,7 @@ wss.on("connection", (ws) => {
         // NOT killed (previously they were). Explicit switches still cancel the
         // old session via cancel_session; leaving a session running lets one
         // device drive several agents at once.
-        await handleStartTask(ws, prompt, sessionId, mode, systemPromptType, skills, effort);
+        await handleStartTask(ws, prompt, sessionId, mode, systemPromptType, skills, effort, harnessId);
       }
       
       // ── approval_response ───────────────────────────────────
@@ -268,7 +286,7 @@ wss.on("connection", (ws) => {
 });
 
 // ── Agent Task Handler ──────────────────────────────────────────────
-async function handleStartTask(ws, userPrompt, sessionId, mode, systemPromptType, skills, effort) {
+async function handleStartTask(ws, userPrompt, sessionId, mode, systemPromptType, skills, effort, harnessId) {
   ws.activeSessionId = sessionId;
   ws.currentPrompt = userPrompt;
   
@@ -375,24 +393,37 @@ async function handleStartTask(ws, userPrompt, sessionId, mode, systemPromptType
   }
   
   // ── Spawn or reuse harness ────────────────────────────────
+  // A session may target a specific harness by id: "local" (or unset) runs the
+  // local pi child process; a remote id runs on the connected aegis-adapter of
+  // that id, via RemoteHarness. Both implement the same interface downstream.
   let sessionItem = activeSessions.get(sessionId);
   if (!sessionItem || !sessionItem.harness) {
-    sendLog(ws, `Spawning agent session for ${sessionId} (mode=${activeMode})...`, false, sessionId);
-    
+    const useRemote = harnessId && harnessId !== "local";
+    const remoteEntry = useRemote ? harnessRegistry.get(harnessId) : null;
+    if (useRemote && !remoteEntry) {
+      sendLog(ws, `[Harness] Remote harness "${harnessId}" is not connected.`, false, sessionId);
+      sendWithSession(ws, { type: "error", message: `Remote harness "${harnessId}" is not connected. Pick another in Fleet.` }, sessionId);
+      sendStatus(ws, "error", sessionId);
+      return;
+    }
+    sendLog(ws, `Spawning agent session for ${sessionId} (mode=${activeMode}, harness=${harnessId || "local"})...`, false, sessionId);
+
     try {
-      const harness = loadHarness("picode", {
-        events: createHarnessEventEmitter(ws, sessionId, activeMode, subagentTracker),
-        config: getConfig(),
-        sessionId,
-        mode: activeMode,
-        systemPromptType,
-        skills: skills || [],
-        model: activeModelName,
-        binaries: { nodePath, piPath },
-      });
-      
+      const events = createHarnessEventEmitter(ws, sessionId, activeMode, subagentTracker);
+      const harness = remoteEntry
+        ? new RemoteHarness({
+            events, config: getConfig(), sessionId, mode: activeMode,
+            systemPromptType, skills: skills || [], model: activeModelName,
+            registryEntry: remoteEntry,
+          })
+        : loadHarness("picode", {
+            events, config: getConfig(), sessionId, mode: activeMode,
+            systemPromptType, skills: skills || [], model: activeModelName,
+            binaries: { nodePath, piPath },
+          });
+
       await harness.connect();
-      sessionItem = { harness, ws, mode: activeMode, subagentTracker, deviceId: ws.device?.id || null };
+      sessionItem = { harness, ws, mode: activeMode, subagentTracker, deviceId: ws.device?.id || null, harnessId: harnessId || "local" };
       activeSessions.set(sessionId, sessionItem);
     } catch (err) {
       console.error(`[handleStartTask] Failed to spawn harness:`, err);
