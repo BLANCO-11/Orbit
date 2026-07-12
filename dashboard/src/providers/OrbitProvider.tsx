@@ -84,8 +84,13 @@ function orbitReducer(state, action) {
     case SET_STATUS:
       return { ...state, status: action.payload };
     
-    case ADD_MESSAGE:
+    case ADD_MESSAGE: {
+      // Dedup: don't stack multiple "Mode Change Required" prompts back-to-back
+      // (belt-and-suspenders for the backend halt guard).
+      const last = state.messages[state.messages.length - 1];
+      if (action.payload?.isModeSuggestion && last?.isModeSuggestion) return state;
       return { ...state, messages: [...state.messages, action.payload] };
+    }
     
     case UPDATE_LAST_MESSAGE: {
       const lastMsg = state.messages[state.messages.length - 1];

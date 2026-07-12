@@ -602,7 +602,7 @@ async function handleStartTask(ws, userPrompt, sessionId, mode, systemPromptType
   metricsManager.recordInputTokens(sessionId, userPrompt);
   metricsManager.beginTurn(sessionId, userPrompt);
   // Reset the anti-flail guard for the new turn.
-  turnGuards.set(sessionId, { calls: 0, consecutiveUnproductive: 0, stopped: false });
+  turnGuards.set(sessionId, { calls: 0, consecutiveUnproductive: 0, stopped: false, halted: false });
 
   // ── Initialize subagent tracker ───────────────────────────
   // Restore prior sub-agent history for this session (if any was persisted)
@@ -814,6 +814,13 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
   });
   
   events.on("tool_call_start", ({ id, name, arguments: args, subagentId }) => {
+    // If this turn was already halted (policy block or anti-flail), ignore the
+    // tool calls pi still emits before cancel() lands — otherwise every trailing
+    // blocked call re-fires a "Mode Change Required" banner (the duplicate-prompt
+    // bug). Only top-level calls gate the turn; sub-agent calls pass through.
+    const guard = turnGuards.get(sessionId);
+    if (guard && guard.halted && !subagentId) return;
+
     const argsStr = JSON.stringify(args || {});
     sendLog(ws, `[Tool Call] ${name} ${argsStr}`);
 
@@ -908,6 +915,7 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
       if (blockedHit) blockKind = "write-protected";
     }
     if (blockedHit) {
+      if (guard) guard.halted = true;
       sendLog(ws, `[Policy] Hard-blocked "${name}" — "${blockedHit}" is ${blockKind}.`, false);
       sendWithSession(ws, {
         type: "policy_blocked", toolName: name, capability: "blocked_path", mode: activeMode,
@@ -937,6 +945,8 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
     const { decision } = policyEngine.evaluate(capability, activeMode, cfg, deviceOverrides);
 
     if (decision === "block") {
+      // Halt the turn so trailing blocked tool calls don't each re-fire the banner.
+      if (guard) guard.halted = true;
       // Suggest the least-privileged mode that would allow this capability.
       const suggestion = ["plan", "edit", "yolo"].find(m =>
         policyEngine.evaluate(capability, m, getConfig(), deviceOverrides).decision !== "block"
@@ -1003,6 +1013,7 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
         const stuck = g.consecutiveUnproductive >= MAX_CONSECUTIVE_UNPRODUCTIVE;
         if (runaway || stuck) {
           g.stopped = true;
+          g.halted = true; // also gate trailing tool_call_start emits
           const why = stuck
             ? `${g.consecutiveUnproductive} tool calls in a row returned nothing useful`
             : `this turn hit ${g.calls} tool calls`;
