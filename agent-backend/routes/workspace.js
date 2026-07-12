@@ -73,7 +73,13 @@ function createWorkspaceRouter() {
       if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
         return res.status(404).json({ success: false, message: "File not found." });
       }
-      
+
+      // Raw bytes (e.g. images for the Preview panel's <img>). Path is already
+      // validated to live under WORKSPACE_ROOT above.
+      if (req.query.raw) {
+        return res.sendFile(filePath);
+      }
+
       const stats = fs.statSync(filePath);
       // Limit file size to 500KB for preview
       if (stats.size > 500 * 1024) {

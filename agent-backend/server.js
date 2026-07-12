@@ -109,6 +109,7 @@ app.use("/api/tts", authMiddleware, createTtsRouter(getConfig));
 app.use("/api/voices", authMiddleware, createVoicesRouter());
 app.use("/api/notify", authMiddleware, createNotificationsRouter(getConfig, wss));
 app.use("/api/workspace", authMiddleware, createWorkspaceRouter());
+app.use("/api/console", authMiddleware, require("./routes/console")());
 app.use("/api/prompts", authMiddleware, createPromptsRouter());
 app.use("/api/skills", authMiddleware, createSkillsRouter());
 app.use("/api/connectors", authMiddleware, createConnectorsRouter(mcpRegistry));

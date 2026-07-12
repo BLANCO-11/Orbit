@@ -1,10 +1,12 @@
 'use client';
 
 import React from 'react';
-import { Activity, Folder, GitBranch, List } from 'lucide-react';
+import { Activity, Folder, GitBranch, List, Monitor, TerminalSquare } from 'lucide-react';
 
 const TABS = [
   { id: 'agent', label: 'Overview', icon: Activity },
+  { id: 'preview', label: 'Preview', icon: Monitor },
+  { id: 'console', label: 'Console', icon: TerminalSquare },
   { id: 'workspace', label: 'Workspace', icon: Folder },
   { id: 'trace', label: 'Trace', icon: GitBranch },
   { id: 'logs', label: 'Logs', icon: List },
@@ -25,7 +27,7 @@ interface DetailPanelProps {
 export default function DetailPanel({ activeTab, onTabChange, children }: DetailPanelProps) {
   return (
     <div className="flex h-full flex-col">
-      <div role="tablist" aria-label="Inspector" className="flex shrink-0 gap-0.5 border-b border-border-soft px-3">
+      <div role="tablist" aria-label="Inspector" className="flex shrink-0 gap-0.5 overflow-x-auto border-b border-border-soft px-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {TABS.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;

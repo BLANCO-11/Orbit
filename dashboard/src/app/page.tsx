@@ -21,6 +21,8 @@ import ChatArea from '@/components/chat/ChatArea';
 import DetailPanel from '@/components/panels/DetailPanel';
 import AgentTab from '@/components/panels/AgentTab';
 import WorkspaceTab from '@/components/panels/WorkspaceTab';
+import PreviewTab from '@/components/panels/PreviewTab';
+import ConsoleTab from '@/components/panels/ConsoleTab';
 import TraceTab from '@/components/panels/TraceTab';
 import MissionView from '@/components/panels/MissionView';
 
@@ -444,6 +446,16 @@ function DashboardInner() {
                 approvalsHistory={state.approvalsHistory}
                 subAgents={state.metrics.activeSubagents || []}
               />
+            </ComponentErrorBoundary>
+          )}
+          {rightPanelTab === 'preview' && (
+            <ComponentErrorBoundary label="Preview panel">
+              <PreviewTab />
+            </ComponentErrorBoundary>
+          )}
+          {rightPanelTab === 'console' && (
+            <ComponentErrorBoundary label="Console panel">
+              <ConsoleTab />
             </ComponentErrorBoundary>
           )}
           {rightPanelTab === 'workspace' && (
