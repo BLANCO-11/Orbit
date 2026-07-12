@@ -3,11 +3,13 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { Folder, File, ChevronRight, ChevronDown, RefreshCw, ExternalLink, Eye, Code } from 'lucide-react';
+import { useOrbitState } from '@/providers/OrbitProvider';
 
 /**
  * WorkspaceTab — File tree browser + file preview in a resizable split pane.
  */
 export default function WorkspaceTab() {
+  const { currentSessionId } = useOrbitState();
   const [tree, setTree] = useState([]);
   const [rootPath, setRootPath] = useState('/workspace');
   const [activeFile, setActiveFile] = useState(null);
@@ -17,16 +19,21 @@ export default function WorkspaceTab() {
   const [expandedDirs, setExpandedDirs] = useState(new Set());
   const [loading, setLoading] = useState(false);
 
+  // The explorer is scoped to the CURRENT session's tree (~/.orbit/sessions/<id>/).
+  const sessionQ = currentSessionId ? `&session=${encodeURIComponent(currentSessionId)}` : '';
+
   const fetchTree = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/workspace/tree?path=${rootPath}`);
+      const res = await fetch(`/api/workspace/tree?path=${rootPath}${sessionQ}`);
       const data = await res.json();
       setTree(data.tree || []);
     } catch { setTree([]); }
     setLoading(false);
-  }, [rootPath]);
+  }, [rootPath, sessionQ]);
 
+  // Reset to the session root + reload when the active session changes.
+  useEffect(() => { setActiveFile(null); setFileContent(null); setPreview(null); setRootPath('/workspace'); }, [currentSessionId]);
   useEffect(() => { fetchTree(); }, [fetchTree]);
 
   const openFile = useCallback(async (filePath) => {
@@ -35,13 +42,13 @@ export default function WorkspaceTab() {
     setPreview(null);
     try {
       const [fileRes, previewRes] = await Promise.all([
-        fetch(`/api/workspace/file?path=${filePath}`),
-        fetch(`/api/workspace/preview?path=${filePath}`),
+        fetch(`/api/workspace/file?path=${filePath}${sessionQ}`),
+        fetch(`/api/workspace/preview?path=${filePath}${sessionQ}`),
       ]);
       setFileContent(await fileRes.json());
       setPreview(await previewRes.json());
     } catch { setFileContent({ error: true }); }
-  }, []);
+  }, [sessionQ]);
 
   const toggleDir = (dirPath) => {
     setExpandedDirs((prev) => {
@@ -56,7 +63,7 @@ export default function WorkspaceTab() {
     await fetch(`/api/workspace/open`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: filePath }),
+      body: JSON.stringify({ path: filePath, session: currentSessionId }),
     });
   };
 

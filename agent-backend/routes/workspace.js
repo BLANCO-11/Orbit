@@ -9,18 +9,28 @@ const fs = require("fs");
 const path = require("path");
 const { exec } = require("child_process");
 const { marked } = require("marked");
+const workspacePaths = require("../workspace-paths");
 
-const WORKSPACE_ROOT = path.resolve(__dirname, "../../workspace");
+// The explorer is scoped to the CURRENT session's own tree
+// (~/.orbit/sessions/<id>/ → workspace/ · artifacts/ · tmp/), passed as ?session=.
+// No session → the sessions base dir (lists all sessions, read-only). The display
+// prefix "/workspace" maps to whichever root is in effect.
+function rootFor(req) {
+  const sid = req.query.session || (req.body && req.body.session);
+  return sid ? workspacePaths.sessionRoot(sid) : workspacePaths.SESSIONS_DIR;
+}
 
-function resolvePath(queryPath) {
-  if (!queryPath) return WORKSPACE_ROOT;
-  if (queryPath === "/workspace" || queryPath === "workspace") return WORKSPACE_ROOT;
+function resolvePath(queryPath, root) {
+  if (!queryPath) return root;
+  if (queryPath === "/workspace" || queryPath === "workspace") return root;
   if (queryPath.startsWith("/workspace/")) {
-    return path.resolve(path.join(WORKSPACE_ROOT, queryPath.substring("/workspace/".length)));
+    return path.resolve(path.join(root, queryPath.substring("/workspace/".length)));
   }
   if (queryPath.startsWith("workspace/")) {
-    return path.resolve(path.join(WORKSPACE_ROOT, queryPath.substring("workspace/".length)));
+    return path.resolve(path.join(root, queryPath.substring("workspace/".length)));
   }
+  // A bare relative path resolves under the session root, not the process cwd.
+  if (!path.isAbsolute(queryPath)) return path.resolve(path.join(root, queryPath));
   return path.resolve(queryPath);
 }
 
@@ -30,19 +40,22 @@ function createWorkspaceRouter() {
   // ── File Tree ───────────────────────────────────────────────────
   router.get("/tree", (req, res, next) => {
     try {
-      const resolved = resolvePath(req.query.path);
-      
+      const WORKSPACE_ROOT = rootFor(req);
+      // Ensure the session tree exists so a fresh session shows its dirs, not 404.
+      if (req.query.session) { try { workspacePaths.ensureSessionDirs(req.query.session); } catch {} }
+      const resolved = resolvePath(req.query.path, WORKSPACE_ROOT);
+
       if (!resolved.startsWith(WORKSPACE_ROOT)) {
         return res.status(403).json({ success: false, message: "Access denied." });
       }
-      
+
       if (!fs.existsSync(resolved)) {
         return res.status(404).json({ success: false, message: "Directory not found." });
       }
-      
+
       const entries = fs.readdirSync(resolved, { withFileTypes: true });
       const tree = entries
-        .filter(e => !e.name.startsWith(".") && e.name !== "node_modules" && e.name !== "screenshots" && e.name !== "temp")
+        .filter(e => !e.name.startsWith(".") && e.name !== "node_modules")
         .map(e => ({
           name: e.name,
           type: e.isDirectory() ? "directory" : "file",
@@ -56,7 +69,7 @@ function createWorkspaceRouter() {
           if (a.type !== b.type) return a.type === "directory" ? -1 : 1;
           return a.name.localeCompare(b.name);
         });
-      
+
       res.json({ tree, root: resolved.replace(WORKSPACE_ROOT, "/workspace") });
     } catch (err) { next(err); }
   });
@@ -64,8 +77,9 @@ function createWorkspaceRouter() {
   // ── File Content ────────────────────────────────────────────────
   router.get("/file", (req, res, next) => {
     try {
-      const filePath = resolvePath(req.query.path);
-      
+      const WORKSPACE_ROOT = rootFor(req);
+      const filePath = resolvePath(req.query.path, WORKSPACE_ROOT);
+
       if (!filePath.startsWith(WORKSPACE_ROOT)) {
         return res.status(403).json({ success: false, message: "Access denied." });
       }
@@ -112,8 +126,9 @@ function createWorkspaceRouter() {
   // ── Preview (rendered HTML) ─────────────────────────────────────
   router.get("/preview", (req, res, next) => {
     try {
-      const filePath = resolvePath(req.query.path);
-      
+      const WORKSPACE_ROOT = rootFor(req);
+      const filePath = resolvePath(req.query.path, WORKSPACE_ROOT);
+
       if (!filePath.startsWith(WORKSPACE_ROOT)) {
         return res.status(403).json({ success: false, message: "Access denied." });
       }
@@ -151,8 +166,9 @@ function createWorkspaceRouter() {
   // ── Open in System Editor ───────────────────────────────────────
   router.post("/open", (req, res, next) => {
     try {
-      const filePath = resolvePath(req.body.path);
-      
+      const WORKSPACE_ROOT = rootFor(req);
+      const filePath = resolvePath(req.body.path, WORKSPACE_ROOT);
+
       if (!filePath.startsWith(WORKSPACE_ROOT)) {
         return res.status(403).json({ success: false, message: "Access denied." });
       }

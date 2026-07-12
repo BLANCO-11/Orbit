@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useCallback, useEffect } from 'react';
+import { useOrbitState } from '@/providers/OrbitProvider';
 import { Monitor, FileText, RefreshCw, ExternalLink, AlertCircle, Maximize2, Minimize2, X } from 'lucide-react';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
@@ -19,6 +20,8 @@ const IMG_EXT = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'ico', 'bmp'];
  * Kept as a single tab so previewing doesn't spawn extra UI regions.
  */
 export default function PreviewTab() {
+  const { currentSessionId } = useOrbitState();
+  const sessionQ = currentSessionId ? `&session=${encodeURIComponent(currentSessionId)}` : '';
   const [mode, setMode] = useState<Mode>('live');
   const [fullscreen, setFullscreen] = useState(false);
 
@@ -50,18 +53,18 @@ export default function PreviewTab() {
     const ext = (name.split('.').pop() || '').toLowerCase();
     if (IMG_EXT.includes(ext)) {
       // Images can't come back as JSON text; point an <img> at the raw route.
-      setFile({ kind: 'image', content: `/api/workspace/file?path=${encodeURIComponent(p)}&raw=1`, name });
+      setFile({ kind: 'image', content: `/api/workspace/file?path=${encodeURIComponent(p)}&raw=1${sessionQ}`, name });
       setBusy(false);
       return;
     }
     try {
-      const res = await fetch(`/api/workspace/file?path=${encodeURIComponent(p)}`);
+      const res = await fetch(`/api/workspace/file?path=${encodeURIComponent(p)}${sessionQ}`);
       const d = await res.json();
       if (!res.ok || d.success === false) { setErr(d.message || 'Could not open file.'); setBusy(false); return; }
       setFile({ kind: d.language === 'markdown' ? 'markdown' : 'text', content: d.content ?? '', name, language: d.language });
     } catch { setErr('Request failed.'); }
     setBusy(false);
-  }, [filePath]);
+  }, [filePath, sessionQ]);
 
   const renderMd = (text: string) => {
     try { return { __html: DOMPurify.sanitize(marked.parse(text, { breaks: true }) as string) }; }
