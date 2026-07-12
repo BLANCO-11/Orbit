@@ -2,7 +2,7 @@
 'use client';
 
 import React from 'react';
-import { Sun, Moon, Menu, PanelRight, Settings } from 'lucide-react';
+import { Sun, Moon, Menu, PanelRight, Settings, MonitorSmartphone } from 'lucide-react';
 
 const STATUS_META = {
   idle: { label: 'Idle', cls: 'bg-muted text-muted-foreground' },
@@ -43,6 +43,7 @@ export default function Header({
   connectionState,
   centerView,
   onSetCenterView,
+  activeDevice,
 }) {
   // Connection problems take priority over the agent's own status.
   const meta = connectionState === 'connecting'
@@ -69,6 +70,18 @@ export default function Header({
         <span className="ml-1 rounded-[5px] border border-border px-1.5 py-px text-[10px] font-semibold uppercase tracking-wider text-faint">
           Console
         </span>
+        {/* Which agent runtime / device this console is currently driving. */}
+        {activeDevice && (
+          <span
+            title={`Agent runtime: ${activeDevice.name}${activeDevice.machine && activeDevice.machine !== 'local' ? ` on ${activeDevice.machine}` : ''} (${activeDevice.transport || 'local'})`}
+            className="ml-1 hidden items-center gap-1.5 rounded-[5px] border border-border bg-card px-1.5 py-px text-[10.5px] font-medium text-muted-foreground sm:inline-flex"
+          >
+            <MonitorSmartphone size={11} className={activeDevice.transport === 'remote' ? 'text-primary' : 'text-faint'} />
+            <span className="max-w-[140px] truncate">
+              {activeDevice.transport === 'remote' ? (activeDevice.machine || activeDevice.name) : activeDevice.name}
+            </span>
+          </span>
+        )}
       </div>
 
       {/* ── Status + controls ── */}

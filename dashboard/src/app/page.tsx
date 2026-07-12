@@ -108,6 +108,25 @@ function DashboardInner() {
     setSessionId(state.currentSessionId);
   }, [state.currentSessionId, setSessionId]);
 
+  // Persist the conversation into the session record whenever a turn settles.
+  // The streamed assistant reply otherwise lives only in reducer state and is
+  // written to the list lazily on the NEXT send — so switching sessions before
+  // sending again reloaded messages from the stale list and the last reply
+  // vanished. Flushing on the active→settled transition keeps it durable.
+  const prevStatusRef = useRef(state.status);
+  useEffect(() => {
+    const was = prevStatusRef.current;
+    prevStatusRef.current = state.status;
+    const wasActive = was === 'thinking' || was === 'executing';
+    const settled = state.status !== 'thinking' && state.status !== 'executing';
+    if (wasActive && settled && state.messages.length > 0) {
+      updateCurrentSession(
+        { messages: state.messages, executionPlan: state.executionPlan, logs: state.logs },
+        true,
+      );
+    }
+  }, [state.status, state.messages, state.executionPlan, state.logs, updateCurrentSession]);
+
   // ── STT ──
   const { isListening, isSupported: sttSupported, startListening, stopListening } = useSTT();
 
@@ -116,6 +135,16 @@ function DashboardInner() {
   const [attachedSkills, setAttachedSkills] = useState<string[]>([]);
   const [effort, setEffort] = useState('balanced');
   const [harnessId, setHarnessId] = useState('local');
+  // Agent runtimes (local pi child + remote paired devices via the adapter).
+  // Used to show WHICH device the console is driving, in the header.
+  const [harnesses, setHarnesses] = useState<any[]>([{ id: 'local', name: 'pi-code', transport: 'local', machine: 'local' }]);
+  useEffect(() => {
+    fetch('/api/harnesses')
+      .then((r) => r.json())
+      .then((d) => { if (d.success && Array.isArray(d.harnesses) && d.harnesses.length) setHarnesses(d.harnesses); })
+      .catch(() => {});
+  }, []);
+  const activeDevice = harnesses.find((h) => h.id === harnessId) || harnesses[0];
   const [activeProfileId, setActiveProfileId] = useState<string | null>(null);
   const [excludeTools, setExcludeTools] = useState<string[]>([]);
   const [centerView, setCenterView] = useState('timeline'); // timeline | mission
@@ -453,6 +482,7 @@ function DashboardInner() {
         connectionState,
         centerView,
         onSetCenterView: setCenterView,
+        activeDevice,
         notificationCenter: <NotificationCenter logs={state.logs} />,
       }}
       bottomNavItems={bottomNavItems}

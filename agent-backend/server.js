@@ -134,6 +134,15 @@ app.use("/api/channels", (req, res, next) => {
   return authMiddleware(req, res, next);
 }, channelsRouter);
 
+// Fleet: orchestrated-lead dispatch. The lead agent delegates tasks to other
+// devices via the `orbit-fleet` MCP tools, which call these routes; each
+// dispatch runs a headless turn on the target device's harness (handleStartTask
+// is hoisted, defined below). Authed like any other API surface.
+const createFleet = require("./fleet");
+const createFleetRouter = require("./routes/fleet");
+const fleet = createFleet({ db, harnessRegistry, handleStartTask });
+app.use("/api/fleet", authMiddleware, createFleetRouter({ fleet }));
+
 // Harness registry: the always-present local pi-code plus any connected remote
 // orbit-adapters. Sessions can target a specific harness by id on start_task.
 app.get("/api/harnesses", authMiddleware, (req, res) => {
@@ -392,31 +401,15 @@ async function handleStartTask(ws, userPrompt, sessionId, mode, systemPromptType
   ws.currentPrompt = userPrompt;
   
   const activeMode = mode || "";
-  
-  // ── Chat mode pre-check ───────────────────────────────────
-  if (!activeMode || activeMode === "chat") {
-    const toolKeyWords = ['read', 'write', 'edit', 'file', 'code', 'run', 'execute', 'command',
-      'create', 'modify', 'search', 'find', 'grep', 'list', 'dir', 'folder', 'directory',
-      'install', 'npm', 'git', 'compile', 'build', 'test', 'deploy', 'bash', 'shell',
-      'terminal', 'open', 'navigate', 'browser', 'web', 'fetch', 'download', 'upload',
-      'delete', 'remove', 'copy', 'move', 'rename', 'make', 'generate', 'implement'];
-    const lowerPrompt = userPrompt.toLowerCase();
-    const needsTools = toolKeyWords.some(kw => lowerPrompt.includes(kw));
-    
-    if (needsTools) {
-      const suggestedMode = lowerPrompt.includes('read') || lowerPrompt.includes('search') ||
-        lowerPrompt.includes('find') || lowerPrompt.includes('list') ? 'plan' : 'edit';
-      sendLog(ws, `[Chat Mode] Prompt appears to need tools. Suggesting ${suggestedMode} mode.`, false, sessionId);
-      sendWithSession(ws, {
-        type: "mode_suggestion",
-        mode: suggestedMode,
-        reason: `Your prompt appears to need tool execution, but you're in Chat mode. Please switch to ${suggestedMode.toUpperCase()} mode.`
-      }, sessionId);
-      sendStatus(ws, "done", sessionId);
-      return;
-    }
-  }
-  
+
+  // NOTE: the old keyword-based "chat mode pre-check" was removed. It guessed
+  // from prompt words whether a mode change was needed and blocked the turn
+  // before the agent ran — which ignored the policy matrix (e.g. a user who
+  // set network:chat=allow was still told to switch modes). The policy engine
+  // is now the single source of truth: each tool call is evaluated against the
+  // capability × mode matrix at tool_call_start, so chat mode allows exactly
+  // what the matrix permits and blocks the rest, per-tool, with a suggestion.
+
   sendStatus(ws, "thinking", sessionId);
   sendLog(ws, `Processing prompt: "${userPrompt}"`, true, sessionId);
 
@@ -617,6 +610,13 @@ function broadcastNotification({ title, body, severity }) {
   console.log(`[Notify] ${severity || "info"}: ${title} — ${body || ""}`);
 }
 
+// A fleet delegation shows up as a normal tool call named for the orbit-fleet
+// dispatch tool (pi prefixes MCP tools, e.g. `mcp_orbit-fleet_dispatch_to_device`),
+// so match on the suffix regardless of prefix spelling.
+function isFleetDispatchTool(name) {
+  return typeof name === "string" && /dispatch_to_device$/.test(name);
+}
+
 // ── Harness Event Emitter Factory ──────────────────────────────────
 function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
   const events = new EventEmitter();
@@ -721,8 +721,22 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
     } else if (subagentId && subagentTracker.getAgent(subagentId)) {
       // This tool call is being made BY a subagent (nested tool use) — record it against the subagent, not the session.
       subagentTracker.startToolCall(subagentId, id, name, args);
+    } else if (isFleetDispatchTool(name)) {
+      // The lead delegating to a device. The delegated run is its own session,
+      // but surface it here as a sub-agent lane so it shows in the Mission board
+      // under the lead. Completed in tool_call_end when the dispatch returns.
+      const device = (args && args.device) || "device";
+      const task = (args && args.task) || "";
+      subagentTracker.spawnAgent(id, `⇢ ${device}`, null, mode || "chat", task);
+      subagentTracker.setStatus(id, STATUS.WORKING);
+      metricsManager.addSubagent(sessionId, { id, name: `⇢ ${device}`, parentId: null, status: STATUS.WORKING, mode: mode || "chat" });
+      sendWithSession(ws, {
+        type: "subagent_metrics",
+        ...metricsManager.toFrontendUpdate(sessionId),
+        subagents: subagentTracker.toFrontendSummary(),
+      }, sessionId);
     }
-    
+
     // ── Policy-matrix enforcement ─────────────────────────────
     // Map the tool to a capability (write in/out depends on the path), then
     // evaluate it against the configurable capability × mode matrix, tightened
@@ -793,6 +807,13 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
     if (subagentId && subagentTracker.getAgent(subagentId)) {
       const subLatencyMs = subagentTracker.endToolCall(subagentId, id, resultStr);
       metricsManager.addSubagentToolCall(sessionId, subagentId, name, null, resultStr, subLatencyMs);
+    }
+
+    // Fleet dispatch lane completion — the delegated device finished and its
+    // answer came back as the tool result.
+    if (isFleetDispatchTool(name) && subagentTracker.getAgent(id)) {
+      subagentTracker.markCompleted(id, resultStr);
+      metricsManager.completeSubagent(sessionId, id, resultStr);
     }
 
     // Subagent completion
@@ -965,8 +986,41 @@ process.on("SIGTERM", () => shutdown("SIGTERM"));
 process.on("SIGINT", () => shutdown("SIGINT"));
 
 // ── Start ───────────────────────────────────────────────────────────
+// Ensure the `orbit-fleet` MCP server is registered in .pi/mcp.json so the lead
+// agent gets the delegate-to-device tools. Written on boot (not committed with a
+// hard-coded path) so command + API key + port always match THIS install.
+function ensureFleetMcpRegistered() {
+  try {
+    const fs = require("fs");
+    const { MCP_CONFIG_PATH } = require("./mcp-registry");
+    const cfg = fs.existsSync(MCP_CONFIG_PATH)
+      ? JSON.parse(fs.readFileSync(MCP_CONFIG_PATH, "utf-8"))
+      : { settings: { toolPrefix: "mcp" }, mcpServers: {} };
+    cfg.mcpServers = cfg.mcpServers || {};
+    const desired = {
+      command: "node",
+      args: [path.join(__dirname, "../mcp-server-fleet/index.js")],
+      transport: "stdio",
+      lifecycle: "eager",
+      env: {
+        ORBIT_API: `http://127.0.0.1:${PORT}`,
+        ...(process.env.ORBIT_API_KEY ? { ORBIT_API_KEY: process.env.ORBIT_API_KEY } : {}),
+      },
+    };
+    const cur = cfg.mcpServers["orbit-fleet"];
+    if (JSON.stringify(cur) !== JSON.stringify(desired)) {
+      cfg.mcpServers["orbit-fleet"] = desired;
+      fs.writeFileSync(MCP_CONFIG_PATH, JSON.stringify(cfg, null, 2) + "\n");
+      console.log("[Fleet] Registered orbit-fleet MCP server in .pi/mcp.json");
+    }
+  } catch (e) {
+    console.error("[Fleet] Could not register orbit-fleet MCP server:", e.message);
+  }
+}
+
 server.listen(PORT, '127.0.0.1', () => {
   console.log(`Orbit Backend Server listening on 127.0.0.1:${PORT} (internal only)`);
+  ensureFleetMcpRegistered();
   // Fire schedule-type channels locally (no inbound exposure needed).
   startScheduler({ db, runProfileHeadless });
   // Any session still marked running at startup was interrupted (this process

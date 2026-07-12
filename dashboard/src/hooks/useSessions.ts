@@ -3,39 +3,76 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useOrbitDispatch, useOrbitState, actions } from '@/providers/OrbitProvider';
 
-const EMPTY_METRICS = { toolCalls: 0, latency: 0, tokens: 0, cost: 0, activeSubagents: [], actionFeed: [] };
+// The complete flat UI-metrics shape, mirroring the reducer's initial
+// state.metrics AND agent-backend/metrics.js toFrontendUpdate(). Every field
+// is spelled out so a session switch fully OVERWRITES the reducer's metrics
+// (SET_METRICS merges, so any field left out here would silently retain the
+// previously-open session's value — the "metrics don't reset between sessions"
+// bug). Keep this in sync with both shapes.
+const EMPTY_METRICS = {
+  toolCalls: 0, latency: 0, tokens: 0, cost: 0,
+  tokensIn: 0, tokensOut: 0, tokensReasoning: 0,
+  tokensSource: 'estimated', costEstimated: true, turns: [],
+  activeSubagents: [], subagentTrace: [], actionFeed: [], latencyPerTool: {},
+};
 
 /**
  * Sessions loaded from the backend carry metrics in the *persisted* shape
- * (agent-backend/metrics.js: tokens.total, toolCalls.total, latency.totalMs,
- * subagents: [...]) — the reducer and every metrics-displaying component
- * expect the *flat* live-stream shape instead (plain-number tokens/
- * toolCalls/latency, see toFrontendUpdate()). Dumping the persisted shape
- * straight into state renders as "[object Object]" / "NaN" until the next
- * live update happens to overwrite it. Normalize on load instead.
+ * (agent-backend/metrics.js toPersistable: nested tokens.{input,output,
+ * reasoning,total,estimated,reported}, toolCalls.total, latency.totalMs,
+ * subagents:[...], turns:[...]) — the reducer and every metrics-displaying
+ * component expect the *flat* live-stream shape instead (see
+ * toFrontendUpdate(): plain-number tokens/tokensIn/tokensOut/…). Dumping the
+ * persisted shape straight into state renders as "[object Object]" / "NaN",
+ * and dropping fields leaves stale values from the previous session. Produce
+ * the FULL flat shape here so the switch is a clean overwrite.
  */
 function normalizeMetricsForUI(raw) {
-  if (!raw || Object.keys(raw).length === 0) return EMPTY_METRICS;
+  if (!raw || Object.keys(raw).length === 0) return { ...EMPTY_METRICS };
 
-  // Already flat (e.g. the empty shape createSession/loadSessions seed with).
+  // Already flat (live-stream shape, or the empty seed shape). Fill any gaps
+  // from EMPTY_METRICS so the payload always carries every field.
   if (typeof raw.tokens === 'number' || typeof raw.toolCalls === 'number') {
     return {
+      ...EMPTY_METRICS,
       toolCalls: raw.toolCalls || 0,
       latency: raw.latency || 0,
       tokens: raw.tokens || 0,
       cost: raw.cost || 0,
+      tokensIn: raw.tokensIn || 0,
+      tokensOut: raw.tokensOut || 0,
+      tokensReasoning: raw.tokensReasoning || 0,
+      tokensSource: raw.tokensSource || 'estimated',
+      costEstimated: raw.costEstimated ?? true,
+      turns: raw.turns || [],
       activeSubagents: raw.activeSubagents || [],
+      subagentTrace: raw.subagentTrace || raw.subagents || [],
       actionFeed: raw.actionFeed || [],
+      latencyPerTool: raw.latencyPerTool || {},
     };
   }
 
-  // Persisted (nested) shape from the backend DB row.
+  // Persisted (nested) shape from the backend DB row. Resolve effective tokens
+  // the same way metrics.js _effectiveTokens does: reported when the provider
+  // sent usage, the running estimate otherwise.
+  const t = raw.tokens || {};
+  const eff = t.estimated ? t : (t.reported || t);
+  const subs = raw.subagents || [];
   return {
+    ...EMPTY_METRICS,
     toolCalls: raw.toolCalls?.total || 0,
     latency: raw.latency?.totalMs || 0,
-    tokens: raw.tokens?.total || 0,
+    latencyPerTool: raw.latency?.perTool || {},
+    tokens: eff.total || 0,
+    tokensIn: eff.input || 0,
+    tokensOut: eff.output || 0,
+    tokensReasoning: eff.reasoning || 0,
+    tokensSource: t.estimated ? 'estimated' : 'reported',
     cost: raw.cost || 0,
-    activeSubagents: (raw.subagents || []).filter((sa) => sa.status === 'spawning' || sa.status === 'working'),
+    costEstimated: !!t.estimated,
+    turns: (raw.turns || []).slice(-12),
+    activeSubagents: subs.filter((sa) => sa.status === 'spawning' || sa.status === 'working'),
+    subagentTrace: subs,
     actionFeed: raw.actionFeed || [],
   };
 }
@@ -45,7 +82,11 @@ function normalizeMetricsForUI(raw) {
  */
 export function useSessions() {
   const dispatch = useOrbitDispatch();
-  const { currentSessionId, sessionMode } = useOrbitState();
+  // `liveMetrics` is the reducer's real-time metrics for the OPEN session; the
+  // per-session `metrics` in the `sessions` list is only a zero seed. Snapshot
+  // live values into the list when leaving a session so switching back shows the
+  // right numbers without a round-trip to the backend.
+  const { currentSessionId, sessionMode, metrics: liveMetrics, messages: liveMessages, executionPlan: livePlan } = useOrbitState();
 
   const [sessions, setSessions] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -82,7 +123,7 @@ export function useSessions() {
       loaded = [{
         id: defaultId, title: 'New Session',
         messages: [], logs: [], executionPlan: '', reasoningHistory: [],
-        metrics: { toolCalls: 0, latency: 0, tokens: 0, cost: 0, activeSubagents: [], actionFeed: [] },
+        metrics: { ...EMPTY_METRICS },
         mode: '', timestamp: Date.now(),
       }];
     }
@@ -170,7 +211,7 @@ export function useSessions() {
     const newSession = {
       id: newId, title: 'New Session',
       messages: [], logs: [], executionPlan: '', reasoningHistory: [],
-      metrics: { toolCalls: 0, latency: 0, tokens: 0, cost: 0, activeSubagents: [], actionFeed: [] },
+      metrics: { ...EMPTY_METRICS },
       mode: '', timestamp: Date.now(),
     };
 
@@ -184,15 +225,28 @@ export function useSessions() {
     dispatch(actions.setMessages([]));
     dispatch(actions.clearLogs());
     dispatch(actions.setExecutionPlan(''));
-    dispatch(actions.setMetrics({ toolCalls: 0, latency: 0, tokens: 0, cost: 0, activeSubagents: [], actionFeed: [] }));
+    dispatch(actions.setMetrics({ ...EMPTY_METRICS }));
     dispatch(actions.setSessionMode(''));
   }, [dispatch]);
 
   const switchSession = useCallback((sessionId) => {
-    // Save current first
+    // Save current first, snapshotting its live metrics into the list entry so a
+    // later switch-back reads the real numbers rather than the zero seed. (The
+    // backend ignores client-sent metrics on save — it owns them — so this only
+    // affects the in-memory list, not what's persisted.)
     const current = sessions.find(s => s.id === currentSessionId);
     if (current) {
-      saveSession(current, true);
+      // Snapshot live reducer state (metrics + the possibly-just-streamed reply)
+      // into the outgoing session so switching back shows real numbers and the
+      // full conversation — the list otherwise lags reducer state.
+      const snapshot = {
+        ...current,
+        metrics: liveMetrics,
+        messages: (liveMessages && liveMessages.length >= (current.messages?.length || 0)) ? liveMessages : current.messages,
+        executionPlan: livePlan || current.executionPlan,
+      };
+      setSessions(prev => prev.map(s => (s.id === currentSessionId ? snapshot : s)));
+      saveSession(snapshot, true);
     }
 
     const target = sessions.find(s => s.id === sessionId);
@@ -208,7 +262,7 @@ export function useSessions() {
       url.searchParams.set('session', sessionId);
       window.history.pushState(null, '', url);
     }
-  }, [sessions, currentSessionId, saveSession, dispatch]);
+  }, [sessions, currentSessionId, saveSession, dispatch, liveMetrics, liveMessages, livePlan]);
 
   const deleteSession = useCallback(async (sessionId) => {
     const next = sessions.filter(s => s.id !== sessionId);

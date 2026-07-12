@@ -13,6 +13,17 @@
       "env": {
         "LIGHTPANDA_WS": "ws://127.0.0.1:9222"
       }
+    },
+    "orbit-fleet": {
+      "command": "node",
+      "args": [
+        "/home/blanco/builds/LLM-OS-AGENT/mcp-server-fleet/index.js"
+      ],
+      "transport": "stdio",
+      "lifecycle": "eager",
+      "env": {
+        "ORBIT_API": "http://127.0.0.1:6800"
+      }
     }
   }
 }

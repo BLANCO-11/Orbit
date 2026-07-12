@@ -89,13 +89,13 @@ class PiCodeHarness extends HarnessInterface {
     ];
 
     // Disable selected tools this session. Precedence: explicit per-session
-    // excludeTools (from a profile / composer) > config default > the built-in
-    // safe default (pi's native web/browser tools, so the agent uses ONLY the
-    // Lightpanda MCP browser — fast, headless, pre-approved). Applies to
-    // extension tools too (per `pi --help`).
+    // excludeTools (from a profile / composer) > config default > nothing.
+    // Nothing is excluded by default: Lightpanda is the PREFERRED browser (the
+    // system prompt steers there first), with pi's native web tools kept as a
+    // fallback. A profile can still exclude tools explicitly.
     const excludeTools = this.excludeTools
       || this.config.excludeTools
-      || ["web_search", "fetch_content", "get_search_content", "browser", "web"];
+      || [];
     if (Array.isArray(excludeTools) && excludeTools.length > 0) {
       piArgs.push("--exclude-tools", excludeTools.join(","));
     }

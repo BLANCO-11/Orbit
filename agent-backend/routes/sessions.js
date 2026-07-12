@@ -75,7 +75,22 @@ function createSessionsRouter() {
   // Create or update session
   router.post("/", (req, res, next) => {
     try {
-      db.saveSession(req.body);
+      const incoming = req.body || {};
+      // `metrics` and `subagentTree` are OWNED by the backend: metricsManager
+      // and subagentTracker persist the authoritative values on turn-end and on
+      // a 30s timer (see server.js). The dashboard re-POSTs the whole session on
+      // every message edit but only carries a zeroed metrics seed — honoring it
+      // here wiped the real counts, which is the "metrics reset on reload /
+      // session switch" bug. For an existing session, keep the persisted
+      // metrics/tree; a brand-new session (no row yet) keeps whatever it sends.
+      const existing = incoming.id ? db.getSession(incoming.id) : null;
+      if (existing) {
+        incoming.metrics = existing.metrics;
+        if (!incoming.subagentTree || Object.keys(incoming.subagentTree).length === 0) {
+          incoming.subagentTree = existing.subagentTree;
+        }
+      }
+      db.saveSession(incoming);
       res.json({ success: true });
     } catch (err) { next(err); }
   });

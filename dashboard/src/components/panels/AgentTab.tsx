@@ -76,6 +76,20 @@ export default function AgentTab({ metrics, status, approvalsHistory, subAgents 
   const feed = [...(metrics.actionFeed || [])].reverse().slice(0, 8);
   const avgLatency = metrics.toolCalls > 0 ? Math.round((metrics.latency || 0) / metrics.toolCalls) : 0;
 
+  // Token/cost truth policy: provider-REPORTED usage is the only authoritative
+  // count. The character-count estimate is unreliable (it under-counts input —
+  // it never sees pi's system prompt / tool schemas / history — and over-counts
+  // output), so we never render it as if it were real. Reported → confident
+  // number. Not yet reported → a muted "≈" estimate labelled as such, or
+  // "measuring…" while a turn is in flight. This keeps the headline honest.
+  const tokensReported = metrics.tokensSource === 'reported';
+  const costReported = metrics.costEstimated === false;
+  const turnActive = status === 'thinking' || status === 'executing';
+  const approxTokens = (metrics.tokens || 0) > 0 ? `≈${(metrics.tokens || 0).toLocaleString()}` : (turnActive ? '…' : '—');
+  const approxCost = (metrics.cost || 0) > 0
+    ? `≈$${(metrics.cost || 0).toFixed(metrics.cost < 0.01 ? 4 : 2)}`
+    : (turnActive ? '…' : '—');
+
   return (
     <div className="flex h-full flex-col gap-5 overflow-y-auto p-4">
       {/* ── Session metrics ── */}
@@ -85,11 +99,12 @@ export default function AgentTab({ metrics, status, approvalsHistory, subAgents 
           <MetricCard
             icon={Cpu}
             label="Tokens"
-            value={(metrics.tokens || 0).toLocaleString()}
+            value={tokensReported ? (metrics.tokens || 0).toLocaleString() : approxTokens}
+            valueCls={tokensReported ? '' : 'text-muted-foreground'}
             sub={
-              metrics.tokensSource === 'reported'
+              tokensReported
                 ? `${(metrics.tokensIn || 0).toLocaleString()} in / ${(metrics.tokensOut || 0).toLocaleString()} out · reported`
-                : 'estimated'
+                : turnActive ? 'measuring…' : 'estimate · awaiting provider usage'
             }
           />
           <MetricCard
@@ -106,10 +121,10 @@ export default function AgentTab({ metrics, status, approvalsHistory, subAgents 
           />
           <MetricCard
             icon={DollarSign}
-            label={metrics.costEstimated === false ? 'Cost' : 'Est. cost'}
-            value={`$${(metrics.cost || 0).toFixed(metrics.cost < 0.01 ? 4 : 2)}`}
-            valueCls="text-success"
-            sub={metrics.costEstimated === false ? 'from reported usage' : 'estimated'}
+            label={costReported ? 'Cost' : 'Est. cost'}
+            value={costReported ? `$${(metrics.cost || 0).toFixed(metrics.cost < 0.01 ? 4 : 2)}` : approxCost}
+            valueCls={costReported ? 'text-success' : 'text-muted-foreground'}
+            sub={costReported ? 'from reported usage' : turnActive ? 'measuring…' : 'estimate · awaiting provider usage'}
           />
         </div>
         {(metrics.turns?.length ?? 0) > 0 && (

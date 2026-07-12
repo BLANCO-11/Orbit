@@ -68,8 +68,17 @@ class HeadlessSocket {
     }
   }
 
+  /**
+   * The final assistant text of the run, TTS markup stripped. Used by fleet
+   * dispatch to hand a delegated device's answer back to the lead agent.
+   */
+  getResult() {
+    return (this._assistant?.content || "").replace(/<tts>[\s\S]*?<\/tts>/gi, "").trim();
+  }
+
   _persist(status) {
     this._done = true;
+    this._status = status;
     try {
       const existing = this._db.getSession(this._sessionId) || {};
       this._db.saveSession({

@@ -25,7 +25,7 @@ function toolIcon(name = '') {
  * ChatMessage — user messages as right-aligned accent bubbles,
  * assistant messages as avatar + prose with inline tool-call cards.
  */
-export default function ChatMessage({
+function ChatMessageBase({
   message, renderMarkdown,
   expandedTools, toggleTool,
   getToolSummary, getToolOutput,
@@ -107,6 +107,31 @@ export default function ChatMessage({
     </div>
   );
 }
+
+/**
+ * While the agent streams, the reducer replaces ONLY the last message object on
+ * every token; all earlier message objects keep their reference. Without
+ * memoization, React still re-renders the whole list each token — re-running
+ * marked.parse + DOMPurify.sanitize on every prior bubble — which is what made
+ * the chat flicker and stutter. Skip a bubble's re-render unless something that
+ * actually changes its output changed. Function props are intentionally omitted:
+ * toggleTool only closes over dispatch, and onSetSessionModeAndReRun is only
+ * live on the (always-re-rendered) last message, so their changing identity must
+ * NOT force every bubble to re-render.
+ */
+function chatMessagePropsEqual(prev, next) {
+  return (
+    prev.message === next.message &&
+    prev.renderMarkdown === next.renderMarkdown &&
+    prev.expandedTools === next.expandedTools &&
+    prev.sessionMode === next.sessionMode &&
+    prev.getToolSummary === next.getToolSummary &&
+    prev.getToolOutput === next.getToolOutput
+  );
+}
+
+const ChatMessage = React.memo(ChatMessageBase, chatMessagePropsEqual);
+export default ChatMessage;
 
 // ── Tool group card ─────────────────────────────────────────────
 

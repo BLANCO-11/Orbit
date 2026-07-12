@@ -1,20 +1,42 @@
 'use client';
 
 import React, { useMemo } from 'react';
-import { GitBranch, ListTree } from 'lucide-react';
+import { GitBranch, ListTree, Circle, CheckCircle2, Loader2 } from 'lucide-react';
 
 const LANE = ['var(--lane-1)', 'var(--lane-2)', 'var(--lane-3)'];
 
+type TaskStatus = 'pending' | 'active' | 'done';
+
+interface Task {
+  text: string;
+  status: TaskStatus;
+}
+
 interface Phase {
   title: string;
-  tasks: string[];
+  tasks: Task[];
+}
+
+// Map pi's bracketed state tag (e.g. "[DONE]", "[IN PROGRESS]", "[TODO]") to a
+// checklist status. Returns null for tags we don't recognise so plain prose or
+// unknown tags fall back to "pending" (honest: unknown ≠ done).
+function classifyTag(tag: string): TaskStatus | null {
+  const t = tag.toLowerCase().trim();
+  // Markdown checkboxes: "[x]" = done, "[ ]" = unchecked (falls through to pending).
+  if (/\b(done|complete|completed|finished|success|resolved|closed)\b|^[✓✔x]$/.test(t)) return 'done';
+  if (/\b(in ?progress|progress|active|current|running|doing|wip|working|now|ongoing)\b/.test(t)) return 'active';
+  if (/\b(todo|to ?do|pending|queued|planned|next|blocked|waiting|open)\b/.test(t)) return 'pending';
+  return null;
 }
 
 /**
  * Parse a free-form execution plan into phases + tasks. The hybrid planner and
  * pi's reasoning emit markdown-ish plans: markdown headings and "Phase N" /
- * "Step N" lines start a phase; bullet/numbered lines are tasks. This is a
- * best-effort projection — honest about the source, not a fabricated board.
+ * "Step N" lines start a phase; bullet/numbered lines are tasks. pi prefixes
+ * task lines with a state tag like "[TODO]" / "[IN PROGRESS]" / "[DONE]" — we
+ * capture that as the task's live status so the board reads as a real checklist,
+ * not a static outline. This is a best-effort projection — honest about the
+ * source, not a fabricated board.
  */
 function parsePlan(plan: string): Phase[] {
   if (!plan || !plan.trim()) return [];
@@ -29,11 +51,10 @@ function parsePlan(plan: string): Phase[] {
 
   const isHeading = (l: string) =>
     /^#{1,4}\s+/.test(l) || /^(phase|step|stage|part)\s*\d*\s*[:.\-)]/i.test(l);
-  const isBullet = (l: string) => /^([-*•]|\d+[.)])\s+/.test(l);
   // A line that is ONLY a bracketed status/meta tag, e.g. "[STATUS: INITIALIZING]".
   const isMetaOnly = (l: string) => /^\[[^\]]*\]$/.test(l);
-  // Strip a leading state tag like "[TODO]" / "[DONE]" that pi prefixes tasks with.
-  const stripTag = (l: string) => l.replace(/^\[[a-z0-9 _-]+\]\s*/i, '').trim();
+  const tagRe = /^\[([a-z0-9 _✓✔/\-]+)\]\s*/i;
+  const stripTag = (l: string) => l.replace(tagRe, '').trim();
 
   for (const raw of lines) {
     if (isMetaOnly(raw)) continue;
@@ -44,13 +65,25 @@ function parsePlan(plan: string): Phase[] {
       // Any non-heading line under a phase is a task (bullet, [TODO]-tagged, or
       // plain prose). This matches pi's real plan format, which uses STEP N:
       // headings with tag-prefixed task lines rather than markdown bullets.
-      const task = stripTag(raw.replace(/^([-*•]|\d+[.)])\s+/, '')).trim();
-      if (!task || task.length > 240) continue;
+      // Strip the bullet marker first, then peel the leading state tag so a
+      // "- [DONE] thing" or "1. [x] thing" line yields status + clean text.
+      const noBullet = raw.replace(/^([-*•]|\d+[.)])\s+/, '');
+      const tagMatch = noBullet.match(tagRe);
+      let status: TaskStatus = 'pending';
+      if (tagMatch) status = classifyTag(tagMatch[1]) || 'pending';
+      const text = (tagMatch ? noBullet.slice(tagMatch[0].length) : noBullet).trim();
+      if (!text || text.length > 240) continue;
       if (!current) { current = { title: 'Plan', tasks: [] }; phases.push(current); }
-      current.tasks.push(task);
+      current.tasks.push({ text, status });
     }
   }
   return phases.filter((p) => p.tasks.length > 0);
+}
+
+function TaskIcon({ status }: { status: TaskStatus }) {
+  if (status === 'done') return <CheckCircle2 size={13} className="mt-0.5 shrink-0 text-success" />;
+  if (status === 'active') return <Loader2 size={13} className="mt-0.5 shrink-0 animate-spin text-warning" />;
+  return <Circle size={13} className="mt-0.5 shrink-0 text-faint" />;
 }
 
 function AgentBadge({ status }: { status: string }) {
@@ -102,22 +135,35 @@ export default function MissionView({ executionPlan, subAgents = [], status }: {
 
         {phases.length > 0 && (
           <div className="grid gap-3 md:grid-cols-2">
-            {phases.map((phase, i) => (
-              <div key={i} className="overflow-hidden rounded-xl border border-border-soft bg-card">
-                <div className="flex items-center gap-2 border-b border-border-soft px-3.5 py-2.5">
-                  <span className="font-mono text-[10.5px] font-bold text-faint">P{i + 1}</span>
-                  <span className="text-[13px] font-semibold">{phase.title}</span>
+            {phases.map((phase, i) => {
+              const doneCount = phase.tasks.filter((t) => t.status === 'done').length;
+              const hasActive = phase.tasks.some((t) => t.status === 'active');
+              return (
+                <div key={i} className="overflow-hidden rounded-xl border border-border-soft bg-card">
+                  <div className="flex items-center gap-2 border-b border-border-soft px-3.5 py-2.5">
+                    <span className="font-mono text-[10.5px] font-bold text-faint">P{i + 1}</span>
+                    <span className="text-[13px] font-semibold">{phase.title}</span>
+                    <span className={`ml-auto shrink-0 font-mono text-[10.5px] ${
+                      doneCount === phase.tasks.length ? 'text-success' : hasActive ? 'text-warning' : 'text-faint'
+                    }`}>
+                      {doneCount}/{phase.tasks.length}
+                    </span>
+                  </div>
+                  <div className="flex flex-col gap-1.5 px-3.5 py-2.5">
+                    {phase.tasks.map((t, j) => (
+                      <div key={j} className="flex items-start gap-2 text-[12.5px]">
+                        <TaskIcon status={t.status} />
+                        <span className={
+                          t.status === 'done' ? 'text-faint line-through' :
+                          t.status === 'active' ? 'font-medium text-foreground' :
+                          'text-muted-foreground'
+                        }>{t.text}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <div className="flex flex-col gap-1.5 px-3.5 py-2.5">
-                  {phase.tasks.map((t, j) => (
-                    <div key={j} className="flex items-start gap-2 text-[12.5px] text-muted-foreground">
-                      <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-border" />
-                      <span>{t}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 

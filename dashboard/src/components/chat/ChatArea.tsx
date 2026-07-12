@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef } from 'react';
+import React, { useRef, useEffect } from 'react';
 import ApprovalBanner from '@/components/ApprovalBanner';
 import ChatMessage, { ChatEmptyState } from '@/components/ChatMessage';
 import ReasoningAccordion from './ReasoningAccordion';
@@ -81,13 +81,37 @@ export default function ChatArea({
   showEmptyState,
 }) {
   const containerRef = useRef(null);
+  // Whether the view is currently pinned to the newest message. Starts true so
+  // opening/switching a session lands at the bottom; flipped by the user
+  // scrolling away from the bottom (e.g. to read history) and back.
+  const stickToBottomRef = useRef(true);
 
   const handleScroll = (e) => {
     const container = e.currentTarget;
+    // Recompute stickiness on every user scroll: within ~120px of the bottom
+    // counts as "following along".
+    const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+    stickToBottomRef.current = distanceFromBottom < 120;
     if (container.scrollTop === 0 && onLoadOlder && hasMoreMessages) {
       onLoadOlder(container);
     }
   };
+
+  // Follow streaming output. The reducer hands us a fresh `messages` array on
+  // every token, so this fires as text is imprinted. We pin by setting
+  // scrollTop directly (instant) rather than scrollIntoView({behavior:'smooth'})
+  // — per-token smooth-scroll animations stack up and fight each other, which
+  // is exactly the stutter we're removing; a continuously-growing instant pin
+  // reads as smooth because the text simply flows upward. Gated on
+  // stickToBottomRef so a user reading earlier messages isn't yanked down.
+  useEffect(() => {
+    if (!stickToBottomRef.current) return;
+    const container = containerRef.current;
+    if (!container) return;
+    requestAnimationFrame(() => {
+      container.scrollTop = container.scrollHeight;
+    });
+  }, [messages]);
 
   const isProcessing = status === 'thinking' || status === 'executing';
   const lastAction = metrics?.actionFeed?.[metrics.actionFeed.length - 1]?.toolName;
