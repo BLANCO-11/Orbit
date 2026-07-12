@@ -76,12 +76,15 @@ class PiCodeHarness extends HarnessInterface {
     this._workspaceDir = dirs.workspace;
     combinedPrompt = combinedPrompt +
       `\n\n## Your workspace (this session)\n` +
-      `You are running in an isolated per-session workspace. Your current directory is your workspace.\n` +
+      `You are running in an isolated per-session workspace. Your current directory IS your workspace.\n` +
       `- \`${dirs.workspace}\` — your working dir (cwd). Do all task work here; relative paths land here.\n` +
       `- \`${dirs.artifacts}\` — put FINISHED deliverables the user should keep here (reports, build outputs, exports).\n` +
       `- \`${dirs.tmp}\` — scratch/downloads/intermediates; disposable.\n` +
-      `Write only inside these. Writing anywhere else asks the user's permission first. ` +
-      `You cannot access other sessions' folders or protected paths (Orbit's own source, ~/.ssh, system dirs). ` +
+      `RULES:\n` +
+      `- Create every file INSIDE your workspace, using RELATIVE paths (e.g. \`weather.sh\`, \`./report.md\`) — NOT absolute paths like \`~/scripts/...\` or \`/home/...\`. The user only sees files in this workspace; anything you scatter elsewhere is invisible to them and asks for permission.\n` +
+      `- Prefer the \`write\` tool over \`bash\` heredocs/redirects for creating files (bash writes are harder to track).\n` +
+      `- If a task genuinely needs a file at a specific system path (e.g. a cron script that must persist), create it in your workspace first, then tell the user the path and ask before copying it out.\n` +
+      `- You cannot access other sessions' folders or protected paths (Orbit's own source, ~/.ssh, system dirs).\n` +
       `Keep things tidy — this layout is how the user tracks and manages your work.`;
 
     if (modePromptFile) {
