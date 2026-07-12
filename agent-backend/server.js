@@ -220,6 +220,21 @@ const fleet = createFleet({
   db, harnessRegistry, handleStartTask,
   // Lets fleet dispatch inherit a delegate's rights from the LEAD session's mode.
   getSessionMode: (sid) => activeSessions.get(sid)?.mode || db.getSession(sid)?.mode || null,
+  // After a delegate finishes, credit the lead's sub-agent lane with the tool
+  // calls + tokens the delegate racked up in ITS own session (else the lane
+  // shows 0 even though the delegate did the work).
+  creditLeadSubagent: (leadSessionId, device, delegateSessionId) => {
+    const lead = activeSessions.get(leadSessionId);
+    if (!lead?.subagentTracker) return;
+    let toolCalls = 0, tokens = 0;
+    try {
+      const p = metricsManager.toPersistable(delegateSessionId) || db.getSession(delegateSessionId)?.metrics || {};
+      toolCalls = p.toolCalls?.total || 0;
+      tokens = (p.tokens?.reported && !p.tokens.estimated ? p.tokens.reported.total : p.tokens?.total) || 0;
+    } catch {}
+    lead.subagentTracker.creditDelegate(device, { toolCalls, tokens, childSessionId: delegateSessionId });
+    try { sendWithSession(lead.ws, { type: "subagent_metrics", ...subagentFields(lead.subagentTracker) }, leadSessionId); } catch {}
+  },
 });
 app.use("/api/fleet", authMiddleware, createFleetRouter({ fleet }));
 

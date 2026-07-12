@@ -91,6 +91,25 @@ class SubagentTracker {
   }
 
   /**
+   * Credit a FLEET-delegated lane with the stats its delegate racked up in its
+   * own session (a dispatched agent runs elsewhere, so its tool calls/tokens
+   * never flow through this tracker). Matches the most recent uncredited lane
+   * named `⇢ <device>`.
+   */
+  creditDelegate(device, { toolCalls = 0, tokens = 0, childSessionId } = {}) {
+    const laneName = `⇢ ${device}`;
+    const lane = Array.from(this._agents.values())
+      .filter((a) => a.name === laneName && !a._credited)
+      .sort((a, b) => new Date(b.timeStart) - new Date(a.timeStart))[0];
+    if (!lane) return;
+    lane._credited = true;
+    lane._delegatedToolCalls = toolCalls;
+    lane.tokens.total = (lane.tokens.total || 0) + tokens;
+    lane.childSessionId = childSessionId || null;
+    this._emit("subagent_update", { agentId: lane.id, status: lane.status });
+  }
+
+  /**
    * Get a subagent node by ID.
    */
   getAgent(agentId) {
@@ -379,8 +398,9 @@ class SubagentTracker {
         mode: agent.mode,
         inheritedMode: this.getEffectiveMode(agent.id),
         parentId: agent.parentId,
-        toolCalls: agent.toolCalls.length,
+        toolCalls: agent.toolCalls.length + (agent._delegatedToolCalls || 0),
         tokens: agent.tokens.total,
+        childSessionId: agent.childSessionId || null,
         reasoning: allReasoning,
         currentAction,
         recentToolCalls,

@@ -27,7 +27,7 @@ function capMode(requested, ceiling) {
   return RANK_MODE[Math.min(r, c)];
 }
 
-function createFleet({ db, harnessRegistry, handleStartTask, getSessionMode }) {
+function createFleet({ db, harnessRegistry, handleStartTask, getSessionMode, creditLeadSubagent }) {
   // Local agent TYPES the lead can delegate to on this host (each is a harness
   // id that handleStartTask routes locally). This is what enables mixing agents
   // — e.g. run one subtask on pi and another on OpenCode from the same chat.
@@ -115,6 +115,12 @@ function createFleet({ db, harnessRegistry, handleStartTask, getSessionMode }) {
       socket.whenDone(),
       new Promise((res) => setTimeout(res, TIMEOUT_MS)),
     ]);
+
+    // Credit the lead's sub-agent lane with what the delegate actually did
+    // (its tool calls + tokens live in ITS session), so the lane doesn't show 0.
+    if (creditLeadSubagent && leadSessionId) {
+      try { creditLeadSubagent(leadSessionId, harnessId, sessionId); } catch {}
+    }
 
     return {
       sessionId,
