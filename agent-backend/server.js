@@ -697,6 +697,9 @@ async function handleStartTask(ws, userPrompt, sessionId, mode, systemPromptType
     if (!ses) { clearInterval(metricsAutoSave); return; }
     try {
       const persistable = metricsManager.toPersistable(sessionId);
+      // Persist the RICH sub-agent summary (task/tools/reasoning) so the Trace
+      // tab rehydrates fully on refresh/switch, not just id/name/status.
+      persistable.subagents = subagentTracker.toFrontendSummary();
       const existingSession = db.getSession(sessionId);
       if (existingSession) {
         db.saveSession({ ...existingSession, metrics: persistable, subagentTree: subagentTracker.toJSON() });
@@ -768,6 +771,16 @@ function isFleetDispatchTool(name) {
   return typeof name === "string" && /dispatch_to_device$/.test(name);
 }
 
+// The single source of sub-agent data for the UI: the rich tracker summary
+// (all agents incl. completed, each with task/tools/reasoning/currentAction),
+// split into the full list + the currently-active subset. Attached to every
+// metrics send so the thin metricsManager view never clobbers it.
+const ACTIVE_SA = new Set(["working", "spawning", "reasoning"]);
+function subagentFields(tracker) {
+  const all = tracker.toFrontendSummary();
+  return { subagents: all, activeSubagents: all.filter((a) => ACTIVE_SA.has(a.status)) };
+}
+
 // ── Harness Event Emitter Factory ──────────────────────────────────
 function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
   const events = new EventEmitter();
@@ -820,6 +833,7 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
     sendWithSession(ws, {
       type: "usage_update",
       ...metricsManager.toFrontendUpdate(sessionId),
+      ...subagentFields(subagentTracker),
     }, sessionId);
   });
   
@@ -903,7 +917,7 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
       sendWithSession(ws, {
         type: "subagent_metrics",
         ...metricsManager.toFrontendUpdate(sessionId),
-        subagents: subagentTracker.toFrontendSummary(),
+        ...subagentFields(subagentTracker),
       }, sessionId);
     }
 
@@ -1079,9 +1093,8 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
     sendWithSession(ws, {
       type: "subagent_metrics",
       // Spread FIRST so the tracker's full-history summary isn't clobbered by
-      // toFrontendUpdate()'s active-only `subagents` field.
       ...metricsManager.toFrontendUpdate(sessionId),
-      subagents: subagentTracker.toFrontendSummary(),
+      ...subagentFields(subagentTracker),
     }, sessionId);
   });
   
@@ -1092,9 +1105,8 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
     sendWithSession(ws, {
       type: "subagent_metrics",
       // Spread FIRST so the tracker's full-history summary isn't clobbered by
-      // toFrontendUpdate()'s active-only `subagents` field.
       ...metricsManager.toFrontendUpdate(sessionId),
-      subagents: subagentTracker.toFrontendSummary(),
+      ...subagentFields(subagentTracker),
     }, sessionId);
   });
   
@@ -1106,9 +1118,8 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
     sendWithSession(ws, {
       type: "subagent_metrics",
       // Spread FIRST so the tracker's full-history summary isn't clobbered by
-      // toFrontendUpdate()'s active-only `subagents` field.
       ...metricsManager.toFrontendUpdate(sessionId),
-      subagents: subagentTracker.toFrontendSummary(),
+      ...subagentFields(subagentTracker),
     }, sessionId);
   });
   
@@ -1120,8 +1131,9 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
     sendWithSession(ws, {
       type: "usage_update",
       ...metricsManager.toFrontendUpdate(sessionId),
+      ...subagentFields(subagentTracker),
     }, sessionId);
-    
+
     const cleanFinalText = (accumulatedText || "")
       .replace(/<tts>[\s\S]*?<\/tts>/gi, "")
       .trim();
@@ -1179,6 +1191,9 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
     // Persist final metrics
     try {
       const persistable = metricsManager.toPersistable(sessionId);
+      // Persist the RICH sub-agent summary (task/tools/reasoning) so the Trace
+      // tab rehydrates fully on refresh/switch, not just id/name/status.
+      persistable.subagents = subagentTracker.toFrontendSummary();
       const existingSession = db.getSession(sessionId);
       if (existingSession) {
         db.saveSession({ ...existingSession, metrics: persistable, subagentTree: subagentTracker.toJSON() });

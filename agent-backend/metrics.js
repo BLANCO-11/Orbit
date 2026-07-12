@@ -616,16 +616,6 @@ class SessionMetricsManager {
   toFrontendUpdate(sessionId) {
     const m = this._metrics.get(sessionId);
     if (!m) return {};
-    const activeSubs = m.subagents
-      .filter(sa => sa.status === "spawning" || sa.status === "working")
-      .map(sa => ({
-        id: sa.id,
-        name: sa.name,
-        status: sa.status,
-        toolCalls: sa.toolCalls.length,
-        tokens: sa.tokens.total,
-        mode: sa.mode,
-      }));
     const eff = this._effectiveTokens(m);
     return {
       toolCalls: m.toolCalls.total,
@@ -642,8 +632,10 @@ class SessionMetricsManager {
       latency: m.latency.totalMs,
       latencyPerTool: m.latency.perTool,
       turns: (m.turns || []).slice(-12),
-      activeSubagents: activeSubs,
-      subagents: activeSubs, // field name expected by frontend
+      // NOTE: subagent fields are intentionally omitted here. The rich, complete
+      // summary (all agents incl. completed, with task/tools/reasoning) comes from
+      // subagentTracker.toFrontendSummary(), which server.js attaches to every
+      // send. Emitting a thin active-only list here would clobber that.
       actionFeed: m.actionFeed.slice(-10),
     };
   }

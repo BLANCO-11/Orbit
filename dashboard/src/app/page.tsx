@@ -437,7 +437,12 @@ function DashboardInner() {
         </ComponentErrorBoundary>
       }
       rightPanel={
-        <DetailPanel activeTab={rightPanelTab} onTabChange={setRightPanelTab}>
+        <DetailPanel
+          activeTab={rightPanelTab}
+          onTabChange={setRightPanelTab}
+          badges={{ trace: (state.metrics.subagentTrace || []).length }}
+          pulse={{ trace: (state.metrics.activeSubagents || []).length > 0 }}
+        >
           {rightPanelTab === 'agent' && (
             <ComponentErrorBoundary label="Agent panel">
               <AgentTab

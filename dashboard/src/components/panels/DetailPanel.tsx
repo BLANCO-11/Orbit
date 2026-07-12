@@ -18,6 +18,10 @@ interface DetailPanelProps {
   activeTab: string;
   onTabChange: (tab: InspectorTab) => void;
   children: React.ReactNode;
+  /** Optional per-tab count badge, e.g. { trace: 3 } for 3 sub-agents. */
+  badges?: Partial<Record<InspectorTab, number>>;
+  /** Tabs to render with a live pulse, e.g. trace while a sub-agent is active. */
+  pulse?: Partial<Record<InspectorTab, boolean>>;
 }
 
 /**
@@ -26,7 +30,7 @@ interface DetailPanelProps {
  * shows icon + label, the rest are icon-only (label via tooltip). No scrolling
  * navbar — the whole strip is always visible.
  */
-export default function DetailPanel({ activeTab, onTabChange, children }: DetailPanelProps) {
+export default function DetailPanel({ activeTab, onTabChange, children, badges = {}, pulse = {} }: DetailPanelProps) {
   return (
     <div className="flex h-full flex-col">
       <div role="tablist" aria-label="Inspector" className="flex shrink-0 items-stretch gap-0.5 border-b border-border-soft px-2">
@@ -49,6 +53,14 @@ export default function DetailPanel({ activeTab, onTabChange, children }: Detail
             >
               <Icon size={14} className="shrink-0" />
               {isActive && <span>{tab.label}</span>}
+              {(badges[tab.id] ?? 0) > 0 && (
+                <span className={`inline-flex min-w-[15px] items-center justify-center gap-0.5 rounded-full px-1 text-[9.5px] font-bold tabular-nums ${
+                  pulse[tab.id] ? 'bg-warning/20 text-warning' : 'bg-muted text-muted-foreground'
+                }`}>
+                  {pulse[tab.id] && <span className="size-[4px] animate-pulse rounded-full bg-warning" />}
+                  {badges[tab.id]}
+                </span>
+              )}
             </button>
           );
         })}

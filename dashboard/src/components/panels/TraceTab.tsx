@@ -17,8 +17,11 @@ interface TraceAgent {
   task?: string;
   time?: string;
   timeEnd?: string;
+  currentAction?: string;
   recentToolCalls?: { name: string; status: string; latencyMs?: number }[];
 }
+
+const ACTIVE = (s: string) => s === 'working' || s === 'spawning' || s === 'reasoning';
 
 function StatusBadge({ status }: { status: string }) {
   const active = status === 'working' || status === 'spawning' || status === 'reasoning';
@@ -81,8 +84,15 @@ export default function TraceTab({ agents = [] }: { agents?: TraceAgent[] }) {
                 size={13}
                 className={`shrink-0 text-faint transition-transform ${open ? 'rotate-90' : ''}`}
               />
-              <span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap font-mono text-xs font-semibold">
-                {agent.name}
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span className="overflow-hidden text-ellipsis whitespace-nowrap font-mono text-xs font-semibold">
+                  {agent.name}
+                </span>
+                {ACTIVE(agent.status) && agent.currentAction && (
+                  <span className="overflow-hidden text-ellipsis whitespace-nowrap text-[10.5px] text-warning">
+                    ▸ {agent.currentAction === 'reasoning' ? 'thinking…' : `running ${agent.currentAction}`}
+                  </span>
+                )}
               </span>
               <span className="shrink-0 font-mono text-[10.5px] text-faint num">
                 {(agent.tokens || 0).toLocaleString()} tok · {agent.toolCalls || 0} tools
