@@ -12,8 +12,10 @@ sleep 1
 echo "▸ Rebuilding dashboard…"
 npm --prefix dashboard run build || { echo "build failed"; exit 1; }
 
-echo "▸ Starting backend (6800) + dashboard (6801)…  (TELEGRAM_DISABLE=1)"
-TELEGRAM_DISABLE=1 nohup node agent-backend/server.js      > /tmp/orbit-backend.log  2>&1 &
+echo "▸ Starting backend (6800) + dashboard (6801)…  (Telegram live)"
+# Telegram poller runs (this is your real instance). Set TELEGRAM_DISABLE=1 before
+# running this script if you want it off.
+nohup node agent-backend/server.js                         > /tmp/orbit-backend.log  2>&1 &
 BE=$!
 nohup npm --prefix dashboard run start                     > /tmp/orbit-frontend.log 2>&1 &
 FE=$!
