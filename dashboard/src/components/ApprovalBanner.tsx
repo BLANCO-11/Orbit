@@ -18,7 +18,7 @@ export default function ApprovalBanner({ approvalRequest, onApprove, onDeny }) {
           <Shield size={15} /> Path outside the safe zone
         </h4>
         <p className="mb-2.5 text-[13px] text-muted-foreground">
-          The agent is in <strong className="font-semibold text-warning">Edit</strong> mode and wants to touch a path outside the project directory.
+          The agent wants to write outside its session workspace. Allow it once, for this session, or always for this folder.
         </p>
         <div className="mb-3 rounded-lg border border-border bg-background p-2.5 font-mono text-xs">
           <div className="mb-1 flex items-center gap-1.5 text-warning">
@@ -40,6 +40,13 @@ export default function ApprovalBanner({ approvalRequest, onApprove, onDeny }) {
             className="flex items-center gap-1.5 rounded-[9px] bg-success px-3.5 py-[7px] text-[13px] font-semibold text-success-foreground hover:opacity-90"
           >
             <Shield size={14} /> Allow for session
+          </button>
+          <button
+            onClick={() => onApprove("allow_always")}
+            title="Add this folder to the durable write allow-list (Settings → Security)"
+            className="flex items-center gap-1.5 rounded-[9px] border border-success/40 bg-success/10 px-3.5 py-[7px] text-[13px] font-semibold text-success hover:bg-success/20"
+          >
+            <ShieldCheck size={14} /> Always allow this folder
           </button>
           <button
             onClick={() => onApprove("deny")}

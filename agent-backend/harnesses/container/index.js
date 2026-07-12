@@ -22,7 +22,6 @@ const PiCodeHarness = require("../picode");
 const IMAGE = process.env.ORBIT_SANDBOX_IMAGE || "node:22-slim";
 const PI_RUNTIME_DIR = path.join(os.homedir(), ".local", "share", "pi-node");
 const PI_CONFIG_DIR = path.join(os.homedir(), ".pi");
-const WORKSPACE = path.resolve(__dirname, "../../../workspace");
 
 class ContainerHarness extends PiCodeHarness {
   getMetadata() {
@@ -37,10 +36,14 @@ class ContainerHarness extends PiCodeHarness {
 
   _buildSpawnCommand({ nodePath, piPath, piArgs, childEnv }) {
     const home = "/root";
+    // Mount ONLY this session's dir (set by the inherited connect()), so the
+    // container is filesystem-isolated from the host and from other sessions.
+    const sessionRoot = require("../../workspace-paths").sessionRoot(this.sessionId);
+    const workspace = this._workspaceDir || sessionRoot;
     const mounts = [
       "-v", `${PI_RUNTIME_DIR}:${PI_RUNTIME_DIR}:ro`,       // pi/node binaries (immutable)
       "-v", `${PI_CONFIG_DIR}:${home}/.pi:rw`,              // pi settings/auth + session/lock files (pi writes here)
-      "-v", `${WORKSPACE}:${WORKSPACE}:rw`,                  // the agent's writable workspace
+      "-v", `${sessionRoot}:${sessionRoot}:rw`,             // this session's tree (workspace/artifacts/tmp)
     ];
     // Forward only the LLM creds + mode the agent needs.
     const envArgs = [];
@@ -52,13 +55,13 @@ class ContainerHarness extends PiCodeHarness {
       "--network", "host",              // reach the local LiteLLM endpoint
       "--pull", "never",
       ...mounts,
-      "-w", WORKSPACE,
+      "-w", workspace,
       "-e", `HOME=${home}`,
       ...envArgs,
       IMAGE,
       nodePath, piPath, ...piArgs,      // same absolute paths, now mounted
     ];
-    return { command: "docker", args: dockerArgs, spawnEnv: process.env, cwd: WORKSPACE };
+    return { command: "docker", args: dockerArgs, spawnEnv: process.env, cwd: workspace };
   }
 }
 

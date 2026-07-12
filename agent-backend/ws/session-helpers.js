@@ -47,6 +47,30 @@ function isPathAllowed(targetPath, projectRoot = PROJECT_ROOT) {
   }
 }
 
+/** True if `targetPath` resolves inside `root` (or equals it). */
+function isUnder(targetPath, root) {
+  if (!root) return false;
+  try {
+    const resolved = resolveTargetPath(targetPath);
+    const base = resolveTargetPath(root);
+    return resolved === base || resolved.startsWith(base + path.sep);
+  } catch { return false; }
+}
+
+/** True if the path is inside ANY of the given roots (session safe zone + durable allow-list). */
+function isPathInZones(targetPath, zones = []) {
+  return zones.some((z) => isUnder(targetPath, z));
+}
+
+/**
+ * True if the path is hard-blocked (source, ~/.ssh, system dirs, …). Blocked
+ * paths are refused for READ and WRITE alike, and user consent CANNOT override
+ * them — this is the guardrail below the permission layer.
+ */
+function isPathBlocked(targetPath, blockedPaths = []) {
+  return (blockedPaths || []).some((b) => isUnder(targetPath, b));
+}
+
 function extractPathsFromArgs(args) {
   const paths = [];
   if (!args) return paths;
@@ -74,4 +98,5 @@ function extractPathsFromArgs(args) {
 module.exports = {
   getActiveSessionId, sendLog, sendStatus, sendWithSession,
   PROJECT_ROOT, resolveTargetPath, isPathAllowed, extractPathsFromArgs,
+  isUnder, isPathInZones, isPathBlocked,
 };

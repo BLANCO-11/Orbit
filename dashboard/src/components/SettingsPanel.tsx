@@ -310,13 +310,32 @@ export default function SettingsPanel({
           </div>
 
           <div>
-            <span className="mb-0.5 block text-xs font-semibold text-muted-foreground">Allowed Write Directories:</span>
+            <span className="mb-0.5 block text-xs font-semibold text-muted-foreground">Extra Write Directories (durable allow-list):</span>
+            <p className="mb-1 text-[11px] leading-relaxed text-faint">
+              Each session already gets its own writable workspace (<code>~/.orbit/sessions/&lt;id&gt;/</code>).
+              These are extra folders always writable across sessions — grown automatically when you click
+              &ldquo;Always allow this folder&rdquo; on a permission prompt.
+            </p>
             <PathList items={securityConfig.fileSystem?.allowedWritePaths || []} onRemove={(i) => onRemoveConfigItem("fileSystem", "allowedWritePaths", i)} />
             <AddRow
               value={settings.newWritePath}
               onChange={(v) => onSettingsChange({ newWritePath: v })}
               placeholder="/absolute/path"
               onAdd={() => onAddConfigItem("fileSystem", "allowedWritePaths", settings.newWritePath, "newWritePath")}
+            />
+          </div>
+
+          <div>
+            <span className="mb-0.5 block text-xs font-semibold text-muted-foreground">Write-Protected Directories (hard block):</span>
+            <p className="mb-1 text-[11px] leading-relaxed text-faint">
+              Never writable, even if you approve a prompt (reads allowed). Orbit&apos;s own source lives here so the agent can&apos;t modify itself.
+            </p>
+            <PathList items={securityConfig.fileSystem?.writeBlockedPaths || []} onRemove={(i) => onRemoveConfigItem("fileSystem", "writeBlockedPaths", i)} danger />
+            <AddRow
+              value={settings.newWriteBlockedPath}
+              onChange={(v) => onSettingsChange({ newWriteBlockedPath: v })}
+              placeholder="/absolute/path"
+              onAdd={() => onAddConfigItem("fileSystem", "writeBlockedPaths", settings.newWriteBlockedPath, "newWriteBlockedPath")}
             />
           </div>
 

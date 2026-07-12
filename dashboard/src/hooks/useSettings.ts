@@ -107,6 +107,8 @@ export function useSettings() {
   const addConfigItem = useCallback((field, subfield, val, settingsKey) => {
     if (!val.trim() || !securityConfig) return;
     const updated = { ...securityConfig };
+    if (!updated[field]) updated[field] = {};
+    if (!Array.isArray(updated[field][subfield])) updated[field][subfield] = [];
     updated[field][subfield].push(val.trim());
     setSecurityConfig(updated);
     if (settingsKey) updateSettings({ [settingsKey]: '' });

@@ -11,7 +11,7 @@ const path = require("path");
 const EventEmitter = require("events");
 
 const { validateEnv, discoverPiBinaries } = require("./env");
-const { loadConfig } = require("./config");
+const { loadConfig, saveConfig } = require("./config");
 const db = require("./db");
 const { metricsManager } = require("./metrics");
 const { SubagentTracker, STATUS } = require("./subagent-tracker");
@@ -23,7 +23,9 @@ const { estimateTokens } = require("./metrics");
 const {
   sendLog, sendStatus, sendWithSession,
   resolveTargetPath, isPathAllowed, extractPathsFromArgs,
+  isPathInZones, isPathBlocked,
 } = require("./ws/session-helpers");
+const workspacePaths = require("./workspace-paths");
 const { isMutatingTool, isReadOnlyTool, isConversationalPrompt } = require("./harnesses/picode/parser");
 const policyEngine = require("./policy-engine");
 const { recordObserved } = require("./tool-catalog");
@@ -368,15 +370,39 @@ wss.on("connection", (ws) => {
         const sid = permSid || ws.activeSessionId;
         sendLog(ws, `[Edit Mode] Permission for "${permPath || "unknown"}": ${decision}`, false);
         
-        if (decision === "allow_session" && permPath) {
+        // allow_session + allow_always both grant for the rest of this session.
+        if ((decision === "allow_session" || decision === "allow_always") && permPath) {
           if (!sessionAllowedPaths.has(sid)) sessionAllowedPaths.set(sid, new Set());
           sessionAllowedPaths.get(sid).add(resolveTargetPath(permPath));
         }
-        
+        // allow_always ALSO persists the containing folder to the durable write
+        // allow-list — the bridge from in-chat consent → app policy. Blocklisted
+        // paths never reach here (hard-blocked earlier), so this can't loosen a
+        // guardrail. Reject if the folder is under a blocked path, belt-and-braces.
+        if (decision === "allow_always" && permPath) {
+          try {
+            const folder = require("path").dirname(resolveTargetPath(permPath));
+            const cfg = loadConfig();
+            cfg.fileSystem = cfg.fileSystem || {};
+            const blocked = [...(cfg.fileSystem.blockedPaths || []), ...(cfg.fileSystem.writeBlockedPaths || [])];
+            if (isPathBlocked(folder, blocked)) {
+              sendLog(ws, `[Policy] Refused to always-allow "${folder}" — it's under a protected path.`, false);
+            } else {
+              const list = cfg.fileSystem.allowedWritePaths || [];
+              if (!list.includes(folder)) {
+                list.push(folder);
+                cfg.fileSystem.allowedWritePaths = list;
+                saveConfig(cfg);
+                sendLog(ws, `[Policy] Always-allow: added "${folder}" to the durable write allow-list.`, false);
+              }
+            }
+          } catch (e) { console.error("allow_always persist failed:", e.message); }
+        }
+
         const resolve = pendingApprovals.get(toolCallId);
         if (resolve) {
           pendingApprovals.delete(toolCallId);
-          resolve(decision === "allow_once" || decision === "allow_session");
+          resolve(decision === "allow_once" || decision === "allow_session" || decision === "allow_always");
         }
       }
       
@@ -864,12 +890,51 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
     // evaluate it against the configurable capability × mode matrix, tightened
     // by any per-device override. block → cancel; ask → surface a gate.
     const activeMode = mode || "chat";
+    const cfg = getConfig();
     const toolPaths = extractPathsFromArgs(args);
-    const outsidePaths = toolPaths.filter(p => !isPathAllowed(p));
+
+    // (1) Hard blocklist — sits BELOW the permission layer: user consent cannot
+    // override it. Two tiers:
+    //   • blockedPaths      — no READ and no WRITE (secrets: ~/.ssh, ~/.aws, …).
+    //   • writeBlockedPaths — no WRITE, reads OK (Orbit's own source: the agent
+    //     may read/explain its code but never modify it). `bash` counts as write.
+    const blockedPaths = (cfg.fileSystem && cfg.fileSystem.blockedPaths) || [];
+    const writeBlockedPaths = (cfg.fileSystem && cfg.fileSystem.writeBlockedPaths) || [];
+    const toolWrites = isMutatingTool(name);
+    let blockedHit = toolPaths.find((p) => isPathBlocked(p, blockedPaths));
+    let blockKind = blockedHit ? "protected (no read/write)" : null;
+    if (!blockedHit && toolWrites) {
+      blockedHit = toolPaths.find((p) => isPathBlocked(p, writeBlockedPaths));
+      if (blockedHit) blockKind = "write-protected";
+    }
+    if (blockedHit) {
+      sendLog(ws, `[Policy] Hard-blocked "${name}" — "${blockedHit}" is ${blockKind}.`, false);
+      sendWithSession(ws, {
+        type: "policy_blocked", toolName: name, capability: "blocked_path", mode: activeMode,
+        suggestedMode: null,
+        reason: `"${blockedHit}" is a ${blockKind} path — this is a hard guardrail that can't be overridden, even with permission.`,
+      }, sessionId);
+      const ses = activeSessions.get(sessionId);
+      if (ses?.harness) ses.harness.cancel();
+      sendStatus(ws, "done", sessionId);
+      return;
+    }
+
+    // (2) Safe zone = THIS session's root (~/.orbit/sessions/<id>) + the durable
+    // allow-list + any path the user granted this session. Writes elsewhere are
+    // "outside" → require consent. Sessions are isolated: another session's root
+    // is not in this zone, so cross-session writes also ask.
+    const sessionRoot = workspacePaths.sessionRoot(sessionId);
+    const durableAllow = (cfg.fileSystem && cfg.fileSystem.allowedWritePaths) || [];
+    const sessionPerms = sessionAllowedPaths.get(sessionId) || new Set();
+    const safeZones = [sessionRoot, ...durableAllow];
+    const outsidePaths = toolPaths.filter((p) =>
+      !isPathInZones(p, safeZones) && !sessionPerms.has(resolveTargetPath(p))
+    );
     const isOutside = outsidePaths.length > 0;
     const capability = policyEngine.toolToCapability(name, isOutside);
     const deviceOverrides = ws.device?.policyOverrides || null;
-    const { decision } = policyEngine.evaluate(capability, activeMode, getConfig(), deviceOverrides);
+    const { decision } = policyEngine.evaluate(capability, activeMode, cfg, deviceOverrides);
 
     if (decision === "block") {
       // Suggest the least-privileged mode that would allow this capability.
@@ -898,20 +963,18 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
     }
 
     if (decision === "ask") {
-      // Surface an approval gate in the timeline. For path-scoped writes we
-      // honor any session-granted allowances so we don't re-ask every time.
-      const sessionPerms = sessionAllowedPaths.get(sessionId) || new Set();
-      const unresolvedPaths = outsidePaths.filter(p => !sessionPerms.has(resolveTargetPath(p)));
-      if (capability !== "write_outside" || unresolvedPaths.length > 0) {
+      // Surface an approval gate. outsidePaths already excludes anything granted
+      // for this session, so we won't re-ask for a path the user already allowed.
+      if (capability !== "write_outside" || outsidePaths.length > 0) {
         sendLog(ws, `[Policy] "${name}" (${capability}) requires approval in ${activeMode} mode.`, false);
         sendWithSession(ws, {
           type: "edit_permission_request",
           toolCallId: id,
           toolName: name,
           capability,
-          paths: unresolvedPaths,
-          outsidePaths: unresolvedPaths,
-          safeZone: require("./ws/session-helpers").PROJECT_ROOT,
+          paths: outsidePaths,
+          outsidePaths,
+          safeZone: sessionRoot,
         }, sessionId);
       }
     }

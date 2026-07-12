@@ -9,6 +9,7 @@ const os = require("os");
 const EventEmitter = require("events");
 const HarnessInterface = require("../interface");
 const { stripTuiChars, isMutatingTool, isReadOnlyTool, isConversationalPrompt } = require("./parser");
+const workspacePaths = require("../../workspace-paths");
 
 // pi "web-access" extension (npm:pi-web-access) tools, split by capability:
 //   - native SEARCH: only autonomous with a backend key, else prompts a browser
@@ -67,6 +68,21 @@ class PiCodeHarness extends HarnessInterface {
     } catch (e) {
       console.error("[PiCodeHarness] orbit-system.md not found:", e.message);
     }
+
+    // Per-session workspace: create the session's dir tree and tell the agent
+    // exactly where it may work, so it never dumps files at random (and never
+    // into Orbit's source). This is dynamic — the paths are session-specific.
+    const dirs = workspacePaths.ensureSessionDirs(this.sessionId);
+    this._workspaceDir = dirs.workspace;
+    combinedPrompt = combinedPrompt +
+      `\n\n## Your workspace (this session)\n` +
+      `You are running in an isolated per-session workspace. Your current directory is your workspace.\n` +
+      `- \`${dirs.workspace}\` — your working dir (cwd). Do all task work here; relative paths land here.\n` +
+      `- \`${dirs.artifacts}\` — put FINISHED deliverables the user should keep here (reports, build outputs, exports).\n` +
+      `- \`${dirs.tmp}\` — scratch/downloads/intermediates; disposable.\n` +
+      `Write only inside these. Writing anywhere else asks the user's permission first. ` +
+      `You cannot access other sessions' folders or protected paths (Orbit's own source, ~/.ssh, system dirs). ` +
+      `Keep things tidy — this layout is how the user tracks and manages your work.`;
 
     if (modePromptFile) {
       const modePrompt = fs.readFileSync(path.join(promptsDir, modePromptFile), "utf-8");
@@ -183,7 +199,9 @@ class PiCodeHarness extends HarnessInterface {
    * Overridden by ContainerHarness to wrap it in `docker run`.
    */
   _buildSpawnCommand({ nodePath, piPath, piArgs, childEnv }) {
-    return { command: nodePath, args: [piPath, ...piArgs], spawnEnv: childEnv, cwd: process.cwd() };
+    // Run pi IN the session workspace so its default writes and relative paths
+    // land there — not in Orbit's source (the backend's cwd).
+    return { command: nodePath, args: [piPath, ...piArgs], spawnEnv: childEnv, cwd: this._workspaceDir || process.cwd() };
   }
 
   _setupStdout() {
