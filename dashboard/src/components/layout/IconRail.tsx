@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Terminal, Server, Shield, Plug, Bot, Cog, Volume2, VolumeX } from 'lucide-react';
+import { Terminal, Server, Shield, Plug, Bot, Volume2, VolumeX } from 'lucide-react';
 
 export type RailView = 'console' | 'agents' | 'fleet' | 'connectors' | 'policies' | 'settings';
 
@@ -66,20 +66,7 @@ export default function IconRail({ activeView, onViewChange, voiceOn, onToggleVo
           <span className="absolute right-1.5 top-1.5 size-[7px] rounded-full border-2 border-sidebar bg-success" />
         )}
       </button>
-
-      <button
-        onClick={() => onViewChange('settings')}
-        aria-label="Settings"
-        title="Settings"
-        aria-current={activeView === 'settings' ? 'page' : undefined}
-        className={`grid size-9 place-items-center rounded-[10px] transition-colors ${
-          activeView === 'settings'
-            ? 'bg-accent text-accent-foreground'
-            : 'text-faint hover:bg-muted hover:text-muted-foreground'
-        }`}
-      >
-        <Cog size={17} />
-      </button>
+      {/* Settings lives on the header gear (single entrypoint) — not duplicated here. */}
     </nav>
   );
 }

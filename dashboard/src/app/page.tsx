@@ -102,7 +102,7 @@ function DashboardInner() {
     sessions, searchQuery, setSearchQuery,
     groupedSessions, hoveredSessionId, setHoveredSessionId,
     createSession, switchSession, deleteSession, renameSession,
-    updateCurrentSession, getSessionPreview,
+    updateCurrentSession, getSessionPreview, clearRunState,
   } = useSessions();
 
   // Keep WebSocket session ID in sync
@@ -123,11 +123,11 @@ function DashboardInner() {
     const settled = state.status !== 'thinking' && state.status !== 'executing';
     if (wasActive && settled && state.messages.length > 0) {
       updateCurrentSession(
-        { messages: state.messages, executionPlan: state.executionPlan, logs: state.logs },
+        { messages: state.messages, executionPlan: state.executionPlan, logs: state.logs, planSteps: state.planSteps },
         true,
       );
     }
-  }, [state.status, state.messages, state.executionPlan, state.logs, updateCurrentSession]);
+  }, [state.status, state.messages, state.executionPlan, state.logs, state.planSteps, updateCurrentSession]);
 
   // ── STT ──
   const { isListening, isSupported: sttSupported, startListening, stopListening } = useSTT();
@@ -494,6 +494,11 @@ function DashboardInner() {
         connectionState,
         centerView,
         onSetCenterView: setCenterView,
+        planProgress: {
+          total: state.planSteps?.length || 0,
+          done: (state.planSteps || []).filter((s) => s.status === 'done').length,
+          active: (state.planSteps || []).some((s) => s.status === 'active'),
+        },
         activeDevice,
         notificationCenter: <NotificationCenter logs={state.logs} />,
       }}
@@ -505,6 +510,7 @@ function DashboardInner() {
         <ComponentErrorBoundary label="Mission">
           <MissionView
             executionPlan={state.executionPlan}
+            planSteps={state.planSteps}
             subAgents={state.metrics.subagentTrace || state.metrics.activeSubagents || []}
             status={state.status}
           />
@@ -531,6 +537,9 @@ function DashboardInner() {
           if (sendMessage) {
             startTtsSession();
             sendMessage({ type: 'resume', sessionId: state.currentSessionId });
+            // Dismiss the interrupted banner immediately — the run is taking
+            // over; the stale local runState.running would otherwise keep it up.
+            clearRunState(state.currentSessionId);
           }
         }}
         status={state.status}

@@ -104,22 +104,30 @@ function AgentBadge({ status }: { status: string }) {
  * phase board, overlaid with the live sub-agent tree (owners + status +
  * metrics). Derived entirely from real session data, updates live.
  */
-export default function MissionView({ executionPlan, subAgents = [], status }: {
+interface PlanStep { id: string; text: string; status: TaskStatus | 'blocked'; deps?: string[] }
+
+export default function MissionView({ executionPlan, planSteps = [], subAgents = [], status }: {
   executionPlan?: string;
+  planSteps?: PlanStep[];
   subAgents?: any[];
   status?: string;
 }) {
-  const phases = useMemo(() => parsePlan(executionPlan || ''), [executionPlan]);
+  // Prefer the STRUCTURED plan (from the orbit-plan tool) — it's authoritative
+  // and updates live as the agent checks steps off. Fall back to parsing the
+  // free-text execution plan only when no structured plan exists.
+  const structured = Array.isArray(planSteps) && planSteps.length > 0;
+  const phases = useMemo(() => structured ? [] : parsePlan(executionPlan || ''), [structured, executionPlan]);
   const running = status === 'thinking' || status === 'executing';
 
-  if (phases.length === 0 && subAgents.length === 0) {
+  if (!structured && phases.length === 0 && subAgents.length === 0) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center">
         <ListTree size={22} className="text-faint" />
-        <p className="text-[13px] font-medium text-muted-foreground">No mission yet</p>
-        <p className="max-w-[320px] text-xs leading-relaxed text-faint">
-          Run a task in Plan or Edit mode (or Deep effort) — the agent&apos;s plan and its
-          sub-agents are projected here as a phase board. Switch back to Timeline to send.
+        <p className="text-[13px] font-medium text-muted-foreground">No active plan</p>
+        <p className="max-w-[340px] text-xs leading-relaxed text-faint">
+          This is the live preview of the agent&apos;s plan. On a multi-step task the agent
+          builds a checklist here and ticks items off as it works — with its sub-agents shown
+          below. Give it something substantial (build, migrate, research) and watch it fill in.
         </p>
       </div>
     );
@@ -132,6 +140,41 @@ export default function MissionView({ executionPlan, subAgents = [], status }: {
           The same session, zoomed out — the agent&apos;s plan projected into phases, overlaid with the
           live sub-agent tree. {running && <span className="text-warning">Updating live…</span>}
         </p>
+
+        {structured && (
+          <div className="mb-5 overflow-hidden rounded-xl border border-border-soft bg-card">
+            <div className="flex items-center gap-2 border-b border-border-soft px-3.5 py-2.5">
+              <span className="text-[13px] font-semibold">Plan</span>
+              <span className={`ml-auto shrink-0 font-mono text-[10.5px] ${
+                planSteps.every((s) => s.status === 'done') ? 'text-success'
+                  : planSteps.some((s) => s.status === 'active') ? 'text-warning' : 'text-faint'
+              }`}>
+                {planSteps.filter((s) => s.status === 'done').length}/{planSteps.length}
+              </span>
+            </div>
+            <div className="flex flex-col gap-1.5 px-3.5 py-3">
+              {planSteps.map((s) => (
+                <div key={s.id} className="flex items-start gap-2 text-[12.5px]">
+                  {s.status === 'done' ? <CheckCircle2 size={13} className="mt-0.5 shrink-0 text-success" />
+                    : s.status === 'active' ? <Loader2 size={13} className="mt-0.5 shrink-0 animate-spin text-warning" />
+                    : s.status === 'blocked' ? <Circle size={13} className="mt-0.5 shrink-0 text-destructive" />
+                    : <Circle size={13} className="mt-0.5 shrink-0 text-faint" />}
+                  <span className="min-w-0 flex-1">
+                    <span className={
+                      s.status === 'done' ? 'text-faint line-through'
+                        : s.status === 'active' ? 'font-medium text-foreground'
+                        : s.status === 'blocked' ? 'text-destructive'
+                        : 'text-muted-foreground'
+                    }>{s.text}</span>
+                    {s.deps && s.deps.length > 0 && (
+                      <span className="ml-1.5 font-mono text-[10px] text-faint">after {s.deps.join(', ')}</span>
+                    )}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {phases.length > 0 && (
           <div className="grid gap-3 md:grid-cols-2">

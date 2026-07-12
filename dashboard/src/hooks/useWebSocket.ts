@@ -67,6 +67,10 @@ export function useWebSocket(
           case 'plan':
             dispatch(actions.setExecutionPlan(data.content));
             break;
+
+          case 'plan_state':
+            dispatch(actions.setPlanSteps(data.steps));
+            break;
             
           case 'reasoning_update':
             dispatch(actions.setExecutionPlan(data.content));

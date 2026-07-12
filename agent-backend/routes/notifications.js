@@ -1,68 +1,35 @@
 // agent-backend/routes/notifications.js
-// POST /api/notify — desktop + Discord + Slack + WebSocket broadcast
+// POST /api/notify — the one HTTP entrypoint for raising an alert. It validates
+// the payload and hands it to the notification bus, which fans it out to the
+// chosen sinks (web / desktop / channel). All sink logic (desktop notify-send,
+// Discord/Slack webhooks, Telegram, WS broadcast) lives in the bus + server.js
+// sink registrations — this route no longer talks to any transport directly.
+//
+// This is also the route the `orbit-notify` MCP tool calls, so the agent raises
+// alerts through a first-class network tool instead of shelling out to curl.
 
 const { Router } = require("express");
-const { exec } = require("child_process");
-const WebSocket = require("ws");
 
-function createNotificationsRouter(getConfig, wss) {
+function createNotificationsRouter(notifyBus) {
   const router = Router();
-  
+
   router.post("/", (req, res, next) => {
     try {
-      const { title, message, severity } = req.body;
-      const config = getConfig();
-      
-      console.log(`[Notification API] [${(severity || "info").toUpperCase()}] ${title}: ${message}`);
-      
-      // 1. Desktop Notification via notify-send
-      const escapedTitle = (title || "Orbit Alert").replace(/"/g, '\\"');
-      const escapedMsg = (message || "").replace(/"/g, '\\"');
-      const urgency = severity === "error" ? "critical" : severity === "warning" ? "normal" : "low";
-      
-      exec(`notify-send -u ${urgency} "${escapedTitle}" "${escapedMsg}"`, (err) => {
-        if (err) console.error("Desktop notify-send failed:", err.message);
+      const { title, message, body, severity, sinks } = req.body || {};
+      // Accept either `message` (legacy shell util / webhook callers) or `body`.
+      const result = notifyBus.notify({
+        title: title || "Orbit Alert",
+        body: body || message || "",
+        severity: severity || "info",
+        sinks: Array.isArray(sinks) && sinks.length ? sinks : undefined,
+        source: "api",
       });
-
-      // 2. Discord Webhook
-      if (config && config.notifications && config.notifications.discordWebhook) {
-        fetch(config.notifications.discordWebhook, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            content: `**[${(severity || "info").toUpperCase()}] ${escapedTitle}**\n${escapedMsg}`
-          })
-        }).catch(e => console.error("Discord webhook delivery failed:", e.message));
-      }
-
-      // 3. Slack Webhook
-      if (config && config.notifications && config.notifications.slackWebhook) {
-        fetch(config.notifications.slackWebhook, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            text: `*[${(severity || "info").toUpperCase()}] ${escapedTitle}*\n${escapedMsg}`
-          })
-        }).catch(e => console.error("Slack webhook delivery failed:", e.message));
-      }
-
-      // 4. Broadcast to all WebSocket clients
-      wss.clients.forEach((client) => {
-        if (client.readyState === WebSocket.OPEN) {
-          client.send(JSON.stringify({
-            type: "log",
-            content: `[Proactive Notify] [${(severity || "info").toUpperCase()}]: ${title} - ${message}`,
-            isSystem: true
-          }));
-        }
-      });
-
-      res.json({ success: true, message: "Notification dispatched successfully" });
+      res.json({ success: true, delivered: result.delivered });
     } catch (err) {
       next(err);
     }
   });
-  
+
   return router;
 }
 

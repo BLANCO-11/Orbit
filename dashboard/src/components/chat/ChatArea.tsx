@@ -190,6 +190,23 @@ export default function ChatArea({
               );
             });
           })()}
+
+          {/* Working indicator — inline in the conversation (TUI-style), not a
+              floating box over the composer. Reads as the agent's turn taking
+              shape at the bottom of the thread. */}
+          {isProcessing && (
+            <div className="flex items-center gap-2.5 text-[13px] text-muted-foreground">
+              <span className="flex gap-1">
+                <span className="size-1.5 animate-bounce rounded-full bg-primary [animation-delay:-0.3s]" />
+                <span className="size-1.5 animate-bounce rounded-full bg-primary [animation-delay:-0.15s]" />
+                <span className="size-1.5 animate-bounce rounded-full bg-primary" />
+              </span>
+              <span className="overflow-hidden text-ellipsis whitespace-nowrap">
+                {status === 'thinking' ? 'Thinking through the task…' : 'Working on it…'}
+                {lastAction ? ` (${lastAction})` : ''}
+              </span>
+            </div>
+          )}
           <div ref={chatEndRef} />
         </div>
       </div>
@@ -197,16 +214,6 @@ export default function ChatArea({
       {/* ── Floating dock ── */}
       <div className="pointer-events-none absolute inset-x-0 bottom-0 px-6 pb-5">
         <div className="mx-auto w-full max-w-[720px]">
-          {isProcessing && (
-            <div className="pointer-events-auto mb-2.5 flex items-center gap-2.5 rounded-xl border border-primary/25 bg-accent px-4 py-2.5 text-[13px] font-medium text-accent-foreground shadow-card">
-              <span className="size-2 shrink-0 animate-pulse rounded-full bg-primary" />
-              <span className="overflow-hidden text-ellipsis whitespace-nowrap">
-                {status === 'thinking' ? 'Thinking through the task…' : 'Working on it…'}
-                {lastAction ? ` (${lastAction})` : ''}
-              </span>
-            </div>
-          )}
-
           <ChatInput
             prompt={prompt}
             setPrompt={setPrompt}

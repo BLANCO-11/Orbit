@@ -2,7 +2,7 @@
 'use client';
 
 import React from 'react';
-import { Sun, Moon, Menu, PanelRight, Settings, MonitorSmartphone } from 'lucide-react';
+import { Sun, Moon, Menu, PanelRight, PanelLeftClose, PanelLeftOpen, Settings, MonitorSmartphone } from 'lucide-react';
 
 const STATUS_META = {
   idle: { label: 'Idle', cls: 'bg-muted text-muted-foreground' },
@@ -43,7 +43,10 @@ export default function Header({
   connectionState,
   centerView,
   onSetCenterView,
+  planProgress,
   activeDevice,
+  onToggleSidebarCollapse,
+  sidebarCollapsed,
 }) {
   // Connection problems take priority over the agent's own status.
   const meta = connectionState === 'connecting'
@@ -61,6 +64,14 @@ export default function Header({
         {!isDesktop && (
           <IconBtn label="Toggle sidebar" onClick={onToggleSidebar}>
             <Menu size={16} />
+          </IconBtn>
+        )}
+        {isDesktop && onToggleSidebarCollapse && (
+          <IconBtn
+            label={sidebarCollapsed ? 'Show sessions sidebar' : 'Hide sessions sidebar'}
+            onClick={onToggleSidebarCollapse}
+          >
+            {sidebarCollapsed ? <PanelLeftOpen size={15} /> : <PanelLeftClose size={15} />}
           </IconBtn>
         )}
         <div className="relative size-[18px] rounded-md bg-gradient-to-br from-primary/80 to-primary shadow-[0_0_0_3px_var(--accent)]">
@@ -88,17 +99,30 @@ export default function Header({
       <div className="flex items-center gap-2">
         {onSetCenterView && (
           <div className="mr-1 inline-flex rounded-lg border border-border-soft bg-background p-0.5">
-            {['timeline', 'mission'].map((v) => (
-              <button
-                key={v}
-                onClick={() => onSetCenterView(v)}
-                className={`rounded-md px-2.5 py-1 text-[11px] font-semibold capitalize transition-colors ${
-                  centerView === v ? 'bg-card text-foreground shadow-card' : 'text-faint hover:text-foreground'
-                }`}
-              >
-                {v}
-              </button>
-            ))}
+            {['timeline', 'mission'].map((v) => {
+              const isMission = v === 'mission';
+              const hasPlan = isMission && planProgress && planProgress.total > 0;
+              return (
+                <button
+                  key={v}
+                  onClick={() => onSetCenterView(v)}
+                  className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] font-semibold capitalize transition-colors ${
+                    centerView === v ? 'bg-card text-foreground shadow-card' : 'text-faint hover:text-foreground'
+                  }`}
+                >
+                  {v}
+                  {hasPlan && (
+                    <span className={`inline-flex items-center gap-1 rounded-full px-1.5 py-px text-[9.5px] font-bold tabular-nums ${
+                      planProgress.done === planProgress.total ? 'bg-success/15 text-success'
+                        : planProgress.active ? 'bg-warning/15 text-warning' : 'bg-muted text-muted-foreground'
+                    }`}>
+                      {planProgress.active && <span className="size-[5px] animate-pulse rounded-full bg-warning" />}
+                      {planProgress.done}/{planProgress.total}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
         )}
         <div className={`flex items-center gap-[7px] rounded-full py-[5px] pl-2.5 pr-3 text-xs font-semibold ${meta.cls}`}>

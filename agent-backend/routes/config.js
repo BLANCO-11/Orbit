@@ -16,6 +16,8 @@ const SPAWN_TIME_KEYS = {
 
 function requiresRespawn(oldCfg, newCfg) {
   if ((oldCfg.systemPromptType || "") !== (newCfg.systemPromptType || "")) return true;
+  // Web-access extension toggle changes the --exclude-tools spawn arg.
+  if (!!oldCfg.webAccess?.enabled !== !!newCfg.webAccess?.enabled) return true;
   const o = oldCfg.litellm || {};
   const n = newCfg.litellm || {};
   return SPAWN_TIME_KEYS.litellm.some((k) => o[k] !== n[k]);

@@ -12,6 +12,7 @@ const initialState = {
   messages: [],
   logs: [],
   executionPlan: '',
+  planSteps: [],          // structured checklist from the orbit-plan tool (live Mission board)
   reasoningHistory: [],
   
   // Metrics
@@ -50,6 +51,8 @@ const UPDATE_LAST_MESSAGE = 'UPDATE_LAST_MESSAGE';
 const SET_MESSAGES = 'SET_MESSAGES';
 const ADD_LOG = 'ADD_LOG';
 const CLEAR_LOGS = 'CLEAR_LOGS';
+const SET_LOGS = 'SET_LOGS';
+const SET_PLAN_STEPS = 'SET_PLAN_STEPS';
 const SET_EXECUTION_PLAN = 'SET_EXECUTION_PLAN';
 const ADD_REASONING_GROUP = 'ADD_REASONING_GROUP';
 const UPDATE_REASONING_ENTRY = 'UPDATE_REASONING_ENTRY';
@@ -109,9 +112,15 @@ function orbitReducer(state, action) {
     
     case CLEAR_LOGS:
       return { ...state, logs: [] };
+
+    case SET_LOGS:
+      return { ...state, logs: Array.isArray(action.payload) ? action.payload : [] };
     
     case SET_EXECUTION_PLAN:
       return { ...state, executionPlan: action.payload };
+
+    case SET_PLAN_STEPS:
+      return { ...state, planSteps: Array.isArray(action.payload) ? action.payload : [] };
     
     case ADD_REASONING_GROUP:
       return { ...state, reasoningHistory: [...state.reasoningHistory, action.payload] };
@@ -311,6 +320,8 @@ export const actions = {
   setMessages: (msgs) => ({ type: SET_MESSAGES, payload: msgs }),
   addLog: (log) => ({ type: ADD_LOG, payload: log }),
   clearLogs: () => ({ type: CLEAR_LOGS }),
+  setLogs: (logs) => ({ type: SET_LOGS, payload: logs }),
+  setPlanSteps: (steps) => ({ type: SET_PLAN_STEPS, payload: steps }),
   setExecutionPlan: (plan) => ({ type: SET_EXECUTION_PLAN, payload: plan }),
   addReasoningGroup: (group) => ({ type: ADD_REASONING_GROUP, payload: group }),
   updateReasoningEntry: (content) => ({ type: UPDATE_REASONING_ENTRY, payload: content }),

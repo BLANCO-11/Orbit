@@ -19,7 +19,7 @@ if (!fs.existsSync(dbPath) && fs.existsSync(legacyDbPath)) {
 const db = new DatabaseSync(dbPath);
 
 // ── Schema Versioning ───────────────────────────────────────────────
-const CURRENT_SCHEMA_VERSION = 10;
+const CURRENT_SCHEMA_VERSION = 11;
 const BACKUP_INTERVAL = 10; // auto-backup every N saves
 let saveCount = 0;
 
@@ -195,6 +195,16 @@ if (currentSchemaVersion < 10) {
   console.log(`[DB] Migrated sessions schema to version ${CURRENT_SCHEMA_VERSION}`);
 }
 
+if (currentSchemaVersion < 11) {
+  // Structured plan/checklist steps for the live Mission board (orbit-plan tool).
+  try { db.exec("ALTER TABLE sessions ADD COLUMN plan_steps TEXT NOT NULL DEFAULT '[]'"); } catch (e) {}
+  db.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)").run(
+    "schema_version",
+    String(CURRENT_SCHEMA_VERSION)
+  );
+  console.log(`[DB] Migrated sessions schema to version ${CURRENT_SCHEMA_VERSION}`);
+}
+
 // ── Initialize tables ────────────────────────────────────────────────
 db.exec(`
   CREATE TABLE IF NOT EXISTS sessions (
@@ -284,6 +294,7 @@ function mapRow(row) {
     metrics: JSON.parse(row.metrics || "{}"),
     mode: row.mode || "",
     subagentTree: JSON.parse(row.subagent_tree || "{}"),
+    planSteps: JSON.parse(row.plan_steps || "[]"),
     runState: JSON.parse(row.run_state || "{}"),
     timestamp: row.timestamp,
     schemaVersion: row.schema_version || 0,
@@ -321,8 +332,8 @@ function enforceTTL() {
 
 function saveSession(session) {
   const stmt = db.prepare(`
-    INSERT INTO sessions (id, title, messages, logs, execution_plan, metrics, mode, subagent_tree, timestamp)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO sessions (id, title, messages, logs, execution_plan, metrics, mode, subagent_tree, plan_steps, timestamp)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       title = excluded.title,
       messages = excluded.messages,
@@ -331,6 +342,7 @@ function saveSession(session) {
       metrics = excluded.metrics,
       mode = excluded.mode,
       subagent_tree = excluded.subagent_tree,
+      plan_steps = excluded.plan_steps,
       timestamp = excluded.timestamp
   `);
   stmt.run(
@@ -342,6 +354,7 @@ function saveSession(session) {
     JSON.stringify(session.metrics || {}),
     session.mode || "",
     JSON.stringify(session.subagentTree || {}),
+    JSON.stringify(session.planSteps || []),
     session.timestamp || Date.now()
   );
 

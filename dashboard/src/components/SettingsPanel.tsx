@@ -184,6 +184,25 @@ export default function SettingsPanel({
 
       <ToggleRow label="VOICE RESPONSES (TTS)" checked={voiceResponse} onCheckedChange={setVoiceResponse} />
 
+      {/* ── Browser & Web Access ── */}
+      <SectionLabel>Browser &amp; Web Access</SectionLabel>
+      <div className="flex flex-col gap-1.5">
+        <ToggleRow
+          label="WEB ACCESS EXTENSION (FALLBACK)"
+          checked={securityConfig?.webAccess?.enabled ?? false}
+          onCheckedChange={(checked) => {
+            const updated = { ...(securityConfig || {}) };
+            updated.webAccess = { ...(updated.webAccess || {}), enabled: checked };
+            setSecurityConfig(updated);
+          }}
+        />
+        <p className="px-1 text-[11px] leading-relaxed text-faint">
+          The Lightpanda browser is the mandatory default for all web tasks. Enable this to also
+          give agents pi&apos;s native web tools (web_search, fetch_content, browser) as a fallback.
+          Off = Lightpanda only. Applies app-wide; a profile can still disable it per-run.
+        </p>
+      </div>
+
       {/* ── Memory & Compaction ── */}
       <SectionLabel>Memory &amp; Compaction</SectionLabel>
       <div className="mb-2 flex flex-col gap-2.5">

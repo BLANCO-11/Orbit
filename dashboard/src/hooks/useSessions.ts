@@ -86,7 +86,7 @@ export function useSessions() {
   // per-session `metrics` in the `sessions` list is only a zero seed. Snapshot
   // live values into the list when leaving a session so switching back shows the
   // right numbers without a round-trip to the backend.
-  const { currentSessionId, sessionMode, metrics: liveMetrics, messages: liveMessages, executionPlan: livePlan } = useOrbitState();
+  const { currentSessionId, sessionMode, metrics: liveMetrics, messages: liveMessages, executionPlan: livePlan, logs: liveLogs, planSteps: livePlanSteps } = useOrbitState();
 
   const [sessions, setSessions] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -140,6 +140,8 @@ export function useSessions() {
     dispatch(actions.setSessionMode(active.mode || ''));
     dispatch(actions.setMetrics(normalizeMetricsForUI(active.metrics)));
     dispatch(actions.setExecutionPlan(active.executionPlan || ''));
+    dispatch(actions.setLogs(active.logs || []));
+    dispatch(actions.setPlanSteps(active.planSteps || []));
 
     setIsLoading(false);
   }
@@ -227,6 +229,7 @@ export function useSessions() {
     dispatch(actions.setExecutionPlan(''));
     dispatch(actions.setMetrics({ ...EMPTY_METRICS }));
     dispatch(actions.setSessionMode(''));
+    dispatch(actions.setPlanSteps([]));
   }, [dispatch]);
 
   const switchSession = useCallback((sessionId) => {
@@ -244,6 +247,10 @@ export function useSessions() {
         metrics: liveMetrics,
         messages: (liveMessages && liveMessages.length >= (current.messages?.length || 0)) ? liveMessages : current.messages,
         executionPlan: livePlan || current.executionPlan,
+        // Snapshot live logs too so switching back shows the outgoing session's
+        // activity (logs are session-scoped — they must not bleed across).
+        logs: (liveLogs && liveLogs.length) ? liveLogs : current.logs,
+        planSteps: (livePlanSteps && livePlanSteps.length) ? livePlanSteps : current.planSteps,
       };
       setSessions(prev => prev.map(s => (s.id === currentSessionId ? snapshot : s)));
       saveSession(snapshot, true);
@@ -256,13 +263,15 @@ export function useSessions() {
       dispatch(actions.setSessionMode(target.mode || ''));
       dispatch(actions.setMetrics(normalizeMetricsForUI(target.metrics)));
       dispatch(actions.setExecutionPlan(target.executionPlan || ''));
+      dispatch(actions.setLogs(target.logs || []));
+      dispatch(actions.setPlanSteps(target.planSteps || []));
 
       // Update URL
       const url = new URL(window.location.href);
       url.searchParams.set('session', sessionId);
       window.history.pushState(null, '', url);
     }
-  }, [sessions, currentSessionId, saveSession, dispatch, liveMetrics, liveMessages, livePlan]);
+  }, [sessions, currentSessionId, saveSession, dispatch, liveMetrics, liveMessages, livePlan, liveLogs, livePlanSteps]);
 
   const deleteSession = useCallback(async (sessionId) => {
     const next = sessions.filter(s => s.id !== sessionId);
@@ -270,10 +279,22 @@ export function useSessions() {
       dispatch(actions.setCurrentSession(next[0].id));
       dispatch(actions.setMessages(next[0].messages || []));
       dispatch(actions.setSessionMode(next[0].mode || ''));
+      dispatch(actions.setMetrics(normalizeMetricsForUI(next[0].metrics)));
+      dispatch(actions.setLogs(next[0].logs || []));
     }
     setSessions(next);
     fetch(`/api/sessions/${sessionId}`, { method: 'DELETE' }).catch(() => {});
   }, [sessions, currentSessionId, dispatch]);
+
+  // Clear the local "interrupted / running" flag for a session. The backend
+  // owns runState and clears it on agent_end, but the list is loaded once and
+  // never re-fetches — so after a resume completes, the stale runState.running
+  // would make the interrupted banner reappear. Clear it optimistically.
+  const clearRunState = useCallback((sessionId) => {
+    setSessions(prev => prev.map(s =>
+      s.id === sessionId ? { ...s, runState: { ...(s.runState || {}), running: false } } : s
+    ));
+  }, []);
 
   const renameSession = useCallback(async (sessionId, newTitle) => {
     setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, title: newTitle } : s));
@@ -324,6 +345,6 @@ export function useSessions() {
     groupedSessions, hoveredSessionId, setHoveredSessionId,
     isLoading,
     createSession, switchSession, deleteSession, renameSession,
-    updateCurrentSession, getSessionPreview,
+    updateCurrentSession, getSessionPreview, clearRunState,
   };
 }

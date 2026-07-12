@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
-import { Monitor, FileText, RefreshCw, ExternalLink, AlertCircle } from 'lucide-react';
+import React, { useState, useCallback, useEffect } from 'react';
+import { Monitor, FileText, RefreshCw, ExternalLink, AlertCircle, Maximize2, Minimize2, X } from 'lucide-react';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 
@@ -20,6 +20,15 @@ const IMG_EXT = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'ico', 'bmp'];
  */
 export default function PreviewTab() {
   const [mode, setMode] = useState<Mode>('live');
+  const [fullscreen, setFullscreen] = useState(false);
+
+  // Escape exits fullscreen.
+  useEffect(() => {
+    if (!fullscreen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setFullscreen(false); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [fullscreen]);
 
   // Live
   const [url, setUrl] = useState('http://localhost:3000');
@@ -59,23 +68,33 @@ export default function PreviewTab() {
     catch { return { __html: '' }; }
   };
 
-  return (
+  const panel = (
     <div className="flex h-full flex-col">
       {/* Mode toggle + address bar */}
       <div className="flex shrink-0 flex-col gap-2 border-b border-border-soft p-3">
-        <div className="inline-flex w-fit rounded-lg border border-border-soft bg-background p-0.5">
-          {(['live', 'file'] as Mode[]).map((m) => (
-            <button
-              key={m}
-              onClick={() => setMode(m)}
-              className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[11.5px] font-semibold capitalize transition-colors ${
-                mode === m ? 'bg-card text-foreground shadow-card' : 'text-faint hover:text-foreground'
-              }`}
-            >
-              {m === 'live' ? <Monitor size={12} /> : <FileText size={12} />}
-              {m}
-            </button>
-          ))}
+        <div className="flex items-center justify-between gap-2">
+          <div className="inline-flex w-fit rounded-lg border border-border-soft bg-background p-0.5">
+            {(['live', 'file'] as Mode[]).map((m) => (
+              <button
+                key={m}
+                onClick={() => setMode(m)}
+                className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[11.5px] font-semibold capitalize transition-colors ${
+                  mode === m ? 'bg-card text-foreground shadow-card' : 'text-faint hover:text-foreground'
+                }`}
+              >
+                {m === 'live' ? <Monitor size={12} /> : <FileText size={12} />}
+                {m}
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={() => setFullscreen((f) => !f)}
+            aria-label={fullscreen ? 'Exit fullscreen' : 'Fullscreen preview'}
+            title={fullscreen ? 'Exit fullscreen (Esc)' : 'Fullscreen'}
+            className="grid size-8 shrink-0 place-items-center rounded-lg border border-border text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            {fullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+          </button>
         </div>
 
         {mode === 'live' ? (
@@ -140,6 +159,39 @@ export default function PreviewTab() {
         ) : (
           <pre className="overflow-auto p-4 font-mono text-[11.5px] leading-relaxed text-muted-foreground">{file.content}</pre>
         )}
+      </div>
+    </div>
+  );
+
+  if (!fullscreen) return panel;
+
+  // Fullscreen: dim backdrop + large centered surface. Click the backdrop or
+  // the close button (or Esc) to return to the docked panel. Rendered as a
+  // single instance (not duplicated behind) so only one iframe mounts.
+  return (
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm sm:p-8"
+      onClick={() => setFullscreen(false)}
+    >
+      <div
+        className="flex h-full w-full max-w-[1400px] flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-float"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex shrink-0 items-center justify-between border-b border-border-soft px-3 py-2">
+          <span className="flex items-center gap-1.5 text-[12.5px] font-semibold text-muted-foreground">
+            {mode === 'live' ? <Monitor size={13} /> : <FileText size={13} />}
+            Preview — {mode === 'live' ? (liveSrc || 'live') : (file?.name || 'file')}
+          </span>
+          <button
+            onClick={() => setFullscreen(false)}
+            aria-label="Close fullscreen"
+            title="Close (Esc)"
+            className="grid size-7 place-items-center rounded-lg border border-border text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            <X size={14} />
+          </button>
+        </div>
+        <div className="min-h-0 flex-1">{panel}</div>
       </div>
     </div>
   );

@@ -28,7 +28,7 @@ function createEmptyMetrics() {
       // Provider-reported usage (from the harness's `usage` events). When any
       // reported usage arrives, `estimated` flips false and these become the
       // authoritative numbers for totals and cost.
-      reported: { input: 0, output: 0, reasoning: 0, total: 0 },
+      reported: { input: 0, output: 0, reasoning: 0, cacheRead: 0, total: 0 },
     },
     latency: {
       totalMs: 0,
@@ -143,12 +143,21 @@ const DEFAULT_RATES = { in: 0.5, out: 1.5 }; // fallback for unrecognized/local 
 
 /**
  * Cost from a directional token split. Reasoning tokens bill as output
- * (that's how every provider meters thinking).
+ * (that's how every provider meters thinking). Cache-READ tokens bill at ~10%
+ * of the input rate (Anthropic/most providers) — this matters enormously for
+ * agentic turns, where the same large system prompt + history is re-sent on
+ * every internal model call: without cache-read accounting the cost looks like
+ * it's "exploding" when in reality most of that input is cheap cache hits.
  */
-function computeCost({ input = 0, output = 0, reasoning = 0 }, modelName) {
+const CACHE_READ_FACTOR = 0.1;
+function computeCost({ input = 0, output = 0, reasoning = 0, cacheRead = 0 }, modelName) {
   const entry = MODEL_PRICING_PER_MILLION.find(p => modelName && p.match.test(modelName));
   const rates = entry || DEFAULT_RATES;
-  return (input / 1_000_000) * rates.in + ((output + reasoning) / 1_000_000) * rates.out;
+  return (
+    (input / 1_000_000) * rates.in +
+    (cacheRead / 1_000_000) * rates.in * CACHE_READ_FACTOR +
+    ((output + reasoning) / 1_000_000) * rates.out
+  );
 }
 
 /** Legacy blended estimate from a single total (assumes 3:1 in:out). */
@@ -179,7 +188,7 @@ class SessionMetricsManager {
 
   _effectiveCost(m) {
     const t = this._effectiveTokens(m);
-    return computeCost({ input: t.input, output: t.output, reasoning: t.reasoning }, m.model);
+    return computeCost({ input: t.input, output: t.output, reasoning: t.reasoning, cacheRead: t.cacheRead || 0 }, m.model);
   }
 
   /**
@@ -349,16 +358,30 @@ class SessionMetricsManager {
    * by the harness as a `usage` event). First reported usage flips the
    * session from estimated to reported accounting.
    */
-  recordUsage(sessionId, { input = 0, output = 0, reasoning = 0 } = {}) {
+  recordUsage(sessionId, { input = 0, output = 0, reasoning = 0, cacheRead = 0 } = {}) {
     const metrics = this._metrics.get(sessionId);
     if (!metrics) return;
     if (!metrics.tokens.reported) {
-      metrics.tokens.reported = { input: 0, output: 0, reasoning: 0, total: 0 };
+      metrics.tokens.reported = { input: 0, output: 0, reasoning: 0, cacheRead: 0, total: 0 };
     }
     const r = metrics.tokens.reported;
+    if (r.cacheRead === undefined) r.cacheRead = 0;
+
+    // Dedup guard: the harness sniffs usage off several stdout item shapes
+    // (message_update final chunk, a terminal message item, agent_end). One
+    // model completion can surface the SAME usage payload on more than one of
+    // them; summing each occurrence is what makes a trivial turn's token count
+    // balloon. Two genuinely-distinct completions never share a byte-identical
+    // (input,output,reasoning) triple — the cumulative input always differs —
+    // so skipping an exact repeat of the immediately-preceding payload is safe.
+    const sig = `${input}|${output}|${reasoning}|${cacheRead}`;
+    if (sig === metrics._lastUsageSig && (input || output || reasoning)) return;
+    metrics._lastUsageSig = sig;
+
     r.input += input;
     r.output += output;
     r.reasoning += reasoning;
+    r.cacheRead += cacheRead;
     r.total = r.input + r.output + r.reasoning;
     metrics.tokens.estimated = false;
     metrics.sessionTokens = r.total;
@@ -394,6 +417,9 @@ class SessionMetricsManager {
   beginTurn(sessionId, promptText) {
     const metrics = this._metrics.get(sessionId);
     if (!metrics) return;
+    // Fresh turn — clear the dedup signature so this turn's first usage is never
+    // mistaken for a repeat of the previous turn's final payload.
+    metrics._lastUsageSig = null;
     // Snapshot BOTH counters: if the session flips estimated→reported mid-turn
     // (first real usage event arrives), the delta must be taken against the
     // matching source's baseline, not across sources.

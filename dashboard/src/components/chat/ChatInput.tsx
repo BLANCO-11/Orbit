@@ -1,11 +1,21 @@
 'use client';
 
-import React, { useRef, useEffect } from 'react';
-import { Mic, Send, Square, Volume2, VolumeX } from 'lucide-react';
+import React, { useRef, useEffect, useState } from 'react';
+import { Mic, Send, Square, Volume2, VolumeX, Settings2 } from 'lucide-react';
+
+/** A labeled row inside the Run-config popover: caption left, control right. */
+function ConfigRow({ label, children }) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <span className="text-[12px] text-muted-foreground">{label}</span>
+      <div className="flex min-w-0 justify-end">{children}</div>
+    </div>
+  );
+}
 
 /**
  * ChatInput — frosted floating dock: textarea over a control strip
- * (mode + prompt chips left, voice + send right).
+ * (mode + run-config popover left, voice + send right).
  */
 export default function ChatInput({
   prompt,
@@ -27,6 +37,23 @@ export default function ChatInput({
   inputHistoryIndexRef,
 }) {
   const textareaRef = useRef(null);
+  const [runConfigOpen, setRunConfigOpen] = useState(false);
+  const runConfigRef = useRef(null);
+
+  // Close the Run-config popover on outside click / Escape.
+  useEffect(() => {
+    if (!runConfigOpen) return;
+    const onDown = (e) => {
+      if (runConfigRef.current && !runConfigRef.current.contains(e.target)) setRunConfigOpen(false);
+    };
+    const onKey = (e) => { if (e.key === 'Escape') setRunConfigOpen(false); };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [runConfigOpen]);
 
   const autoGrow = () => {
     const el = textareaRef.current;
@@ -109,12 +136,43 @@ export default function ChatInput({
 
       <div className="flex items-center justify-between border-t border-border-soft px-3 py-2">
         <div className="flex flex-wrap items-center gap-[7px]">
-          {profileButton}
-          {harnessButton}
+          {/* Mode stays inline — it's the one control changed turn-to-turn. */}
           {modeButton}
-          {promptTypeButton}
-          {effortButton}
-          {skillButton}
+
+          {/* Everything else (profile · harness · prompt · effort · skills)
+              collapses behind one Run-config popover to keep the dock calm. */}
+          <div className="relative" ref={runConfigRef}>
+            <button
+              type="button"
+              onClick={() => setRunConfigOpen((o) => !o)}
+              aria-label="Run configuration"
+              aria-expanded={runConfigOpen}
+              title="Run config — profile, harness, prompt, effort, skills"
+              className={`flex items-center gap-1.5 rounded-lg border px-2 py-[6px] text-[12.5px] font-medium transition-colors ${
+                runConfigOpen
+                  ? 'border-ring/50 bg-accent text-foreground'
+                  : 'border-border text-muted-foreground hover:bg-muted hover:text-foreground'
+              }`}
+            >
+              <Settings2 size={14} />
+              Run config
+            </button>
+
+            {runConfigOpen && (
+              <div className="absolute bottom-[calc(100%+8px)] left-0 z-30 w-[260px] rounded-xl border border-border bg-card p-3 shadow-float">
+                <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.08em] text-faint">
+                  Run configuration
+                </div>
+                <div className="flex flex-col gap-2.5">
+                  <ConfigRow label="Profile">{profileButton}</ConfigRow>
+                  <ConfigRow label="Harness">{harnessButton}</ConfigRow>
+                  <ConfigRow label="Prompt">{promptTypeButton}</ConfigRow>
+                  <ConfigRow label="Effort">{effortButton}</ConfigRow>
+                  <ConfigRow label="Skills">{skillButton}</ConfigRow>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="flex items-center gap-1.5">

@@ -1,0 +1,161 @@
+// mcp-server-transcript/index.js
+//
+// The `orbit-transcript` MCP server: a first-class tool for pulling the spoken
+// TRANSCRIPT / captions of a video. WHY IT EXISTS: the Lightpanda browser can
+// load a YouTube page but cannot play the video or open the "Show transcript"
+// panel — it only sees the title. Agents were papering over that by fabricating
+// a "report from the transcript" out of the title + training data. This tool
+// fetches the real caption track so the agent has actual text to work from (or
+// a clear, honest failure when none exists).
+//
+// Implementation is pure fetch (no API key, no extra deps): read the watch page,
+// find the caption tracks in ytInitialPlayerResponse, fetch the timedtext track,
+// and return the plain text.
+
+const { Server } = require("@modelcontextprotocol/sdk/server/index.js");
+const { StdioServerTransport } = require("@modelcontextprotocol/sdk/server/stdio.js");
+const {
+  CallToolRequestSchema,
+  ListToolsRequestSchema,
+} = require("@modelcontextprotocol/sdk/types.js");
+
+const UA =
+  "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0 Safari/537.36";
+
+/** Pull a YouTube video id from watch/youtu.be/shorts/embed URLs or a bare id. */
+function parseVideoId(input) {
+  const s = String(input || "").trim();
+  if (/^[a-zA-Z0-9_-]{11}$/.test(s)) return s;
+  try {
+    const u = new URL(s);
+    if (u.hostname === "youtu.be") return u.pathname.slice(1, 12) || null;
+    if (u.searchParams.get("v")) return u.searchParams.get("v");
+    const m = u.pathname.match(/\/(shorts|embed|v)\/([a-zA-Z0-9_-]{11})/);
+    if (m) return m[2];
+  } catch {}
+  const m = s.match(/([a-zA-Z0-9_-]{11})/);
+  return m ? m[1] : null;
+}
+
+function decodeEntities(text) {
+  return String(text)
+    .replace(/&amp;/g, "&")
+    .replace(/&#39;/g, "'")
+    .replace(/&#34;|&quot;/g, '"')
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// InnerTube (YouTube's internal API) with the ANDROID client. The old approach —
+// scraping captionTracks off the watch page and fetching the timedtext baseUrl —
+// now returns EMPTY: YouTube requires a proof-of-origin token for those URLs.
+// The ANDROID-client player response returns caption baseUrls that still resolve
+// without that token. No API key or external binary needed.
+const ANDROID_CLIENT = { clientName: "ANDROID", clientVersion: "20.10.38", hl: "en", androidSdkVersion: 34 };
+
+/** Parse a timedtext body: format-3 uses <p>…<s>word</s>…</p>; srv1 uses <text>. */
+function parseTimedText(xml) {
+  let lines = [...xml.matchAll(/<p[^>]*>([\s\S]*?)<\/p>/g)].map((m) => decodeEntities(m[1].replace(/<[^>]+>/g, "")));
+  if (!lines.length) lines = [...xml.matchAll(/<text[^>]*>([\s\S]*?)<\/text>/g)].map((m) => decodeEntities(m[1]));
+  return lines.filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
+}
+
+async function fetchYouTubeTranscript(url, preferLang) {
+  const videoId = parseVideoId(url);
+  if (!videoId) throw new Error(`Could not parse a YouTube video id from "${url}".`);
+
+  const res = await fetch("https://www.youtube.com/youtubei/v1/player", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "User-Agent": "com.google.android.youtube/20.10.38 (Linux; U; Android 14) gzip" },
+    body: JSON.stringify({ context: { client: ANDROID_CLIENT }, videoId }),
+  });
+  if (!res.ok) throw new Error(`YouTube player API returned HTTP ${res.status}.`);
+  const data = await res.json();
+
+  const title = data?.videoDetails?.title || null;
+  const status = data?.playabilityStatus?.status;
+  if (status && status !== "OK" && status !== "LIVE_STREAM_OFFLINE") {
+    const reason = data?.playabilityStatus?.reason || status;
+    throw new Error(`Video is not accessible (${reason}). No transcript could be read.`);
+  }
+
+  const tracks = data?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
+  if (!Array.isArray(tracks) || tracks.length === 0) {
+    throw new Error(
+      "This video has no captions/transcript available (none published, or age/region-restricted). There is no transcript to read — tell the user that; do not invent the contents."
+    );
+  }
+
+  // Prefer requested lang, then English, then a manual (non-asr) track, then first.
+  const pick =
+    (preferLang && tracks.find((t) => (t.languageCode || "").startsWith(preferLang))) ||
+    tracks.find((t) => (t.languageCode || "").startsWith("en")) ||
+    tracks.find((t) => t.kind !== "asr") ||
+    tracks[0];
+
+  const baseUrl = pick.baseUrl;
+  if (!baseUrl) throw new Error("Caption track had no fetchable URL.");
+
+  const xmlRes = await fetch(baseUrl, { headers: { "User-Agent": UA } });
+  if (!xmlRes.ok) throw new Error(`Caption track fetch failed (HTTP ${xmlRes.status}).`);
+  const transcript = parseTimedText(await xmlRes.text());
+  if (!transcript) throw new Error("The caption track came back empty after parsing.");
+
+  const autoGenerated = pick.kind === "asr";
+  const langName = pick.name?.simpleText || pick.name?.runs?.[0]?.text || pick.languageCode || "unknown";
+  return { videoId, title, language: langName, autoGenerated, chars: transcript.length, transcript };
+}
+
+const server = new Server(
+  { name: "orbit-transcript", version: "1.0.0" },
+  { capabilities: { tools: {} } },
+);
+
+server.setRequestHandler(ListToolsRequestSchema, async () => ({
+  tools: [
+    {
+      name: "get_transcript",
+      description:
+        "Get the actual spoken TRANSCRIPT (captions) of a YouTube video as plain text. USE THIS for any 'read/summarize/what does this video say' request — the Lightpanda browser CANNOT read video transcripts, only the page title. If this returns an error (no captions), tell the user the transcript isn't available — do NOT invent the video's contents.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          url: { type: "string", description: "A YouTube video URL (watch, youtu.be, shorts, embed) or an 11-char video id." },
+          language: { type: "string", description: "Optional preferred caption language code, e.g. 'en', 'hi'." },
+        },
+        required: ["url"],
+      },
+    },
+  ],
+}));
+
+server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  const { name, arguments: args } = request.params;
+  try {
+    if (name === "get_transcript") {
+      const r = await fetchYouTubeTranscript(args?.url, args?.language);
+      const header =
+        `Transcript for "${r.title || r.videoId}" ` +
+        `(lang: ${r.language}${r.autoGenerated ? ", auto-generated" : ""}, ${r.chars} chars).\n` +
+        `Base ALL claims strictly on the text below — do not add facts that aren't in it.\n\n`;
+      return { content: [{ type: "text", text: header + r.transcript }] };
+    }
+    throw new Error(`Unknown tool: ${name}`);
+  } catch (error) {
+    return { isError: true, content: [{ type: "text", text: `Error executing ${name}: ${error.message}` }] };
+  }
+});
+
+async function run() {
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+  console.error("Orbit Transcript MCP server running on stdio");
+}
+
+run().catch((error) => {
+  console.error("Fatal error in Orbit Transcript MCP server:", error);
+  process.exit(1);
+});

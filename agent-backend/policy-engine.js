@@ -26,7 +26,10 @@ const DEFAULT_MATRIX = {
   write_workspace: { chat: "block", plan: "block", edit: "allow", yolo: "allow" },
   write_outside: { chat: "block", plan: "block", edit: "ask", yolo: "allow" },
   shell: { chat: "block", plan: "block", edit: "allow", yolo: "allow" },
-  network: { chat: "block", plan: "allow", edit: "allow", yolo: "allow" },
+  // Network is allowed in chat: "look this up for me" is a core assistant use,
+  // and the mandatory browser (Lightpanda) is a network capability — gating it
+  // in chat forced needless mode-changes for plain web reads.
+  network: { chat: "allow", plan: "allow", edit: "allow", yolo: "allow" },
   spawn_subagent: { chat: "block", plan: "allow", edit: "allow", yolo: "allow" },
 };
 

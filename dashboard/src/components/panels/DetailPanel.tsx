@@ -21,13 +21,15 @@ interface DetailPanelProps {
 }
 
 /**
- * DetailPanel — inspector segments: Overview | Workspace | Trace | Logs.
- * Settings lives on the icon rail now, not in a fifth clipped tab.
+ * DetailPanel — inspector segments: Overview · Preview · Console · Workspace ·
+ * Trace · Logs. All six fit without a horizontal scrollbar: the active tab
+ * shows icon + label, the rest are icon-only (label via tooltip). No scrolling
+ * navbar — the whole strip is always visible.
  */
 export default function DetailPanel({ activeTab, onTabChange, children }: DetailPanelProps) {
   return (
     <div className="flex h-full flex-col">
-      <div role="tablist" aria-label="Inspector" className="flex shrink-0 gap-0.5 overflow-x-auto border-b border-border-soft px-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div role="tablist" aria-label="Inspector" className="flex shrink-0 items-stretch gap-0.5 border-b border-border-soft px-2">
         {TABS.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -36,15 +38,17 @@ export default function DetailPanel({ activeTab, onTabChange, children }: Detail
               key={tab.id}
               role="tab"
               aria-selected={isActive}
+              aria-label={tab.label}
+              title={tab.label}
               onClick={() => onTabChange(tab.id)}
-              className={`flex items-center gap-1.5 whitespace-nowrap border-b-2 px-3 pb-[11px] pt-3 text-[12.5px] transition-colors ${
+              className={`flex min-w-0 items-center justify-center gap-1.5 whitespace-nowrap border-b-2 px-2.5 pb-[11px] pt-3 text-[12.5px] transition-colors ${
                 isActive
                   ? 'border-primary font-semibold text-foreground'
-                  : 'border-transparent font-medium text-faint hover:text-foreground'
+                  : 'flex-1 border-transparent font-medium text-faint hover:text-foreground'
               }`}
             >
-              <Icon size={13} />
-              {tab.label}
+              <Icon size={14} className="shrink-0" />
+              {isActive && <span>{tab.label}</span>}
             </button>
           );
         })}

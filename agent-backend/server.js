@@ -38,6 +38,7 @@ const createConfigRouter = require("./routes/config");
 const createSessionsRouter = require("./routes/sessions");
 const { createModelsRouter, createTtsRouter, createVoicesRouter } = require("./routes/models");
 const createNotificationsRouter = require("./routes/notifications");
+const createNotifyBus = require("./notify-bus");
 const createHealthRouter = require("./routes/health");
 const createWorkspaceRouter = require("./routes/workspace");
 const createDevicesRouter = require("./routes/devices");
@@ -64,6 +65,59 @@ validateEnv();
 const PORT = process.env.PORT || 6800;
 const activeSessions = new Map();    // sessionId → { harness, ws, mode, subagentTracker }
 const pendingApprovals = new Map();  // toolCallId → resolve callback
+const turnGuards = new Map();         // sessionId → anti-flail counters for the active turn
+const sessionPlans = new Map();       // sessionId → structured plan steps (the live Mission checklist)
+
+const PLAN_STATUSES = new Set(["pending", "active", "done", "blocked"]);
+
+/**
+ * Apply an orbit-plan tool call to the session's structured plan and return the
+ * updated steps (or null if it wasn't a plan tool). The shared MCP process has
+ * no session context, so the backend owns plan state — keyed here by sessionId.
+ */
+function applyPlanTool(sessionId, name, args) {
+  const isWrite = /plan_write$/.test(name);
+  const isUpdate = /plan_update$/.test(name);
+  if (!isWrite && !isUpdate) return null;
+
+  if (isWrite) {
+    const steps = Array.isArray(args?.steps) ? args.steps : [];
+    const normalized = steps.map((s, i) => ({
+      id: String(s.id || i + 1),
+      text: String(s.text || "").slice(0, 240),
+      status: PLAN_STATUSES.has(s.status) ? s.status : "pending",
+      deps: Array.isArray(s.deps) ? s.deps.map(String) : [],
+    })).filter((s) => s.text);
+    sessionPlans.set(sessionId, normalized);
+    return normalized;
+  }
+
+  // update — rehydrate from the DB if we don't have the plan in memory (e.g. the
+  // server restarted mid-task), so an update never wipes a persisted plan.
+  let steps = sessionPlans.get(sessionId);
+  if (!steps) {
+    try { steps = db.getSession(sessionId)?.planSteps || []; } catch { steps = []; }
+    sessionPlans.set(sessionId, steps);
+  }
+  const step = steps.find((s) => s.id === String(args?.id));
+  if (step) {
+    if (PLAN_STATUSES.has(args?.status)) step.status = args.status;
+    if (typeof args?.text === "string" && args.text.trim()) step.text = args.text.slice(0, 240);
+  }
+  return steps;
+}
+
+// Anti-flail limits: stop a turn that's spinning without making progress.
+const MAX_TOOL_CALLS_PER_TURN = 40;        // hard runaway backstop
+const MAX_CONSECUTIVE_UNPRODUCTIVE = 6;    // repeated empty/errored tool results
+
+/** Heuristic: did a tool result fail to produce anything useful? */
+function isUnproductiveResult(isError, result) {
+  if (isError) return true;
+  const s = (typeof result === "string" ? result : JSON.stringify(result || "")).trim();
+  if (s.length < 15) return true;
+  return /error executing|\(no output\)|exited with code [1-9]|bot challenge|captcha|are you a robot|429 too many|no results found|thin content|can't play this video|target closed/i.test(s);
+}
 const sessionAllowedPaths = new Map(); // sessionId → Set<allowedPaths>
 
 // Read config fresh from disk each call so a saved change (policy, budgets,
@@ -94,6 +148,25 @@ const server = http.createServer(app);
 const harnessRegistry = createHarnessRegistry(); // remote orbit-adapter connections
 const wss = createWebSocketServer(server, db, harnessRegistry);
 
+// ── Notification bus ────────────────────────────────────────────────
+// One bus, typed sinks. "web" and "desktop" are wired here (they only need the
+// WS server + host shell); the "channel" sink is registered further down, once
+// the Telegram bridge exists. Callers/tools choose sinks per-event.
+const notifyBus = createNotifyBus();
+notifyBus.registerSink("web", ({ title, body, severity, timestamp }) => {
+  const msg = JSON.stringify({ type: "notification", title, body, severity, timestamp });
+  wss.clients.forEach((c) => { if (c.readyState === 1) { try { c.send(msg); } catch {} } });
+});
+notifyBus.registerSink("desktop", ({ title, body, severity }) => {
+  const { exec } = require("child_process");
+  const t = String(title || "Orbit").replace(/"/g, '\\"');
+  const m = String(body || "").replace(/"/g, '\\"');
+  const urgency = severity === "error" ? "critical" : severity === "warning" ? "normal" : "low";
+  exec(`notify-send -u ${urgency} "${t}" "${m}"`, (err) => {
+    if (err) console.error("[Notify] desktop notify-send failed:", err.message);
+  });
+});
+
 // ── Auth ────────────────────────────────────────────────────────────
 const authMiddleware = createAuthMiddleware(db);
 if (!createAuthMiddleware.getSharedApiKey()) {
@@ -107,7 +180,7 @@ app.use("/api/sessions", authMiddleware, createSessionsRouter());
 app.use("/api/models", authMiddleware, createModelsRouter(getConfig));
 app.use("/api/tts", authMiddleware, createTtsRouter(getConfig));
 app.use("/api/voices", authMiddleware, createVoicesRouter());
-app.use("/api/notify", authMiddleware, createNotificationsRouter(getConfig, wss));
+app.use("/api/notify", authMiddleware, createNotificationsRouter(notifyBus));
 app.use("/api/workspace", authMiddleware, createWorkspaceRouter());
 app.use("/api/console", authMiddleware, require("./routes/console")());
 app.use("/api/prompts", authMiddleware, createPromptsRouter());
@@ -151,6 +224,28 @@ const createTelegramBridge = require("./telegram-bridge");
 const telegramBridge = createTelegramBridge({ db, decrypt, dispatch: fleet.dispatchToDevice });
 app.get("/api/telegram/status", authMiddleware, (req, res) => {
   res.json({ success: true, ...telegramBridge.status() });
+});
+
+// "channel" sink: everything off the web app — Telegram + Discord/Slack
+// webhooks. Kept separate from the "web" bell so channel alerts and in-app
+// notifications never pollute each other.
+notifyBus.registerSink("channel", ({ title, body, severity }) => {
+  const line = `${severity === "error" || severity === "warning" ? "⚠️ " : ""}${title}${body ? `\n${body}` : ""}`;
+  try { telegramBridge.notify(line); } catch (e) { console.error("[Notify] telegram sink failed:", e.message); }
+  const config = getConfig();
+  const tag = `[${String(severity || "info").toUpperCase()}]`;
+  if (config?.notifications?.discordWebhook) {
+    fetch(config.notifications.discordWebhook, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: `**${tag} ${title}**${body ? `\n${body}` : ""}` }),
+    }).catch((e) => console.error("[Notify] Discord webhook failed:", e.message));
+  }
+  if (config?.notifications?.slackWebhook) {
+    fetch(config.notifications.slackWebhook, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: `*${tag} ${title}*${body ? `\n${body}` : ""}` }),
+    }).catch((e) => console.error("[Notify] Slack webhook failed:", e.message));
+  }
 });
 
 // Harness registry: the always-present local pi-code plus any connected remote
@@ -480,7 +575,9 @@ async function handleStartTask(ws, userPrompt, sessionId, mode, systemPromptType
 
   metricsManager.recordInputTokens(sessionId, userPrompt);
   metricsManager.beginTurn(sessionId, userPrompt);
-  
+  // Reset the anti-flail guard for the new turn.
+  turnGuards.set(sessionId, { calls: 0, consecutiveUnproductive: 0, stopped: false });
+
   // ── Initialize subagent tracker ───────────────────────────
   // Restore prior sub-agent history for this session (if any was persisted)
   // instead of always starting from an empty tree — otherwise a harness
@@ -613,16 +710,14 @@ async function runProfileHeadless({ profileId, prompt, title, source }) {
   return { sessionId };
 }
 
-/** Broadcast a notification to every connected dashboard. */
+/**
+ * Internal system events (a background/headless run finishing, an interruption)
+ * go to the web dashboard + desktop only — NOT to channels. Channel alerts are
+ * reserved for things the agent explicitly sends via the notify tool, so the
+ * user's Telegram isn't spammed by every internal run.
+ */
 function broadcastNotification({ title, body, severity }) {
-  const msg = JSON.stringify({ type: "notification", title, body, severity, timestamp: new Date().toISOString() });
-  wss.clients.forEach((c) => { if (c.readyState === 1) { try { c.send(msg); } catch {} } });
-  console.log(`[Notify] ${severity || "info"}: ${title} — ${body || ""}`);
-  // Fan the alert out to paired Telegram chats too (outbound side of the bridge).
-  try {
-    const mark = severity === "error" || severity === "warning" ? "⚠️ " : "";
-    telegramBridge.notify(`${mark}${title}${body ? `\n${body}` : ""}`);
-  } catch {}
+  notifyBus.notify({ title, body, severity, sinks: ["web", "desktop"], source: "system" });
 }
 
 // A fleet delegation shows up as a normal tool call named for the orbit-fleet
@@ -670,7 +765,7 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
   // Provider-reported usage relayed by the harness. When the usage belongs to
   // a sub-agent's own LLM calls, credit that agent's counters too; the session
   // totals always absorb it (sub-agent work is session work).
-  events.on("usage", ({ input, output, reasoning, subagentId }) => {
+  events.on("usage", ({ input, output, reasoning, cacheRead, subagentId }) => {
     if (subagentId) {
       const agent = subagentTracker.getAgent(subagentId);
       if (agent) {
@@ -680,7 +775,7 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
         agent.tokens.total = agent.tokens.input + agent.tokens.output + agent.tokens.reasoning;
       }
     }
-    metricsManager.recordUsage(sessionId, { input, output, reasoning });
+    metricsManager.recordUsage(sessionId, { input, output, reasoning, cacheRead });
     sendWithSession(ws, {
       type: "usage_update",
       ...metricsManager.toFrontendUpdate(sessionId),
@@ -703,6 +798,18 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
     metricsManager.setToolCallArgs(sessionId, id, args);
 
     sendWithSession(ws, { type: "tool_start", toolCallId: id, name, arguments: args }, sessionId);
+
+    // Structured plan tool → update the live Mission checklist for this session.
+    // (Intercepted here because this per-session emitter has the sessionId the
+    // shared orbit-plan MCP process lacks.)
+    const planSteps = applyPlanTool(sessionId, name, args);
+    if (planSteps) {
+      sendWithSession(ws, { type: "plan_state", steps: planSteps }, sessionId);
+      try {
+        const existing = db.getSession(sessionId);
+        if (existing) db.saveSession({ ...existing, planSteps });
+      } catch {}
+    }
 
     // Track subagent spawns
     if (name === "subagent") {
@@ -810,13 +917,45 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
     }
   });
   
-  events.on("tool_call_end", ({ id, name, result, subagentId }) => {
+  events.on("tool_call_end", ({ id, name, result, isError, subagentId }) => {
     sendLog(ws, `[Tool Done] Finished ${name}`);
 
     const resultStr = typeof result === "string" ? result : JSON.stringify(result || "");
     const latencyMs = metricsManager.endToolCall(sessionId, id, name, resultStr);
 
     sendWithSession(ws, { type: "tool_end", toolCallId: id, name, result, latencyMs }, sessionId);
+
+    // ── Anti-flail guard ──────────────────────────────────────
+    // Stop a turn that's spinning: too many tool calls overall, or a run of
+    // empty/errored results (the "spiral across search engines" failure mode).
+    // Only top-level calls count (sub-agents manage their own budget).
+    if (!subagentId) {
+      const g = turnGuards.get(sessionId);
+      if (g && !g.stopped) {
+        g.calls += 1;
+        g.consecutiveUnproductive = isUnproductiveResult(isError, result)
+          ? g.consecutiveUnproductive + 1
+          : 0;
+        const runaway = g.calls >= MAX_TOOL_CALLS_PER_TURN;
+        const stuck = g.consecutiveUnproductive >= MAX_CONSECUTIVE_UNPRODUCTIVE;
+        if (runaway || stuck) {
+          g.stopped = true;
+          const why = stuck
+            ? `${g.consecutiveUnproductive} tool calls in a row returned nothing useful`
+            : `this turn hit ${g.calls} tool calls`;
+          sendLog(ws, `[Anti-flail] Stopping turn — ${why}.`, false, sessionId);
+          const ses = activeSessions.get(sessionId);
+          if (ses?.harness) { try { ses.harness.cancel(); } catch {} }
+          sendWithSession(ws, {
+            type: "message", role: "assistant",
+            content: `I stopped because ${why} — I don't seem to be making progress. Could be a blocked/unavailable source or the wrong approach. Tell me how you'd like to proceed, or refine the request.`,
+          }, sessionId);
+          broadcastNotification({ title: "Agent stopped (no progress)", body: why, severity: "warning" });
+          sendStatus(ws, "done", sessionId);
+          return;
+        }
+      }
+    }
 
     // Handle nested tool calls made BY a subagent
     if (subagentId && subagentTracker.getAgent(subagentId)) {
@@ -1020,10 +1159,19 @@ process.on("SIGTERM", () => shutdown("SIGTERM"));
 process.on("SIGINT", () => shutdown("SIGINT"));
 
 // ── Start ───────────────────────────────────────────────────────────
-// Ensure the `orbit-fleet` MCP server is registered in .pi/mcp.json so the lead
-// agent gets the delegate-to-device tools. Written on boot (not committed with a
-// hard-coded path) so command + API key + port always match THIS install.
-function ensureFleetMcpRegistered() {
+// Ensure Orbit's own MCP servers are registered in .pi/mcp.json so the agent
+// gets its platform tools: `orbit-fleet` (delegate-to-device) and `orbit-notify`
+// (message the user / raise alerts — a network capability, so no bash needed).
+// Written on boot (not committed with a hard-coded path) so command + API key +
+// port always match THIS install.
+function ensureOrbitMcpServersRegistered() {
+  const servers = {
+    "orbit-fleet": path.join(__dirname, "../mcp-server-fleet/index.js"),
+    "orbit-notify": path.join(__dirname, "../mcp-server-notify/index.js"),
+    "orbit-transcript": path.join(__dirname, "../mcp-server-transcript/index.js"),
+    "orbit-search": path.join(__dirname, "../mcp-server-search/index.js"),
+    "orbit-plan": path.join(__dirname, "../mcp-server-plan/index.js"),
+  };
   try {
     const fs = require("fs");
     const { MCP_CONFIG_PATH } = require("./mcp-registry");
@@ -1031,30 +1179,38 @@ function ensureFleetMcpRegistered() {
       ? JSON.parse(fs.readFileSync(MCP_CONFIG_PATH, "utf-8"))
       : { settings: { toolPrefix: "mcp" }, mcpServers: {} };
     cfg.mcpServers = cfg.mcpServers || {};
-    const desired = {
-      command: "node",
-      args: [path.join(__dirname, "../mcp-server-fleet/index.js")],
-      transport: "stdio",
-      lifecycle: "eager",
-      env: {
-        ORBIT_API: `http://127.0.0.1:${PORT}`,
-        ...(process.env.ORBIT_API_KEY ? { ORBIT_API_KEY: process.env.ORBIT_API_KEY } : {}),
-      },
-    };
-    const cur = cfg.mcpServers["orbit-fleet"];
-    if (JSON.stringify(cur) !== JSON.stringify(desired)) {
-      cfg.mcpServers["orbit-fleet"] = desired;
-      fs.writeFileSync(MCP_CONFIG_PATH, JSON.stringify(cfg, null, 2) + "\n");
-      console.log("[Fleet] Registered orbit-fleet MCP server in .pi/mcp.json");
+    let changed = false;
+    for (const [id, entry] of Object.entries(servers)) {
+      const desired = {
+        command: "node",
+        args: [entry],
+        transport: "stdio",
+        lifecycle: "eager",
+        env: {
+          ORBIT_API: `http://127.0.0.1:${PORT}`,
+          ...(process.env.ORBIT_API_KEY ? { ORBIT_API_KEY: process.env.ORBIT_API_KEY } : {}),
+        },
+      };
+      if (JSON.stringify(cfg.mcpServers[id]) !== JSON.stringify(desired)) {
+        cfg.mcpServers[id] = desired;
+        changed = true;
+        console.log(`[Orbit MCP] Registered ${id} in .pi/mcp.json`);
+      }
     }
+    if (changed) fs.writeFileSync(MCP_CONFIG_PATH, JSON.stringify(cfg, null, 2) + "\n");
   } catch (e) {
-    console.error("[Fleet] Could not register orbit-fleet MCP server:", e.message);
+    console.error("[Orbit MCP] Could not register Orbit MCP servers:", e.message);
   }
 }
 
 server.listen(PORT, '127.0.0.1', () => {
   console.log(`Orbit Backend Server listening on 127.0.0.1:${PORT} (internal only)`);
-  ensureFleetMcpRegistered();
+  ensureOrbitMcpServersRegistered();
+  // Essential service: the Lightpanda browser is the mandatory default browser
+  // for every agent. Ensure its container is up with an auto-restart policy so
+  // a crash never leaves agents web-blind (falling back to code_search/nonsense).
+  require("./lightpanda").ensureLightpandaRunning().catch((e) =>
+    console.error("[Lightpanda] ensure failed:", e.message));
   // Start the Telegram bridge (no-ops cleanly if no bot token is set).
   telegramBridge.start();
   // Fire schedule-type channels locally (no inbound exposure needed).

@@ -10,6 +10,13 @@ const EventEmitter = require("events");
 const HarnessInterface = require("../interface");
 const { stripTuiChars, isMutatingTool, isReadOnlyTool, isConversationalPrompt } = require("./parser");
 
+// pi "web-access" extension (npm:pi-web-access) tools, split by capability:
+//   - native SEARCH: only autonomous with a backend key, else prompts a browser
+//     sign-in — excluded unless a key is configured (orbit-search covers search).
+//   - native BROWSE fallback: superseded by the Lightpanda MCP browser.
+const WEB_NATIVE_SEARCH_TOOLS = ["web_search", "get_search_content"];
+const WEB_BROWSE_FALLBACK_TOOLS = ["fetch_content", "browser", "web"];
+
 class PiCodeHarness extends HarnessInterface {
   constructor(options) {
     super(options);
@@ -49,7 +56,18 @@ class PiCodeHarness extends HarnessInterface {
     const promptsDir = path.join(__dirname, "../../../prompts");
     const basePrompt = fs.readFileSync(path.join(promptsDir, basePromptFile), "utf-8");
     let combinedPrompt = basePrompt;
-    
+
+    // Always inject Orbit's self-knowledge (who it is, its modes + capability
+    // matrix, connectors, the fleet + notify tools) so the agent answers
+    // questions about itself and picks the notify tool over bash — instead of
+    // grepping its own source at runtime.
+    try {
+      const systemDocs = fs.readFileSync(path.join(promptsDir, "orbit-system.md"), "utf-8");
+      combinedPrompt = combinedPrompt + "\n\n" + systemDocs;
+    } catch (e) {
+      console.error("[PiCodeHarness] orbit-system.md not found:", e.message);
+    }
+
     if (modePromptFile) {
       const modePrompt = fs.readFileSync(path.join(promptsDir, modePromptFile), "utf-8");
       combinedPrompt = combinedPrompt + "\n\n" + modePrompt;
@@ -90,12 +108,31 @@ class PiCodeHarness extends HarnessInterface {
 
     // Disable selected tools this session. Precedence: explicit per-session
     // excludeTools (from a profile / composer) > config default > nothing.
-    // Nothing is excluded by default: Lightpanda is the PREFERRED browser (the
-    // system prompt steers there first), with pi's native web tools kept as a
-    // fallback. A profile can still exclude tools explicitly.
-    const excludeTools = this.excludeTools
+    let excludeTools = this.excludeTools
       || this.config.excludeTools
       || [];
+
+    // ── Web capability policy ──────────────────────────────────────────
+    // SEARCH and BROWSE are separate capabilities:
+    //   • SEARCH (native pi web_search/get_search_content) is PREFERRED when the
+    //     user has configured a real backend key — otherwise pi falls back to a
+    //     Google/Gemini browser SIGN-IN prompt (not autonomous), so we EXCLUDE it
+    //     and let our keyless `orbit-search` MCP tool be the default retriever.
+    //   • BROWSE fallback (native fetch_content/browser/web) is off by default —
+    //     the Lightpanda MCP browser reads pages; enable via config.webAccess.
+    const webAccessEnabled =
+      this.webAccessEnabled === true ||
+      (this.webAccessEnabled === undefined && this.config.webAccess?.enabled === true);
+
+    if (!webAccessEnabled) {
+      excludeTools = Array.from(new Set([...excludeTools, ...WEB_BROWSE_FALLBACK_TOOLS]));
+    }
+    // Native search stays only if a real (autonomous) backend key is set; else
+    // exclude it so it never triggers the browser sign-in — orbit-search covers it.
+    if (!PiCodeHarness._hasNativeSearchConfigured()) {
+      excludeTools = Array.from(new Set([...excludeTools, ...WEB_NATIVE_SEARCH_TOOLS]));
+    }
+
     if (Array.isArray(excludeTools) && excludeTools.length > 0) {
       piArgs.push("--exclude-tools", excludeTools.join(","));
     }
@@ -109,10 +146,16 @@ class PiCodeHarness extends HarnessInterface {
 
     console.log(`[PiCodeHarness] Spawning: ${command} (mode=${activeMode}, model=${normalModel})`);
 
+    // `detached: true` makes pi its OWN process-group leader, so the tools it
+    // spawns (bash → curl, etc.) join pi's group. cancel() can then signal the
+    // WHOLE group and actually kill an in-flight command — signalling just pi's
+    // PID (the old behaviour) left long curls/bash running and the Stop button
+    // did nothing.
     this.piProcess = spawn(command, args, {
       env: spawnEnv,
       cwd,
-      stdio: ['pipe', 'pipe', 'pipe']
+      stdio: ['pipe', 'pipe', 'pipe'],
+      detached: true,
     });
     
     console.log(`[PiCodeHarness] Process spawned, PID: ${this.piProcess.pid}`);
@@ -220,6 +263,7 @@ class PiCodeHarness extends HarnessInterface {
         id: tc.id || tc.toolCallId,
         name: tc.name || tc.toolName || "",
         result: item.result || null,
+        isError: item.isError === true || tc.isError === true,
         subagentId: item.subagentId || null,
       });
       return;
@@ -274,23 +318,37 @@ class PiCodeHarness extends HarnessInterface {
   }
   
   async cancel() {
-    if (this.piProcess) {
-      try {
-        this.piProcess.kill("SIGINT");
-      } catch (e) {
-        console.error("[PiCodeHarness] Error cancelling:", e);
+    if (!this.piProcess) return;
+    const pid = this.piProcess.pid;
+    // Best-effort graceful turn-abort first (harmless if pi ignores it).
+    try { this.piProcess.stdin.write(JSON.stringify({ type: "cancel" }) + "\n"); } catch {}
+    // Then signal pi's whole PROCESS GROUP so any in-flight bash/curl child dies
+    // too — not just the pi PID. Escalate to SIGKILL if it doesn't exit.
+    this._killGroup(pid, "SIGTERM");
+    setTimeout(() => {
+      // Still the same live process? Force-kill the group.
+      if (this.piProcess && this.piProcess.pid === pid && !this.piProcess.killed) {
+        this._killGroup(pid, "SIGKILL");
       }
+    }, 2500);
+  }
+
+  /** Signal pi's process group (negative pid). Falls back to the bare pid. */
+  _killGroup(pid, signal) {
+    try {
+      process.kill(-pid, signal); // negative pid → the whole group (detached leader)
+    } catch (e) {
+      try { process.kill(pid, signal); } catch {}
     }
   }
-  
+
   async disconnect() {
     if (this.piProcess) {
-      try {
-        this.piProcess.kill("SIGTERM");
-        this.piProcess = null;
-      } catch (e) {
+      const pid = this.piProcess.pid;
+      try { this._killGroup(pid, "SIGTERM"); } catch (e) {
         console.error("[PiCodeHarness] Error disconnecting:", e);
       }
+      this.piProcess = null;
     }
   }
 
@@ -344,6 +402,20 @@ class PiCodeHarness extends HarnessInterface {
       ...t,
       enabledByDefault: !excluded.has(t.name),
     }));
+  }
+
+  /**
+   * True if a real (autonomous) native search backend is configured — an API
+   * key in env or ~/.pi/web-search.json. When false, pi's web_search would fall
+   * back to a browser sign-in, so we exclude it and rely on orbit-search.
+   */
+  static _hasNativeSearchConfigured() {
+    if (process.env.EXA_API_KEY || process.env.PERPLEXITY_API_KEY || process.env.GEMINI_API_KEY) return true;
+    try {
+      const cfgPath = path.join(os.homedir(), ".pi", "web-search.json");
+      const cfg = JSON.parse(fs.readFileSync(cfgPath, "utf-8"));
+      return !!(cfg.exaApiKey || cfg.perplexityApiKey || cfg.geminiApiKey || cfg.apiKey);
+    } catch { return false; }
   }
 
   /** Installed pi extension packages from ~/.pi/agent/settings.json. */

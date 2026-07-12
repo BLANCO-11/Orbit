@@ -24,6 +24,50 @@
       "env": {
         "ORBIT_API": "http://127.0.0.1:6800"
       }
+    },
+    "orbit-notify": {
+      "command": "node",
+      "args": [
+        "/home/blanco/builds/LLM-OS-AGENT/mcp-server-notify/index.js"
+      ],
+      "transport": "stdio",
+      "lifecycle": "eager",
+      "env": {
+        "ORBIT_API": "http://127.0.0.1:6800"
+      }
+    },
+    "orbit-transcript": {
+      "command": "node",
+      "args": [
+        "/home/blanco/builds/LLM-OS-AGENT/mcp-server-transcript/index.js"
+      ],
+      "transport": "stdio",
+      "lifecycle": "eager",
+      "env": {
+        "ORBIT_API": "http://127.0.0.1:6800"
+      }
+    },
+    "orbit-search": {
+      "command": "node",
+      "args": [
+        "/home/blanco/builds/LLM-OS-AGENT/mcp-server-search/index.js"
+      ],
+      "transport": "stdio",
+      "lifecycle": "eager",
+      "env": {
+        "ORBIT_API": "http://127.0.0.1:6800"
+      }
+    },
+    "orbit-plan": {
+      "command": "node",
+      "args": [
+        "/home/blanco/builds/LLM-OS-AGENT/mcp-server-plan/index.js"
+      ],
+      "transport": "stdio",
+      "lifecycle": "eager",
+      "env": {
+        "ORBIT_API": "http://127.0.0.1:6800"
+      }
     }
   }
 }

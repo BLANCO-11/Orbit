@@ -24,6 +24,7 @@ export default function AppShell({
   const { isDesktop, isMobile } = useResponsive();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const toggleSidebar = useCallback(() => setSidebarOpen((prev) => !prev), []);
   const toggleRightPanel = useCallback(() => setRightPanelOpen((prev) => !prev), []);
@@ -35,17 +36,21 @@ export default function AppShell({
       <Header
         onToggleSidebar={toggleSidebar}
         onToggleRightPanel={toggleRightPanel}
+        onToggleSidebarCollapse={() => setSidebarCollapsed((p) => !p)}
+        sidebarCollapsed={sidebarCollapsed}
         isDesktop={isDesktop}
         isMobile={isMobile}
         {...headerProps}
       />
 
       <div className="relative flex min-h-0 flex-1">
-        {/* ── Sidebar ── */}
+        {/* ── Sidebar ── (desktop: collapsible via the header toggle) */}
         {isDesktop ? (
-          <aside className="flex w-[264px] shrink-0 flex-col border-r border-border-soft bg-sidebar">
-            {sidebar}
-          </aside>
+          !sidebarCollapsed && (
+            <aside className="flex w-[264px] shrink-0 flex-col border-r border-border-soft bg-sidebar">
+              {sidebar}
+            </aside>
+          )
         ) : (
           <>
             {sidebarOpen && <div onClick={closeSidebar} className="fixed inset-0 z-20 bg-black/40" />}

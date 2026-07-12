@@ -201,12 +201,28 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const bodyText = await activePage.evaluate(() => {
           return document.body ? document.body.innerText : "";
         });
-        
+
+        // Thin/unusable-content guard. Lightpanda can't run heavy SPAs (YouTube,
+        // some paywalled/JS apps): it returns just a title or a "can't play"
+        // stub. Flag that loudly so the agent reports inability instead of
+        // fabricating page contents from the title.
+        const clean = (bodyText || "").trim();
+        const blocked = /can't play this video|enable javascript|are you a robot|verify you are human/i.test(clean);
+        let notice = "";
+        if (clean.length < 200 || blocked) {
+          notice =
+            `\n\n⚠️ THIN CONTENT: this page returned little or no readable text` +
+            `${blocked ? " (JS-heavy/blocked — e.g. a video player or bot-check)" : ""}. ` +
+            `You did NOT retrieve its real content. Do NOT infer, summarize, or report ` +
+            `the page's substance from this — tell the user you couldn't read it` +
+            `${/youtube\.com|youtu\.be/i.test(url) ? ", and for a video transcript use the get_transcript tool instead" : ""}.`;
+        }
+
         return {
           content: [
             {
               type: "text",
-              text: `Current URL: ${url}\nTitle: ${title}\n\nVisible Content:\n${bodyText.substring(0, 10000)}`
+              text: `Current URL: ${url}\nTitle: ${title}\n\nVisible Content:\n${clean.substring(0, 10000)}${notice}`
             }
           ]
         };
