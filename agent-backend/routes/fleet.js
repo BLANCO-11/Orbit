@@ -21,8 +21,8 @@ function createFleetRouter({ fleet }) {
   // answer the lead needs to merge.
   router.post("/dispatch", async (req, res, next) => {
     try {
-      const { device, prompt, mode, effort } = req.body || {};
-      const result = await fleet.dispatchToDevice({ device, prompt, mode, effort });
+      const { device, prompt, mode, effort, leadSessionId } = req.body || {};
+      const result = await fleet.dispatchToDevice({ device, prompt, mode, effort, leadSessionId });
       res.json({ success: true, ...result });
     } catch (err) {
       // Surface the reason to the tool (bad device, empty prompt) rather than a 500.

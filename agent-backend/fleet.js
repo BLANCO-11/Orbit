@@ -17,7 +17,17 @@ const HeadlessSocket = require("./ws/headless-socket");
  * @param {object} deps.harnessRegistry    connected remote adapters (ws/harness)
  * @param {Function} deps.handleStartTask   server.js turn runner (drives any harness)
  */
-function createFleet({ db, harnessRegistry, handleStartTask }) {
+// Execution-rights ordering (least → most). A delegate can never exceed its lead.
+const MODE_RANK = { chat: 0, plan: 1, edit: 2, yolo: 3 };
+const RANK_MODE = ["chat", "plan", "edit", "yolo"];
+/** Cap `requested` at `ceiling` (the lead's rights). Both default sensibly. */
+function capMode(requested, ceiling) {
+  const c = MODE_RANK[ceiling] ?? MODE_RANK.edit;
+  const r = requested && MODE_RANK[requested] !== undefined ? MODE_RANK[requested] : c; // no explicit → inherit
+  return RANK_MODE[Math.min(r, c)];
+}
+
+function createFleet({ db, harnessRegistry, handleStartTask, getSessionMode }) {
   // Local agent TYPES the lead can delegate to on this host (each is a harness
   // id that handleStartTask routes locally). This is what enables mixing agents
   // — e.g. run one subtask on pi and another on OpenCode from the same chat.
@@ -47,9 +57,15 @@ function createFleet({ db, harnessRegistry, handleStartTask }) {
    * target id from listDevices: a local agent type ("local" = pi, "opencode")
    * or a connected remote device id.
    */
-  async function dispatchToDevice({ device, prompt, mode, effort, source = "fleet", titlePrefix = "⇢" }) {
+  async function dispatchToDevice({ device, prompt, mode, effort, leadSessionId, source = "fleet", titlePrefix = "⇢" }) {
     if (!prompt || !prompt.trim()) throw new Error("a task/prompt is required");
     const harnessId = device || "local";
+
+    // Delegate execution rights: inherit the LEAD's mode by default; if the lead
+    // passed an explicit `mode`, honor it but CAP at the lead's own rights so a
+    // delegate can never escalate beyond what the lead itself may do.
+    const leadMode = (getSessionMode && leadSessionId && getSessionMode(leadSessionId)) || "edit";
+    const resolvedMode = capMode(mode, leadMode);
     const isLocalAgent = Object.prototype.hasOwnProperty.call(LOCAL_AGENTS, harnessId);
     if (!isLocalAgent && !harnessRegistry.get(harnessId)) {
       const ids = listDevices().map((d) => d.id).join(", ");
@@ -65,7 +81,7 @@ function createFleet({ db, harnessRegistry, handleStartTask }) {
         messages: [{ role: "user", content: prompt }],
         logs: [],
         executionPlan: "",
-        mode: mode || "",
+        mode: resolvedMode,
         metrics: {},
         subagentTree: {},
         timestamp: Date.now(),
@@ -82,13 +98,11 @@ function createFleet({ db, harnessRegistry, handleStartTask }) {
     // the delegate's toolset by every name pi might expose it under.
     const noRedelegate = ["dispatch_to_device", "mcp_orbit-fleet_dispatch_to_device", "orbit-fleet_dispatch_to_device"];
 
-    // Delegates run headless and can't answer an approval prompt, so they need a
-    // mode that actually lets them work. Default to "edit" (shell/read/network
-    // allowed; each delegate is isolated in its own session workspace) — "chat"
-    // blocks shell, which made delegates finish silently with 0 tool calls.
+    // Delegates run headless and can't answer an approval prompt; resolvedMode
+    // (inherited from the lead, capped) governs what they may actually do.
     await handleStartTask(
       socket, prompt, sessionId,
-      mode || "edit", "standard", [], effort || "balanced",
+      resolvedMode, "standard", [], effort || "balanced",
       harnessId, noRedelegate,
     );
 

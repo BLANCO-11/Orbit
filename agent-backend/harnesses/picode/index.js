@@ -83,7 +83,14 @@ class PiCodeHarness extends HarnessInterface {
       const { MCP_CONFIG_PATH } = require("../../mcp-registry");
       const piDir = path.join(this._workspaceDir, ".pi");
       fs.mkdirSync(piDir, { recursive: true });
-      fs.copyFileSync(MCP_CONFIG_PATH, path.join(piDir, "mcp.json"));
+      // Inject this session's id into each Orbit MCP server's env so session-blind
+      // MCP tools (e.g. fleet dispatch) can identify the LEAD session — used to
+      // inherit its execution rights, not hardcode them.
+      const cfg = JSON.parse(fs.readFileSync(MCP_CONFIG_PATH, "utf-8"));
+      for (const [name, s] of Object.entries(cfg.mcpServers || {})) {
+        if (name.startsWith("orbit-")) s.env = { ...(s.env || {}), ORBIT_SESSION_ID: this.sessionId };
+      }
+      fs.writeFileSync(path.join(piDir, "mcp.json"), JSON.stringify(cfg, null, 2) + "\n");
     } catch (e) {
       console.error("[PiCodeHarness] Could not mirror .pi/mcp.json to workspace:", e.message);
     }

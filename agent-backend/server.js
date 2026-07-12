@@ -216,7 +216,11 @@ app.use("/api/channels", (req, res, next) => {
 // is hoisted, defined below). Authed like any other API surface.
 const createFleet = require("./fleet");
 const createFleetRouter = require("./routes/fleet");
-const fleet = createFleet({ db, harnessRegistry, handleStartTask });
+const fleet = createFleet({
+  db, harnessRegistry, handleStartTask,
+  // Lets fleet dispatch inherit a delegate's rights from the LEAD session's mode.
+  getSessionMode: (sid) => activeSessions.get(sid)?.mode || db.getSession(sid)?.mode || null,
+});
 app.use("/api/fleet", authMiddleware, createFleetRouter({ fleet }));
 
 // Telegram bridge: two-way integration over the stored "telegram" bot token.

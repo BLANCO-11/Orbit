@@ -45,12 +45,13 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     {
       name: "dispatch_to_device",
       description:
-        "Delegate a self-contained task to another agent/device and get its final answer back. `device` picks the target: a local agent type ('local'=pi, 'opencode'=OpenCode) runs it on THIS host with a fresh agent of that type; a remote device id runs it on that machine. IMPORTANT: the delegate does NOT see this conversation — give it a complete, standalone instruction. Fan out subtasks to different agents, then merge the answers yourself.",
+        "Delegate a self-contained task to another agent/device and get its final answer back. `device` picks the target: a local agent type ('local'=pi, 'opencode'=OpenCode) runs it on THIS host with a fresh agent of that type; a remote device id runs it on that machine. IMPORTANT: the delegate does NOT see this conversation — give it a complete, standalone instruction. By default the delegate inherits YOUR execution rights (mode); set `mode` to grant it fewer/appropriate rights (it can never exceed yours). Fan out subtasks, then merge the answers yourself.",
       inputSchema: {
         type: "object",
         properties: {
           device: { type: "string", description: "A target id from list_devices: 'local' (pi), 'opencode', or a paired device id." },
           task: { type: "string", description: "A complete, standalone instruction for the delegate agent." },
+          mode: { type: "string", enum: ["chat", "plan", "edit", "yolo"], description: "Execution rights to grant the delegate (default: inherit yours). chat=read/answer, plan=read+research, edit=read/write/shell, yolo=unrestricted. Capped at your own rights." },
         },
         required: ["device", "task"],
       },
@@ -72,7 +73,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     if (name === "dispatch_to_device") {
       const d = await api("/api/fleet/dispatch", {
         method: "POST",
-        body: JSON.stringify({ device: args.device, prompt: args.task }),
+        body: JSON.stringify({
+          device: args.device,
+          prompt: args.task,
+          mode: args.mode,                          // explicit rights (capped server-side)
+          leadSessionId: process.env.ORBIT_SESSION_ID, // so the delegate inherits the lead's rights
+        }),
       });
       return {
         content: [{ type: "text", text: `[${d.device} · ${d.status}]\n${d.output || "(no output returned)"}` }],
