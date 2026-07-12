@@ -509,7 +509,6 @@ function DashboardInner() {
       {centerView === 'mission' ? (
         <ComponentErrorBoundary label="Mission">
           <MissionView
-            executionPlan={state.executionPlan}
             planSteps={state.planSteps}
             subAgents={state.metrics.subagentTrace || state.metrics.activeSubagents || []}
             status={state.status}
