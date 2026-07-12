@@ -143,6 +143,15 @@ const createFleetRouter = require("./routes/fleet");
 const fleet = createFleet({ db, harnessRegistry, handleStartTask });
 app.use("/api/fleet", authMiddleware, createFleetRouter({ fleet }));
 
+// Telegram bridge: two-way integration over the stored "telegram" bot token.
+// Inbound messages from paired chats run the agent (via the same headless
+// dispatch fleet uses); outbound alerts are pushed from the notification bus.
+const createTelegramBridge = require("./telegram-bridge");
+const telegramBridge = createTelegramBridge({ db, decrypt, dispatch: fleet.dispatchToDevice });
+app.get("/api/telegram/status", authMiddleware, (req, res) => {
+  res.json({ success: true, ...telegramBridge.status() });
+});
+
 // Harness registry: the always-present local pi-code plus any connected remote
 // orbit-adapters. Sessions can target a specific harness by id on start_task.
 app.get("/api/harnesses", authMiddleware, (req, res) => {
@@ -608,6 +617,11 @@ function broadcastNotification({ title, body, severity }) {
   const msg = JSON.stringify({ type: "notification", title, body, severity, timestamp: new Date().toISOString() });
   wss.clients.forEach((c) => { if (c.readyState === 1) { try { c.send(msg); } catch {} } });
   console.log(`[Notify] ${severity || "info"}: ${title} — ${body || ""}`);
+  // Fan the alert out to paired Telegram chats too (outbound side of the bridge).
+  try {
+    const mark = severity === "error" || severity === "warning" ? "⚠️ " : "";
+    telegramBridge.notify(`${mark}${title}${body ? `\n${body}` : ""}`);
+  } catch {}
 }
 
 // A fleet delegation shows up as a normal tool call named for the orbit-fleet
@@ -901,6 +915,25 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
       }
     }
 
+    // Persist metrics to the DB at EVERY turn end, not just on ws.close /
+    // harness-close / the 30s autosave. Metrics are backend-owned (the client
+    // POST can't write them — see routes/sessions.js), so without this a fresh
+    // session refreshed before the next autosave/close read back zero — the
+    // "observability resets on refresh" bug. Merge so messages/logs survive.
+    try {
+      const persistable = metricsManager.toPersistable(sessionId);
+      const existing = db.getSession(sessionId);
+      if (existing) {
+        db.saveSession({
+          ...existing,
+          metrics: persistable,
+          subagentTree: subagentTracker ? subagentTracker.toJSON() : existing.subagentTree,
+        });
+      }
+    } catch (e) {
+      console.error(`[Metrics] turn-end persist failed for ${sessionId}:`, e.message);
+    }
+
     // Turn finished cleanly — no longer resumable.
     try { db.clearSessionRunning(sessionId); } catch {}
     sendStatus(ws, "done", sessionId);
@@ -1021,6 +1054,8 @@ function ensureFleetMcpRegistered() {
 server.listen(PORT, '127.0.0.1', () => {
   console.log(`Orbit Backend Server listening on 127.0.0.1:${PORT} (internal only)`);
   ensureFleetMcpRegistered();
+  // Start the Telegram bridge (no-ops cleanly if no bot token is set).
+  telegramBridge.start();
   // Fire schedule-type channels locally (no inbound exposure needed).
   startScheduler({ db, runProfileHeadless });
   // Any session still marked running at startup was interrupted (this process

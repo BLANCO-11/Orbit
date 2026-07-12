@@ -38,7 +38,7 @@ function createFleet({ db, harnessRegistry, handleStartTask }) {
    * Run `prompt` on `device` and resolve with its final text. `device` is a
    * harness id from listDevices ("local" or a connected remote id).
    */
-  async function dispatchToDevice({ device, prompt, mode, effort }) {
+  async function dispatchToDevice({ device, prompt, mode, effort, source = "fleet", titlePrefix = "⇢" }) {
     if (!prompt || !prompt.trim()) throw new Error("a task/prompt is required");
     const harnessId = device || "local";
     if (harnessId !== "local" && !harnessRegistry.get(harnessId)) {
@@ -46,8 +46,8 @@ function createFleet({ db, harnessRegistry, handleStartTask }) {
       throw new Error(`device "${harnessId}" is not connected. Available: ${ids}`);
     }
 
-    const sessionId = `fleet-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-    const title = `⇢ ${harnessId}: ${prompt.slice(0, 48)}${prompt.length > 48 ? "…" : ""}`;
+    const sessionId = `${source}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const title = `${titlePrefix} ${harnessId}: ${prompt.slice(0, 48)}${prompt.length > 48 ? "…" : ""}`;
     try {
       db.saveSession({
         id: sessionId,
@@ -64,7 +64,7 @@ function createFleet({ db, harnessRegistry, handleStartTask }) {
       console.error("[Fleet] initial save failed:", e.message);
     }
 
-    const socket = new HeadlessSocket(sessionId, db, { title, source: "fleet" });
+    const socket = new HeadlessSocket(sessionId, db, { title, source });
     socket.addUserMessage(prompt);
 
     // Recursion guard (best-effort): a delegate must not re-delegate, or a
