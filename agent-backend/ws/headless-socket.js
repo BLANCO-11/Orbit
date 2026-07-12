@@ -26,7 +26,14 @@ class HeadlessSocket {
     this._logs = [];
     this._executionPlan = "";
     this._done = false;
+    // Resolves when the run completes (status done/error) — fleet dispatch awaits
+    // this before reading getResult(), so the lead gets the delegate's real answer
+    // instead of an empty string captured before the async run finished.
+    this._donePromise = new Promise((res) => { this._resolveDone = res; });
   }
+
+  /** Await run completion. Resolves with the final status ("done"/"error"). */
+  whenDone() { return this._donePromise; }
 
   addUserMessage(text) {
     this._messages.push({ role: "user", content: text });
@@ -99,6 +106,7 @@ class HeadlessSocket {
       try { this._notify({ title: `Channel: ${this._title}`, body: summary || `Run ${status}`, severity: status === "error" ? "error" : "info" }); } catch {}
     }
     if (this._onDone) { try { this._onDone(status, this._sessionId); } catch {} }
+    if (this._resolveDone) { try { this._resolveDone(status); } catch {} }
   }
 }
 

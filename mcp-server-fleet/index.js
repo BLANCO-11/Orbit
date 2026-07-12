@@ -39,18 +39,18 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     {
       name: "list_devices",
       description:
-        "List the devices/agents this console can delegate work to (the local host plus any paired remote devices). Call this before dispatch_to_device to get valid device ids and see which are online.",
+        "List the targets you can delegate work to: local AGENT TYPES ('local' = pi, 'opencode' = OpenCode) plus any paired remote devices. Call this before dispatch_to_device to see valid target ids. Use it to mix agents — e.g. run one subtask on pi and another on OpenCode.",
       inputSchema: { type: "object", properties: {} },
     },
     {
       name: "dispatch_to_device",
       description:
-        "Delegate a self-contained task to another device's agent and get its final answer back. The remote agent runs the task ON that machine (its files, services, network) and returns text. IMPORTANT: the remote agent does NOT see this conversation — give it a complete, standalone instruction. Use this to coordinate work across several devices, then merge the answers yourself.",
+        "Delegate a self-contained task to another agent/device and get its final answer back. `device` picks the target: a local agent type ('local'=pi, 'opencode'=OpenCode) runs it on THIS host with a fresh agent of that type; a remote device id runs it on that machine. IMPORTANT: the delegate does NOT see this conversation — give it a complete, standalone instruction. Fan out subtasks to different agents, then merge the answers yourself.",
       inputSchema: {
         type: "object",
         properties: {
-          device: { type: "string", description: "A device id from list_devices (e.g. 'local' or a paired device id)." },
-          task: { type: "string", description: "A complete, standalone instruction for the remote agent." },
+          device: { type: "string", description: "A target id from list_devices: 'local' (pi), 'opencode', or a paired device id." },
+          task: { type: "string", description: "A complete, standalone instruction for the delegate agent." },
         },
         required: ["device", "task"],
       },

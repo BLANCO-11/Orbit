@@ -18,9 +18,20 @@ const HeadlessSocket = require("./ws/headless-socket");
  * @param {Function} deps.handleStartTask   server.js turn runner (drives any harness)
  */
 function createFleet({ db, harnessRegistry, handleStartTask }) {
-  // Devices the lead can delegate to: the local host is always present; every
-  // connected remote adapter is a candidate too.
+  // Local agent TYPES the lead can delegate to on this host (each is a harness
+  // id that handleStartTask routes locally). This is what enables mixing agents
+  // — e.g. run one subtask on pi and another on OpenCode from the same chat.
+  const LOCAL_AGENTS = {
+    local: { name: "pi-code (this host)", agent: "pi" },
+    opencode: { name: "OpenCode (this host)", agent: "opencode" },
+  };
+
+  // Targets the lead can delegate to: local agent types + every connected remote
+  // device (which runs whatever agent that device's adapter hosts).
   function listDevices() {
+    const locals = Object.entries(LOCAL_AGENTS).map(([id, v]) => ({
+      id, name: v.name, machine: "local", transport: "local", agent: v.agent, status: "connected",
+    }));
     const remotes = harnessRegistry.list().map((h) => ({
       id: h.id,
       name: h.name || h.id,
@@ -28,22 +39,21 @@ function createFleet({ db, harnessRegistry, handleStartTask }) {
       transport: "remote",
       status: h.status || "connected",
     }));
-    return [
-      { id: "local", name: "this host", machine: "local", transport: "local", status: "connected" },
-      ...remotes,
-    ];
+    return [...locals, ...remotes];
   }
 
   /**
    * Run `prompt` on `device` and resolve with its final text. `device` is a
-   * harness id from listDevices ("local" or a connected remote id).
+   * target id from listDevices: a local agent type ("local" = pi, "opencode")
+   * or a connected remote device id.
    */
   async function dispatchToDevice({ device, prompt, mode, effort, source = "fleet", titlePrefix = "⇢" }) {
     if (!prompt || !prompt.trim()) throw new Error("a task/prompt is required");
     const harnessId = device || "local";
-    if (harnessId !== "local" && !harnessRegistry.get(harnessId)) {
+    const isLocalAgent = Object.prototype.hasOwnProperty.call(LOCAL_AGENTS, harnessId);
+    if (!isLocalAgent && !harnessRegistry.get(harnessId)) {
       const ids = listDevices().map((d) => d.id).join(", ");
-      throw new Error(`device "${harnessId}" is not connected. Available: ${ids}`);
+      throw new Error(`target "${harnessId}" is not available. Valid targets: ${ids}`);
     }
 
     const sessionId = `${source}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
@@ -77,6 +87,16 @@ function createFleet({ db, harnessRegistry, handleStartTask }) {
       mode || "", "standard", [], effort || "balanced",
       harnessId, noRedelegate,
     );
+
+    // handleStartTask returns once the run is DRIVEN, not finished (harnesses
+    // stream asynchronously). Wait for the run to actually complete so the lead
+    // gets the delegate's real answer — with a ceiling so a hung delegate can't
+    // block the lead forever.
+    const TIMEOUT_MS = 5 * 60 * 1000;
+    await Promise.race([
+      socket.whenDone(),
+      new Promise((res) => setTimeout(res, TIMEOUT_MS)),
+    ]);
 
     return {
       sessionId,
