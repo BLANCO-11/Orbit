@@ -32,6 +32,7 @@ Everything below is a console feature with a UI. If a feature can't be operated 
 | Channels (Slack/GitHub events trigger agents) | **Event channels** — inbound webhooks start a session with a profile, headless, surfaced in the console | new (Phase 3) |
 | Sandboxes (local/virtual/remote container) | **Sandbox dimension** — host (today) / ephemeral container / remote-adapter | new (Phase 4) |
 | Durable execution / checkpoint recovery | **Resume** — reconnect to an interrupted session and continue | new (Phase 5) |
+| (beyond Flue) OAuth-connected services | **Service connections** — one-click OAuth, else bring-your-own MCP; connect ≠ trigger | new (Phase 6) |
 
 Reconciliation with earlier decisions: the greenlit **"Extensions" rail tab** becomes the **"Agents" rail tab** (session profiles), because tools/extensions are one *dimension* of a profile, not a standalone concept. The **global default + per-session override** decision maps directly: a profile is the reusable default; the composer chips remain the per-session override.
 
@@ -157,6 +158,44 @@ pi already persists its own conversation per `--session-id`, so "resume context"
 
 ---
 
+## 6b. Phase 6 — Service connections (OAuth-first, MCP-backed)
+
+Let a user **connect a third-party service** (GitHub, Slack, Notion, a database, …) so the agent can act on it — with the least friction possible. Two things stay clearly separated:
+
+- **Connection** = give the agent a *key* to a service. The agent uses it **on demand** (when you ask). Quiet by default.
+- **Trigger (channel)** = let the service **start** the agent by itself. Optional layer added on top of a connection, only for services that emit events (Phase 3 built this).
+
+Connecting never auto-enables a trigger. Not every service can be a trigger source (needs an event feed); every service can be a connection.
+
+### How a service connects — three tiers, one pipe
+
+Everything is MCP under the hood; OAuth is just the *auth method*, not a separate bucket.
+
+1. **Curated one-click OAuth** — for popular services, a "Connect" button runs the OAuth login-and-approve flow. Zero config.
+2. **Bring-your-own remote MCP** — user pastes a hosted MCP server URL. If it needs OAuth, Orbit runs the *same* login-and-approve flow automatically (MCP `401 → consent → token`). Still login-based.
+3. **Local / key-based MCP** — `npx …`/stdio servers or ones using an API key: added with a command + secret, as today. Manual.
+
+So: **OAuth if the service (or its MCP server) offers it; otherwise host/point at your own MCP.** Exactly the user's model.
+
+### Backend
+- **OAuth flow**: `GET /api/oauth/:provider/start` → open provider consent → `GET /api/oauth/callback` → exchange code → store tokens. Lean on the MCP SDK's OAuth 2.1 support (PKCE + Dynamic Client Registration) for remote MCP connectors; DCR-capable servers need *zero* pre-registration.
+- **Encrypted token store**: a `connections` table (provider, scopes, encrypted access+refresh tokens, expiry). Note: unlike device tokens (hashed), OAuth tokens are **encrypted-at-rest** because we replay them. Refresh on expiry; a "Disconnect" revokes.
+- **Token → MCP injection**: a connected service's token feeds the MCP connection it authenticates (env/header on the connector). This is the one new wire between the OAuth store and `McpRegistry`.
+- **Scopes → policy**: granted OAuth scopes map into the policy matrix (OAuth'd read-only ⇒ the agent physically can't write through it).
+
+### Frontend
+- Connectors view gains **"Connect <service>"** buttons (curated) + the existing add-remote/add-local paths, each showing connection status and a **Disconnect**.
+- Redirect uses `http://localhost:6801/api/oauth/callback` — most providers allow a localhost redirect, so **OAuth works on a local-first Orbit with no tunnel** (unlike inbound webhooks, which still need exposure).
+
+### Two design answers this phase settles
+- **"Do harnesses need an external-tools connector?"** — No new abstraction: **the MCP connector registry *is* the external-tools mechanism** for harnesses; external tools = MCP connectors (already built). This phase only makes *connecting* them nicer (OAuth) and adds two gaps: (a) **token injection** into connectors, and (b) **propagating connectors to remote harnesses** — a remote `orbit-adapter` today reads its *own* machine's `.pi/mcp.json`, so connectors added in the console must be pushed to the adapter (or the connector runs backend-side and the adapter proxies tool calls).
+- **"Do we need a DB connector?"** — No dedicated thing: **a user's database is just another MCP connector** (e.g. `@modelcontextprotocol/server-postgres`), added via tier 2/3 with a connection string or OAuth. Orbit's *own* store (`orbit.db`, SQLite) is internal and the agent must **not** get direct access to it — the OAuth `connections` table lives there, encrypted.
+
+### Verify
+- Connect a remote OAuth MCP server end-to-end: click Connect → provider consent (localhost redirect) → token stored encrypted → connector shows `connected` and its tools appear in a profile's tools list; Disconnect revokes. A poisoned webhook payload cannot exercise a connection beyond its granted scope + the profile's policy.
+
+---
+
 ## 7. Sequencing & rationale
 
 1. **Phase 1 (tool contract)** — foundation; unblocks 2 and keeps us harness-agnostic.
@@ -164,8 +203,9 @@ pi already persists its own conversation per `--session-id`, so "resume context"
 3. **Phase 3 (channels)** — the standout new capability; needs the session-bus refactor (which also improves multi-device viewing).
 4. **Phase 4 (sandboxes)** — real isolation; heaviest; remote already covers part of it.
 5. **Phase 5 (resume)** — robustness for long autonomous runs; lightest of the new work thanks to pi's own persistence.
+6. **Phase 6 (service connections / OAuth)** — the "click Connect, approve" UX for third-party services; builds on the connector registry (Phase 5 of the original program). Not yet built.
 
-Each phase is independently shippable and verified against the running console (drive the real app, not just typecheck), consistent with how the prior program was executed.
+Phases 1–5 are done and verified. Phase 6 (OAuth service connections) is planned, not yet implemented. Each phase is independently shippable and verified against the running console (drive the real app, not just typecheck), consistent with how the prior program was executed.
 
 ---
 
