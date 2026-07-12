@@ -82,9 +82,13 @@ function createFleet({ db, harnessRegistry, handleStartTask }) {
     // the delegate's toolset by every name pi might expose it under.
     const noRedelegate = ["dispatch_to_device", "mcp_orbit-fleet_dispatch_to_device", "orbit-fleet_dispatch_to_device"];
 
+    // Delegates run headless and can't answer an approval prompt, so they need a
+    // mode that actually lets them work. Default to "edit" (shell/read/network
+    // allowed; each delegate is isolated in its own session workspace) — "chat"
+    // blocks shell, which made delegates finish silently with 0 tool calls.
     await handleStartTask(
       socket, prompt, sessionId,
-      mode || "", "standard", [], effort || "balanced",
+      mode || "edit", "standard", [], effort || "balanced",
       harnessId, noRedelegate,
     );
 
