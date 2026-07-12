@@ -4,7 +4,7 @@
 > **Scope:** Session profiles, harness-agnostic tool/extension management, event channels, sandboxes, durable resume.
 > **Prompted by:** studying [withastro/flue](https://github.com/withastro/flue) — a code-first agent *framework*. We borrow its concepts (agent definitions, channels, sandboxes) and keep our *form* (a human-in-the-loop operator console).
 >
-> **STATUS: all five phases ✅ implemented and verified live** (commits `748e113`, `ccf73ca`, `3f7e4e6`, `9d745d9`, `68b0efb`). See per-phase "Verify" notes — each was driven against the running app, not just typechecked.
+> **STATUS: Phases 1–6 implemented.** Phases 1–5 verified live end-to-end; Phase 6 (OAuth service connections) — framework + token path + OAuth URL/PKCE verified; live provider handshakes require the user's OAuth app creds.
 
 ---
 
@@ -203,9 +203,9 @@ So: **OAuth if the service (or its MCP server) offers it; otherwise host/point a
 3. **Phase 3 (channels)** — the standout new capability; needs the session-bus refactor (which also improves multi-device viewing).
 4. **Phase 4 (sandboxes)** — real isolation; heaviest; remote already covers part of it.
 5. **Phase 5 (resume)** — robustness for long autonomous runs; lightest of the new work thanks to pi's own persistence.
-6. **Phase 6 (service connections / OAuth)** — the "click Connect, approve" UX for third-party services; builds on the connector registry (Phase 5 of the original program). Not yet built.
+6. **Phase 6 (service connections / OAuth)** — the "click Connect, approve" UX; built (framework + token path verified).
 
-Phases 1–5 are done and verified. Phase 6 (OAuth service connections) is planned, not yet implemented. Each phase is independently shippable and verified against the running console (drive the real app, not just typecheck), consistent with how the prior program was executed.
+Phases 1–6 implemented. 1–5 verified live; Phase 6 framework + token path + OAuth URL/PKCE verified (live provider handshakes need the user's OAuth app creds). Each phase is independently shippable and verified against the running console (drive the real app, not just typecheck), consistent with how the prior program was executed.
 
 ---
 

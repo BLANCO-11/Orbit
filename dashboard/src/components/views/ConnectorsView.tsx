@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { Globe, Plug, Trash2, Plus, ChevronDown, ChevronRight, RefreshCw } from 'lucide-react';
+import ServicesSection from './ServicesSection';
 
 interface Connector {
   name: string;
@@ -97,10 +98,13 @@ export default function ConnectorsView() {
           </button>
         </div>
         <p className="mb-5 mt-0.5 text-[13px] text-muted-foreground">
-          MCP tool servers. Register once here — every harness session gets the tools, and each
-          call lands in the timeline like any other tool. A new connector applies to the next session.
+          Connect third-party services by login, or register raw MCP tool servers. Either way the
+          agent gets the tools, and each call lands in the timeline. Applies to the next session.
         </p>
 
+        <ServicesSection />
+
+        <div className="mb-2 text-[10.5px] font-bold uppercase tracking-[0.08em] text-faint">MCP servers</div>
         <div className="flex flex-col gap-2.5">
           {connectors.map((c) => {
             const open = expanded === c.name;

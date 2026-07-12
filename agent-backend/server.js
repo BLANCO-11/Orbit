@@ -45,6 +45,8 @@ const { createPromptsRouter } = require("./routes/prompts");
 const { createSkillsRouter } = require("./routes/skills");
 const createConnectorsRouter = require("./routes/connectors");
 const createProfilesRouter = require("./routes/profiles");
+const createConnectionsRouters = require("./routes/connections");
+const { encrypt, decrypt } = require("./crypto-store");
 
 // WebSocket
 const createWebSocketServer = require("./ws/index");
@@ -111,6 +113,16 @@ app.use("/api/prompts", authMiddleware, createPromptsRouter());
 app.use("/api/skills", authMiddleware, createSkillsRouter());
 app.use("/api/connectors", authMiddleware, createConnectorsRouter(mcpRegistry));
 app.use("/api/profiles", authMiddleware, createProfilesRouter(db));
+
+// Service connections: list/token/disconnect are authed; the OAuth start +
+// callback are browser-navigated (can't carry a header token) so they mount
+// public and self-protect with state + PKCE.
+const { connectionsRouter, oauthRouter } = createConnectionsRouters({
+  db, mcpRegistry, encrypt, decrypt,
+  getOrigin: () => process.env.DASHBOARD_ORIGIN || "http://localhost:6801",
+});
+app.use("/api/connections", authMiddleware, connectionsRouter);
+app.use("/api/oauth", oauthRouter);
 
 // Channels: CRUD + test-fire are authed; the /:id/webhook receiver is public
 // (external senders can't present a device token) and self-verifies per channel.

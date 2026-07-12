@@ -19,7 +19,7 @@ if (!fs.existsSync(dbPath) && fs.existsSync(legacyDbPath)) {
 const db = new DatabaseSync(dbPath);
 
 // ── Schema Versioning ───────────────────────────────────────────────
-const CURRENT_SCHEMA_VERSION = 9;
+const CURRENT_SCHEMA_VERSION = 10;
 const BACKUP_INTERVAL = 10; // auto-backup every N saves
 let saveCount = 0;
 
@@ -165,6 +165,29 @@ if (currentSchemaVersion < 9) {
   // A session left `running` (harness died / server restarted mid-turn) is
   // detected as interrupted and can be resumed (see server.js resume handler).
   try { db.exec("ALTER TABLE sessions ADD COLUMN run_state TEXT NOT NULL DEFAULT '{}'"); } catch (e) {}
+  db.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)").run(
+    "schema_version",
+    String(CURRENT_SCHEMA_VERSION)
+  );
+  console.log(`[DB] Migrated sessions schema to version ${CURRENT_SCHEMA_VERSION}`);
+}
+
+if (currentSchemaVersion < 10) {
+  // Service connections (OAuth / token). Tokens are ENCRYPTED-at-rest (see
+  // crypto-store.js), not hashed — we replay them to the provider.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS connections (
+      provider TEXT PRIMARY KEY,
+      kind TEXT NOT NULL,
+      scopes TEXT NOT NULL DEFAULT '',
+      access_token_enc TEXT NOT NULL DEFAULT '',
+      refresh_token_enc TEXT NOT NULL DEFAULT '',
+      expires_at INTEGER,
+      meta TEXT NOT NULL DEFAULT '{}',
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
+  `);
   db.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)").run(
     "schema_version",
     String(CURRENT_SCHEMA_VERSION)
@@ -553,6 +576,56 @@ function deleteChannel(id) {
   db.prepare("DELETE FROM channels WHERE id = ?").run(id);
 }
 
+// ── Service connections (OAuth / token) ─────────────────────────────
+// Stores the *encrypted* token payloads; callers pass already-encrypted
+// strings (server owns crypto-store) so db.js stays crypto-agnostic.
+
+function mapConnectionRow(row) {
+  return {
+    provider: row.provider,
+    kind: row.kind,
+    scopes: row.scopes ? row.scopes.split(" ").filter(Boolean) : [],
+    accessTokenEnc: row.access_token_enc,
+    refreshTokenEnc: row.refresh_token_enc,
+    expiresAt: row.expires_at,
+    meta: JSON.parse(row.meta || "{}"),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function listConnections() {
+  return db.prepare("SELECT * FROM connections ORDER BY created_at ASC").all().map(mapConnectionRow);
+}
+
+function getConnection(provider) {
+  const row = db.prepare("SELECT * FROM connections WHERE provider = ?").get(provider);
+  return row ? mapConnectionRow(row) : null;
+}
+
+/** Upsert a connection. Token fields must already be encrypted by the caller. */
+function saveConnection(c) {
+  const now = Date.now();
+  const existing = db.prepare("SELECT created_at FROM connections WHERE provider = ?").get(c.provider);
+  db.prepare(`
+    INSERT INTO connections (provider, kind, scopes, access_token_enc, refresh_token_enc, expires_at, meta, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(provider) DO UPDATE SET
+      kind = excluded.kind, scopes = excluded.scopes,
+      access_token_enc = excluded.access_token_enc, refresh_token_enc = excluded.refresh_token_enc,
+      expires_at = excluded.expires_at, meta = excluded.meta, updated_at = excluded.updated_at
+  `).run(
+    c.provider, c.kind, (c.scopes || []).join(" "),
+    c.accessTokenEnc || "", c.refreshTokenEnc || "", c.expiresAt || null,
+    JSON.stringify(c.meta || {}), existing ? existing.created_at : now, now
+  );
+  return getConnection(c.provider);
+}
+
+function deleteConnection(provider) {
+  db.prepare("DELETE FROM connections WHERE provider = ?").run(provider);
+}
+
 module.exports = {
   saveSession,
   getSession,
@@ -583,4 +656,8 @@ module.exports = {
   setSessionRunning,
   clearSessionRunning,
   listInterruptedSessions,
+  listConnections,
+  getConnection,
+  saveConnection,
+  deleteConnection,
 };
