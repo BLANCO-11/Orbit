@@ -262,7 +262,17 @@ app.get("/api/harnesses", authMiddleware, (req, res) => {
     capabilities: ["chat", "plan", "edit", "yolo", "subagents", "tools", "browser"],
     activeSessions: [...activeSessions.values()].filter(s => !s.harnessId || s.harnessId === "local").length,
   };
-  res.json({ success: true, harnesses: [local, ...harnessRegistry.list()] });
+  // OpenCode as a selectable local harness (a second, harness-agnostic agent).
+  const opencode = {
+    id: "opencode",
+    name: "OpenCode",
+    machine: "local",
+    transport: "local",
+    status: "connected",
+    capabilities: ["chat", "plan", "edit", "yolo", "tools"],
+    activeSessions: [...activeSessions.values()].filter(s => s.harnessId === "opencode").length,
+  };
+  res.json({ success: true, harnesses: [local, opencode, ...harnessRegistry.list()] });
 });
 
 // Tools a harness can offer, for the tools/extensions manager. Merges the
@@ -273,8 +283,9 @@ app.get("/api/harnesses/:id/tools", authMiddleware, async (req, res) => {
   try {
     const id = req.params.id;
     let harnessTools = [];
-    if (!id || id === "local") {
-      const probe = loadHarness("picode", {
+    const LOCAL_TYPES = { local: "picode", "pi-code": "picode", picode: "picode", opencode: "opencode" };
+    if (!id || LOCAL_TYPES[id]) {
+      const probe = loadHarness(LOCAL_TYPES[id] || "picode", {
         events: new EventEmitter(), config: getConfig(), sessionId: "probe",
         mode: "chat", binaries: { nodePath, piPath },
       });
@@ -626,9 +637,13 @@ async function handleStartTask(ws, userPrompt, sessionId, mode, systemPromptType
   let sessionItem = activeSessions.get(sessionId);
   if (!sessionItem || !sessionItem.harness) {
     const activeSandbox = sandbox || "host";
-    // Sandbox 'remote' runs on a paired remote harness; an explicit remote
+    // Local harness types run on THIS host (a child process). Anything else is a
+    // remote harness id (a paired orbit-adapter).
+    const LOCAL_HARNESSES = { local: "picode", "pi-code": "picode", picode: "picode", opencode: "opencode" };
+    const localHarnessType = LOCAL_HARNESSES[harnessId || "local"];
+    // Sandbox 'remote' runs on a paired remote harness; an unknown (non-local)
     // harnessId does too. 'container' runs in an ephemeral Docker container.
-    const wantRemote = activeSandbox === "remote" || (harnessId && harnessId !== "local");
+    const wantRemote = activeSandbox === "remote" || (harnessId && !localHarnessType);
     const remoteEntry = wantRemote
       ? (harnessRegistry.get(harnessId) || harnessRegistry.list()[0] && harnessRegistry.get(harnessRegistry.list()[0].id))
       : null;
@@ -659,11 +674,11 @@ async function handleStartTask(ws, userPrompt, sessionId, mode, systemPromptType
       } else if (activeSandbox === "container") {
         harness = new ContainerHarness({ ...commonOpts, binaries: { nodePath, piPath } });
       } else {
-        harness = loadHarness("picode", { ...commonOpts, binaries: { nodePath, piPath } });
+        harness = loadHarness(localHarnessType || "picode", { ...commonOpts, binaries: { nodePath, piPath } });
       }
 
       await harness.connect();
-      sessionItem = { harness, ws, mode: activeMode, subagentTracker, deviceId: ws.device?.id || null, harnessId: remoteEntry ? remoteEntry.id : "local", sandbox: activeSandbox };
+      sessionItem = { harness, ws, mode: activeMode, subagentTracker, deviceId: ws.device?.id || null, harnessId: remoteEntry ? remoteEntry.id : (harnessId || "local"), sandbox: activeSandbox };
       activeSessions.set(sessionId, sessionItem);
     } catch (err) {
       console.error(`[handleStartTask] Failed to spawn harness:`, err);
