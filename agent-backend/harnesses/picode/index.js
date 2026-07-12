@@ -74,6 +74,19 @@ class PiCodeHarness extends HarnessInterface {
     // into Orbit's source). This is dynamic — the paths are session-specific.
     const dirs = workspacePaths.ensureSessionDirs(this.sessionId);
     this._workspaceDir = dirs.workspace;
+
+    // CRITICAL: pi's MCP extension loads <cwd>/.pi/mcp.json. Since we run pi in
+    // the session workspace (for isolation), mirror the repo's MCP config into
+    // <workspace>/.pi/mcp.json — otherwise pi loads NO MCP servers (no orbit
+    // notify/search/plan, no lightpanda) and the agent falls back to bash.
+    try {
+      const { MCP_CONFIG_PATH } = require("../../mcp-registry");
+      const piDir = path.join(this._workspaceDir, ".pi");
+      fs.mkdirSync(piDir, { recursive: true });
+      fs.copyFileSync(MCP_CONFIG_PATH, path.join(piDir, "mcp.json"));
+    } catch (e) {
+      console.error("[PiCodeHarness] Could not mirror .pi/mcp.json to workspace:", e.message);
+    }
     combinedPrompt = combinedPrompt +
       `\n\n## Your workspace (this session)\n` +
       `You are running in an isolated per-session workspace. Your current directory IS your workspace.\n` +
