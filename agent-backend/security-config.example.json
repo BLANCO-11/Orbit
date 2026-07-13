@@ -1,0 +1,43 @@
+{
+  "litellm": {
+    "baseURL": "http://127.0.0.1:5000/v1",
+    "apiKey": "",
+    "selectedNormalModel": "",
+    "selectedReasoningModel": "",
+    "taskMode": "normal"
+  },
+  "fileSystem": {
+    "allowedReadPaths": ["~"],
+    "allowedWritePaths": [],
+    "blockedPaths": ["~/.ssh", "~/.aws", "~/.gnupg", "~/.gemini", "/etc", "/boot", "/sys"],
+    "writeBlockedPaths": []
+  },
+  "shellCommands": {
+    "autoApprove": ["git status", "git diff", "ls", "pwd"],
+    "allowedPrefixes": ["git", "npm", "node", "python3", "docker", "ls", "echo", "pwd", "cat"],
+    "blockedCommands": ["rm -rf /", "dd", "mkfs", "sudo"],
+    "requireApproval": true,
+    "defaultMode": ""
+  },
+  "notifications": {
+    "discordWebhook": "",
+    "slackWebhook": ""
+  },
+  "webAccess": {
+    "enabled": false
+  },
+  "budgets": {
+    "maxCostPerSession": 0,
+    "maxTokensPerSession": 0,
+    "maxSubagentDepth": 2
+  },
+  "systemPromptType": "standard",
+  "policyMatrix": {
+    "read_workspace": { "chat": "block", "plan": "allow", "edit": "allow", "yolo": "allow" },
+    "write_workspace": { "chat": "block", "plan": "block", "edit": "allow", "yolo": "allow" },
+    "write_outside": { "chat": "block", "plan": "block", "edit": "ask", "yolo": "allow" },
+    "shell": { "chat": "block", "plan": "block", "edit": "allow", "yolo": "allow" },
+    "network": { "chat": "allow", "plan": "allow", "edit": "allow", "yolo": "allow" },
+    "spawn_subagent": { "chat": "block", "plan": "allow", "edit": "allow", "yolo": "allow" }
+  }
+}

@@ -21,3 +21,6 @@ agent-backend/tool-catalog.json
 
 # encrypted-token key (never commit)
 agent-backend/.orbit-secret
+
+# planning docs — internal, not shipped
+plan/

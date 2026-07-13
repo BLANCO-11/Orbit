@@ -1,99 +1,122 @@
-# Orbit OS Assistant & Dashboard
+# Orbit
 
-Orbit is a local-first, **harness-agnostic agent-operations console**: a Next.js dashboard talks over one WebSocket to an Express backend that drives a local CLI agent ("harness" — pi/PiCode today, others via the adapter contract) and streams everything it does back for you to watch and steer. It runs on your host OS within user-configurable security guardrails, with real usage/cost observability, end-to-end sub-agent tracing, a voice (STT+TTS) layer, and live browsing via the **Lightpanda headless browser** (an MCP server).
+**A local-first, harness-agnostic agent-operations console.** A Next.js dashboard talks over one WebSocket to an Express backend that drives a local CLI agent — a "harness" (pi, OpenCode, or a paired remote device) — and streams everything it does back for you to watch and steer: chat, reasoning, tool calls, sub-agents, tokens, and cost. It runs on your own machine, on your own model, within permission guardrails you control.
 
-## Key Features
+```
+┌──────────────────────┐        WebSocket + REST         ┌───────────────────────────┐
+│  Dashboard (Next.js)  │ ───────────────────────────────▶│   Backend (Express)        │
+│  localhost:6801       │◀─────────  live stream  ────────│   localhost:6800 (loopback)│
+└──────────────────────┘                                 └────────────┬──────────────┘
+   chat · trace · mission                                              │ drives
+   preview · policies · fleet                                          ▼
+                                              ┌───────────────────────────────────────┐
+                                              │  Harness (one per session)             │
+                                              │   • pi   • OpenCode   • remote adapter  │
+                                              └───────┬───────────────────────┬────────┘
+                                                      │ tools                 │ MCP (stdio)
+                                                      ▼                       ▼
+                                     per-session workspace          orbit MCP servers:
+                                     ~/.orbit/sessions/<id>/         lightpanda (browser),
+                                       workspace · artifacts · tmp   search · notify · plan ·
+                                                                     transcript · fleet
+   State: SQLite (agent-backend/*.db) · encrypted tokens · per-session file isolation
+```
 
-1. **Console with a unified activity view** — an icon-rail app (Console / Fleet / Connectors / Policies / Settings). Chat, reasoning (per-turn, collapsible, never spoken), tools, and sub-agents stream in one place; the inspector has Overview / Workspace / Trace / Logs segments.
-2. **Real observability** — provider-reported token usage (not estimates) with directional cost, a per-turn ledger + tokens-per-turn chart, and a **Trace** view giving each sub-agent its own task, reasoning, tool calls, and token counters (persisted across restarts).
-3. **Editable policy matrix + enforced budgets** — a capability × mode matrix (allow/ask/block) is the source of truth the backend enforces; per-device overrides tighten it further. Per-session cost/token caps and a sub-agent-depth cap halt work before it overruns (Policies view; hot-reloaded, no restart).
-4. **Prompt library + skills** — swap the system prompt per session from stored `prompts/*.md` (incl. frontier-style prompts); attach reusable `skills/*/SKILL.md` instruction packs. Both are inherited by every sub-agent.
-5. **Effort profiles** — fast / balanced / deep routes the model and planning depth per session, orthogonal to the permission mode.
-6. **Fleet: devices + remote harnesses** — pair devices via URL + OTP (with scopes: full / chat+voice / read-only). Any machine with pi can dial in as a **remote harness** via `orbit-adapter` and the same pairing flow; pick which harness runs a session from the composer.
-7. **Connector registry** — MCP tool servers (the Lightpanda headless browser today; any stdio or remote-HTTP MCP server) are managed in the Connectors view with live status and tool listings.
-8. **Agents: profiles + channels** — save reusable session setups (harness · mode · effort · prompt · skills · tools · sandbox) and pick one in a click; per-profile tool control (e.g. disable pi's native browser, keep Lightpanda). **Channels** trigger a profile unattended — on a schedule or from a verified webhook (GitHub/Slack HMAC) — and the run lands in the session list with its full timeline.
-9. **Sandboxes** — a profile runs on the host, in an ephemeral Docker container (real filesystem isolation), or on a paired remote harness.
-10. **Durable resume** — a session interrupted mid-run (crash/restart) is detected and resumed from where it left off.
-11. **Voice** — mic STT with barge-in (speaking stops the agent's audio), streamed sentence-level TTS.
+**How it fits together:** the backend owns sessions, metrics, and the capability×mode **policy** it enforces on every tool call. Each session spawns a harness with `cwd` = its own isolated workspace. Capabilities the agent reaches for (search, notify, plan, browser) are **MCP servers** Orbit auto-registers. A "lead" chat can delegate subtasks to other agents/devices (**Fleet**), and each delegate's activity streams back into the lead's Trace.
 
 ---
 
-## Folder Structure
+## Prerequisites
 
-- `mcp-server-lightpanda/`: MCP server connecting to Lightpanda CDP.
-- `agent-backend/`: Node.js/Express server, harness abstraction (`harnesses/` — local pi + `remote/`), the `orbit-adapter` CLI (`adapter/`), MCP connector registry (`mcp-registry.js`), policy engine (`policy-engine.js`), metrics + sub-agent tracker, Security Guard, and route handlers. Wire protocol documented in `agent-backend/PROTOCOL.md`.
-- `dashboard/`: Next.js 16 + React 19 + Tailwind 4 dashboard (custom server with WS proxy).
-- `prompts/`: System-prompt library (`standard.md`, `claude-fable-5.md`, …) plus mode directives (`plan/edit/yolo-mode.md`).
-- `skills/`: Reusable instruction packs (`<name>/SKILL.md`).
-- `plan/`: Product redesign + implementation plans and the approved UI mock (`orbit-console-mock.html`).
-- `workspace/`: The designated file workspace for the assistant's filesystem operations.
+| Requirement | Why | Notes |
+|---|---|---|
+| **Node.js 22+** | uses the built-in `node:sqlite` | `node --version` ≥ 22 |
+| **An OpenAI-compatible LLM endpoint** | the model the agent runs on | e.g. [LiteLLM](https://github.com/BerriAI/litellm) proxy, or any `/v1` endpoint |
+| **`pi` CLI** | the default agent harness | install per pi's docs; auto-discovered on PATH |
+| **Docker** *(recommended)* | the Lightpanda headless browser (web browsing) | auto-started on boot if present |
+| **OpenCode** *(optional)* | a second harness | `npm i -g opencode-ai` |
+| **A TTS server** *(optional)* | voice output | the voice UI only appears when configured |
 
----
+It is **not** a pure pull-and-run: you need an LLM endpoint and the `pi` CLI. Everything else degrades gracefully (no Docker → no browser; no TTS creds → no voice UI).
 
-## Quick Start Guide
-
-### Prerequisites
-- Node.js (v18+)
-- Docker (for the Lightpanda browser container)
-
-### Step 1: Start Lightpanda Browser
-If not already running, start the Lightpanda browser CDP container:
-```bash
-docker run -d --name lightpanda-browser -p 127.0.0.1:9222:9222 lightpanda/browser:nightly
-```
-
-### Step 2: Configure Environment
-Create a `.env` in the repo root with at least `LITELLM_KEY` (required — the backend refuses to start without it). Recommended extras: `LOCAL_TTS_KEY`, `LIGHTPANDA_WS`. The LiteLLM endpoint/models are configured in `agent-backend/security-config.json` (or live from the dashboard's Settings page). Optional TTS overrides: `LOCAL_TTS_URL`, `LOCAL_TTS_MODEL`.
-
-### Step 3: Run the Application
-In the root directory, start both the backend and dashboard concurrently:
-```bash
-npm run dev
-```
-
-This will:
-1. Boot the agent backend on `http://127.0.0.1:6800` (internal only).
-2. Connect to the Lightpanda browser container.
-3. Launch the dashboard on `http://localhost:6801` — the only exposed port; it proxies `/api/*` and the WebSocket to the backend.
-
-Open `http://localhost:6801` in your browser.
-
-### All Commands
-
-Run these from the repo root:
-
-| Command | What it does |
-|---|---|
-| `npm run dev` | Backend + dashboard dev servers together (labeled, colored output; Ctrl+C stops both) |
-| `npm run dev:backend` | Backend only (`:6800`) |
-| `npm run dev:frontend` | Dashboard dev server only (`:6801`) |
-| `npm run build` | Production build of the dashboard (**stop the dev server first** — build and dev sharing `.next` corrupts the chunk manifest) |
-| `npm start` | Production: builds the dashboard, then runs backend + dashboard with `NODE_ENV=production` |
-| `npm run verify` | Typecheck + a production compile into an isolated `.next-verify/` — safe to run while the dev server is up |
-| `npm run typecheck` | `tsc --noEmit` on the dashboard |
-| `npm test` | Security-guard test suite |
-| `npm run clean` | Delete `dashboard/.next` and `.next-verify` — the fix for a corrupted/stale build cache |
-
-### Connecting a remote harness
-
-Run the agent on another machine and drive it from this console. On the remote
-machine (which needs `pi` and its LiteLLM creds in env), generate a pairing code
-in the console's **Fleet** view, then:
+## Quickstart
 
 ```bash
-LITELLM_KEY=... node agent-backend/adapter/orbit-adapter.js \
-  --server ws://CONSOLE_HOST:6800 --code <PAIRING_CODE> --name "My workstation"
+git clone https://github.com/BLANCO-11/Orbit.git
+cd Orbit
+npm install
+npm --prefix dashboard install
+
+cp .env.example .env          # set LITELLM_BASE_URL / LITELLM_KEY / LITELLM_MODEL
+                              # (or leave blank and configure in Settings after launch)
+
+npm run dev                   # backend :6800 + dashboard :6801
+# open http://localhost:6801
 ```
 
-The harness appears in Fleet and in the composer's harness picker; select it to
-run a session on that machine.
+On first boot Orbit **seeds `agent-backend/security-config.json`** from the committed example (so it doesn't crash on a fresh clone) and **auto-starts the Lightpanda browser** container if Docker is available.
 
----
+For a clean restart on the latest code (kills ports, rebuilds the dashboard, boots both):
 
-## Security Configurations (`security-config.json`)
+```bash
+./restart-orbit.sh
+```
 
-You can edit paths and prefixes directly inside the dashboard or via `agent-backend/security-config.json`.
-- **Allowed Read/Write Directories**: The agent will be blocked if it attempts to access files outside these paths.
-- **Allowed Utilities**: Shell commands must start with these utility prefixes (e.g. `git`, `npm`, `node`).
-- **Auto-Approve Commands**: Safe commands that execute without prompt (e.g. `git status`).
-- **Require Approval Toggle**: When active, all non-whitelist commands require you to click **Approve** on the dashboard before they run on your host.
+## Configuration
+
+Two layers, and env wins:
+
+- **`.env`** (see [`.env.example`](.env.example)) — LLM endpoint, ports, optional TTS/search/browser/Telegram. Values here override the config file at spawn time.
+- **Settings panel** (in-app) — models, TTS voice, security (allowed/blocked paths, approval), web-access extension, budgets — persisted to `agent-backend/security-config.json` (gitignored, holds your key).
+
+**Permissions** are a capability × mode matrix (`chat`/`plan`/`edit`/`yolo` → allow/ask/block) enforced by the backend on every tool call, plus a consent-proof hard blocklist (your `~/.ssh`, Orbit's own source, etc.). Each session writes only inside its own `~/.orbit/sessions/<id>/workspace`; anything outside asks first.
+
+## Features
+
+- **Unified console** — icon rail (Console / Fleet / Connectors / Policies / Settings); chat, per-turn reasoning, tools, and sub-agents in one stream; inspector tabs Overview · Preview · Console · Workspace · Trace · Logs.
+- **Real observability** — provider-reported tokens (not estimates) + directional cost, per-turn ledger, and a **Trace** giving every sub-agent its own task, tool calls, and tokens.
+- **Mission board** — the agent's structured plan (via the `orbit-plan` tool) as a live checklist with dependencies.
+- **Enforced policy + budgets** — capability×mode matrix, per-device tighten-only overrides, per-session cost/token/sub-agent-depth caps.
+- **Per-session isolation** — each session runs in its own workspace; host by default, or an ephemeral Docker sandbox for untrusted execution.
+- **Multi-agent (Fleet)** — one chat delegates subtasks to pi, OpenCode, or paired remote devices; delegates inherit the lead's rights (capped) and their activity streams back to the lead's Trace.
+- **Capabilities as MCP servers** — Lightpanda browser, keyless web search, YouTube transcripts, notify (in-app + Telegram + webhooks), plan, fleet — all auto-registered.
+- **Prompt library + skills** — swap the system prompt and attach `skills/*/SKILL.md` packs per session; inherited by sub-agents.
+- **Channels** — trigger a saved profile unattended on a schedule or a verified webhook (GitHub/Slack HMAC).
+- **Voice** *(optional)* — STT in, streamed TTS out with barge-in, shown only when a TTS backend is configured.
+
+## Project layout
+
+```
+agent-backend/        Express backend, harnesses, policy engine, MCP registry, SQLite
+  harnesses/          picode (pi), opencode, container, remote — one HarnessInterface
+  routes/ ws/         REST + WebSocket
+  workspace-paths.js  per-session ~/.orbit/sessions/<id> layout
+dashboard/            Next.js console (src/app, components, hooks, providers)
+mcp-server-*/         Orbit's own MCP tool servers (lightpanda, search, notify, plan, transcript, fleet)
+prompts/  skills/     system prompts + reusable instruction packs
+restart-orbit.sh      clean rebuild + boot
+```
+
+## Scripts
+
+```bash
+npm run dev        # backend + dashboard (hot reload)
+npm run build      # build the dashboard
+npm start          # build + run both (production)
+npm run verify     # typecheck + production build
+npm test           # security-guard tests
+```
+
+## Branching
+
+- **`main`** — stable, releasable. Protect it; merge via PR.
+- **`develop`** *(optional)* — integration branch if you want a staging line.
+- **`feature/*`**, **`fix/*`** — one branch per change, PR into `main` (or `develop`).
+
+Never commit `.env`, `agent-backend/security-config.json`, or `agent-backend/.orbit-secret` — they're gitignored and hold secrets. `security-config.example.json` is the safe, committed template.
+
+## Security notes
+
+- The backend binds to `127.0.0.1` only. Set `ORBIT_API_KEY` before exposing it beyond loopback.
+- The agent runs real commands on your machine within the policy matrix — review Policies/Settings before granting `edit`/`yolo`, and use the container sandbox for untrusted work.
+- Tokens for connected services are encrypted at rest (`crypto-store.js`).
