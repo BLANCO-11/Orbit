@@ -27,7 +27,7 @@ function capMode(requested, ceiling) {
   return RANK_MODE[Math.min(r, c)];
 }
 
-function createFleet({ db, harnessRegistry, handleStartTask, getSessionMode, creditLeadSubagent }) {
+function createFleet({ db, harnessRegistry, handleStartTask, getSessionMode, creditLeadSubagent, notifySessionCreated }) {
   // Local agent TYPES the lead can delegate to on this host (each is a harness
   // id that handleStartTask routes locally). This is what enables mixing agents
   // — e.g. run one subtask on pi and another on OpenCode from the same chat.
@@ -86,6 +86,9 @@ function createFleet({ db, harnessRegistry, handleStartTask, getSessionMode, cre
         subagentTree: {},
         timestamp: Date.now(),
       });
+      if (notifySessionCreated && leadSessionId) {
+        try { notifySessionCreated(leadSessionId, sessionId); } catch {}
+      }
     } catch (e) {
       console.error("[Fleet] initial save failed:", e.message);
     }

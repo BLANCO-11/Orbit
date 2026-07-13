@@ -1,0 +1,29 @@
+{
+  "viewMode": "advanced",
+  "components": {
+    "rail": {
+      "console": true,
+      "agents": true,
+      "fleet": true,
+      "connectors": true,
+      "library": true,
+      "policies": true
+    },
+    "tabs": {
+      "agent": true,
+      "preview": true,
+      "console": true,
+      "workspace": true,
+      "trace": true,
+      "logs": true
+    },
+    "views": {
+      "console": true,
+      "fleet": true,
+      "connectors": true,
+      "policies": true,
+      "library": true,
+      "mission": true
+    }
+  }
+}

@@ -34,7 +34,7 @@ import AgentsView from '@/components/views/AgentsView';
 import LibraryView from '@/components/views/LibraryView';
 
 // Components
-import SessionList from '@/components/SessionList';
+import SidebarSwitcher from '@/components/layout/SidebarSwitcher';
 import LogViewer from '@/components/LogViewer';
 import SettingsPanel from '@/components/SettingsPanel';
 import PairDevice from '@/components/PairDevice';
@@ -170,6 +170,96 @@ function DashboardInner() {
     if (Array.isArray(p.skills)) setAttachedSkills(p.skills);
     if (p.toolPolicy?.excluded) setExcludeTools(p.toolPolicy.excluded);
   }, [dispatch, setSystemPromptType]);
+  const [rightPanelCollapsed, setRightPanelCollapsed] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('orbit_right_panel_collapsed') === 'true';
+    }
+    return false;
+  });
+  const toggleRightPanelCollapse = useCallback(() => {
+    setRightPanelCollapsed((prev) => {
+      const next = !prev;
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('orbit_right_panel_collapsed', String(next));
+      }
+      return next;
+    });
+  }, []);
+
+  const [bootProgress, setBootProgress] = useState(0);
+  const [bootLogs, setBootLogs] = useState<string[]>([]);
+  const [bootComplete, setBootComplete] = useState(false);
+
+  useEffect(() => {
+    const steps = [
+      { text: "Initializing SQLite database...", delay: 200 },
+      { text: "Configuring security environment and policies...", delay: 500 },
+      { text: "Connecting to LiteLLM orchestrator...", delay: 850 },
+      { text: "Detecting active harnesses (pi, OpenCode)...", delay: 1100 },
+      { text: "Loading custom UI preferences...", delay: 1300 },
+      { text: "Workspace fully hydrated. Booting Orbit OS...", delay: 1550 }
+    ];
+
+    steps.forEach((step) => {
+      setTimeout(() => {
+        setBootLogs(prev => [...prev, `[ OK ] ${step.text}`]);
+      }, step.delay);
+    });
+
+    const interval = setInterval(() => {
+      setBootProgress(prev => {
+        if (prev >= 100) {
+          clearInterval(interval);
+          setTimeout(() => {
+            setBootComplete(true);
+          }, 200);
+          return 100;
+        }
+        return prev + 5;
+      });
+    }, 70);
+
+    return () => {
+      clearInterval(interval);
+    };
+  }, []);
+
+  const [uiConfig, setUiConfig] = useState<any>(null);
+
+  useEffect(() => {
+    fetch('/api/config/ui')
+      .then((r) => r.json())
+      .then((data) => setUiConfig(data))
+      .catch(() => {});
+  }, []);
+
+  const isVisible = useCallback((category: string, id: string) => {
+    if (!uiConfig) return true;
+    if (uiConfig.viewMode === 'simple') {
+      if (category === 'rail') return id === 'console';
+      if (category === 'tabs') return id === 'preview';
+      if (category === 'views') return id === 'console';
+      return false;
+    }
+    return uiConfig.components?.[category]?.[id] !== false;
+  }, [uiConfig]);
+
+  const handleUiConfigChange = useCallback((updated: any) => {
+    setUiConfig(updated);
+    fetch('/api/config/ui', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updated),
+    }).catch(() => {});
+  }, []);
+
+  const [activePreviewFile, setActivePreviewFile] = useState<string>('');
+  const handleFileSelect = useCallback((filePath: string) => {
+    setActivePreviewFile(filePath);
+    setRightPanelTab('preview');
+    setRightPanelCollapsed(false);
+  }, []);
+
   const [showThinking, setShowThinking] = useState(true);
   const [rightPanelTab, setRightPanelTab] = useState('agent');
   const [activeView, setActiveView] = useState<'console' | 'agents' | 'fleet' | 'connectors' | 'policies' | 'library' | 'settings'>('console');
@@ -378,32 +468,79 @@ function DashboardInner() {
 
   // ── Full-page views (rail destinations) ──
   const settingsView = (
-    <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-[720px] px-7 py-7">
-        <h2 className="mb-4 text-lg font-semibold">Settings</h2>
-        <ComponentErrorBoundary label="Settings panel">
-          <SettingsPanel
-            settings={settings}
-            onSettingsChange={updateSettings}
-            securityConfig={securityConfig}
-            setSecurityConfig={setSecurityConfig}
-            systemPromptType={systemPromptType} setSystemPromptType={setSystemPromptType}
-            ttsAvailable={ttsAvailable}
-            voiceResponse={state.voiceState === 'audio'}
-            setVoiceResponse={(val) => dispatch(actions.setVoiceState(val ? 'audio' : 'disabled'))}
-            models={models} voices={voices}
-            onSave={saveAllSettings}
-            onManualCompact={handleManualCompact}
-            onAddConfigItem={addConfigItem} onRemoveConfigItem={removeConfigItem}
-            sessionMode={state.sessionMode}
-            onSetSessionMode={handleSetSessionMode}
-          />
-        </ComponentErrorBoundary>
-      </div>
+    <div className="h-full w-full overflow-hidden">
+      <ComponentErrorBoundary label="Settings panel">
+        <SettingsPanel
+          settings={settings}
+          onSettingsChange={updateSettings}
+          securityConfig={securityConfig}
+          setSecurityConfig={setSecurityConfig}
+          systemPromptType={systemPromptType} setSystemPromptType={setSystemPromptType}
+          ttsAvailable={ttsAvailable}
+          voiceResponse={state.voiceState === 'audio'}
+          setVoiceResponse={(val) => dispatch(actions.setVoiceState(val ? 'audio' : 'disabled'))}
+          models={models} voices={voices}
+          onSave={saveAllSettings}
+          onManualCompact={handleManualCompact}
+          onAddConfigItem={addConfigItem} onRemoveConfigItem={removeConfigItem}
+          sessionMode={state.sessionMode}
+          onSetSessionMode={handleSetSessionMode}
+          uiConfig={uiConfig}
+          onUiConfigChange={handleUiConfigChange}
+        />
+      </ComponentErrorBoundary>
     </div>
   );
 
   // ── JSX ──
+  if (!bootComplete) {
+    return (
+      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#faf9f6] dark:bg-[#0a0a0e] px-6 select-none font-sans transition-colors duration-300">
+        <div className="flex flex-col items-center max-w-md w-full text-center">
+          {/* Glowing Animated Orbit Logo */}
+          <div className="relative mb-8 grid size-16 place-items-center rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 animate-pulse">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="size-8 animate-spin-slow"
+            >
+              <circle cx="12" cy="12" r="8" strokeDasharray="3 3" className="opacity-50" />
+              <circle cx="12" cy="12" r="3" fill="currentColor" />
+              <circle cx="18" cy="6" r="1" fill="currentColor" />
+            </svg>
+          </div>
+
+          {/* Title */}
+          <h1 className="text-lg font-bold tracking-tight text-foreground mb-1">ORBIT_OS</h1>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-faint mb-6">Initializing Secure Agent Runtime</p>
+
+          {/* Progress Bar */}
+          <div className="w-full h-1 bg-border-soft dark:bg-border rounded-full overflow-hidden mb-6">
+            <div
+              className="h-full bg-primary transition-all duration-75 ease-out rounded-full"
+              style={{ width: `${bootProgress}%` }}
+            />
+          </div>
+
+          {/* Boot Logs console */}
+          <div className="w-full bg-[#f4f3ee] dark:bg-[#101015] border border-border-soft dark:border-border rounded-lg p-3.5 h-[130px] overflow-hidden text-left font-mono text-[10px] leading-relaxed text-muted-foreground flex flex-col justify-end gap-1.5 shadow-inner">
+            {bootLogs.map((log, i) => (
+              <div key={i} className="animate-fade-in truncate">
+                <span className="text-primary font-bold">{log.slice(0, 6)}</span>
+                <span className="text-foreground/80">{log.slice(6)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <ErrorBoundary>
     <div className="flex h-dvh overflow-hidden bg-background text-foreground">
@@ -416,20 +553,25 @@ function DashboardInner() {
         onToggleVoice={() =>
           dispatch(actions.setVoiceState(state.voiceState === 'audio' ? 'disabled' : 'audio'))
         }
+        theme={theme}
+        onToggleTheme={toggleTheme}
+        isVisible={isVisible}
       />
     )}
     <div className="relative min-w-0 flex-1">
-    {activeView === 'agents' && <ComponentErrorBoundary label="Agents"><AgentsView /></ComponentErrorBoundary>}
-    {activeView === 'fleet' && <ComponentErrorBoundary label="Fleet"><FleetView /></ComponentErrorBoundary>}
-    {activeView === 'connectors' && <ComponentErrorBoundary label="Connectors"><ConnectorsView /></ComponentErrorBoundary>}
-    {activeView === 'policies' && <ComponentErrorBoundary label="Policies"><PoliciesView /></ComponentErrorBoundary>}
-    {activeView === 'library' && <ComponentErrorBoundary label="Library"><LibraryView /></ComponentErrorBoundary>}
+    {activeView === 'agents' && isVisible('rail', 'agents') && <ComponentErrorBoundary label="Agents"><AgentsView /></ComponentErrorBoundary>}
+    {activeView === 'fleet' && isVisible('rail', 'fleet') && <ComponentErrorBoundary label="Fleet"><FleetView /></ComponentErrorBoundary>}
+    {activeView === 'connectors' && isVisible('rail', 'connectors') && <ComponentErrorBoundary label="Connectors"><ConnectorsView /></ComponentErrorBoundary>}
+    {activeView === 'policies' && isVisible('rail', 'policies') && <ComponentErrorBoundary label="Policies"><PoliciesView /></ComponentErrorBoundary>}
+    {activeView === 'library' && isVisible('rail', 'library') && <ComponentErrorBoundary label="Library"><LibraryView /></ComponentErrorBoundary>}
     {activeView === 'settings' && settingsView}
     {activeView === 'console' && (
     <AppShell
+      rightPanelCollapsed={rightPanelCollapsed}
+      onToggleRightPanelCollapse={toggleRightPanelCollapse}
       sidebar={
-        <ComponentErrorBoundary label="Session list">
-          <SessionList
+        <ComponentErrorBoundary label="Sidebar Switcher">
+          <SidebarSwitcher
             sessions={sessions}
             currentSessionId={state.currentSessionId}
             searchQuery={searchQuery}
@@ -443,6 +585,7 @@ function DashboardInner() {
             onNewSession={createSession}
             getSessionPreview={getSessionPreview}
             sessionsLength={sessions.length}
+            onFileSelect={handleFileSelect}
           />
         </ComponentErrorBoundary>
       }
@@ -452,39 +595,46 @@ function DashboardInner() {
           onTabChange={setRightPanelTab}
           badges={{ trace: (state.metrics.subagentTrace || []).length }}
           pulse={{ trace: (state.metrics.activeSubagents || []).length > 0 }}
+          isVisible={isVisible}
         >
           {rightPanelTab === 'agent' && (
-            <ComponentErrorBoundary label="Agent panel">
-              <AgentTab
-                metrics={state.metrics}
-                status={state.status}
-                approvalsHistory={state.approvalsHistory}
-                subAgents={state.metrics.activeSubagents || []}
-              />
-            </ComponentErrorBoundary>
+            <div className="h-full w-full animate-fade-in">
+              <ComponentErrorBoundary label="Agent panel">
+                <AgentTab
+                  metrics={state.metrics}
+                  status={state.status}
+                  approvalsHistory={state.approvalsHistory}
+                  subAgents={state.metrics.activeSubagents || []}
+                />
+              </ComponentErrorBoundary>
+            </div>
           )}
           {rightPanelTab === 'preview' && (
-            <ComponentErrorBoundary label="Preview panel">
-              <PreviewTab />
-            </ComponentErrorBoundary>
+            <div className="h-full w-full animate-fade-in">
+              <ComponentErrorBoundary label="Preview panel">
+                <PreviewTab
+                  activeFilePath={activePreviewFile}
+                  onFilePathChange={setActivePreviewFile}
+                />
+              </ComponentErrorBoundary>
+            </div>
           )}
           {rightPanelTab === 'console' && (
-            <ComponentErrorBoundary label="Console panel">
-              <ConsoleTab />
-            </ComponentErrorBoundary>
-          )}
-          {rightPanelTab === 'workspace' && (
-            <ComponentErrorBoundary label="Workspace panel">
-              <WorkspaceTab />
-            </ComponentErrorBoundary>
+            <div className="h-full w-full animate-fade-in">
+              <ComponentErrorBoundary label="Console panel">
+                <ConsoleTab />
+              </ComponentErrorBoundary>
+            </div>
           )}
           {rightPanelTab === 'trace' && (
-            <ComponentErrorBoundary label="Trace panel">
-              <TraceTab agents={state.metrics.subagentTrace || []} />
-            </ComponentErrorBoundary>
+            <div className="h-full w-full animate-fade-in">
+              <ComponentErrorBoundary label="Trace panel">
+                <TraceTab agents={state.metrics.subagentTrace || []} />
+              </ComponentErrorBoundary>
+            </div>
           )}
           {rightPanelTab === 'logs' && (
-            <div className="flex h-full flex-col overflow-hidden p-4">
+            <div className="flex h-full flex-col overflow-hidden p-4 animate-fade-in">
               <ComponentErrorBoundary label="Log viewer">
                 <LogViewer logs={state.logs} logEndRef={logEndRef} />
               </ComponentErrorBoundary>
@@ -516,6 +666,7 @@ function DashboardInner() {
         },
         activeDevice,
         notificationCenter: <NotificationCenter logs={state.logs} />,
+        isVisible,
       }}
       bottomNavItems={bottomNavItems}
       activeNavTab={activeNavTab}
@@ -525,6 +676,8 @@ function DashboardInner() {
         <ComponentErrorBoundary label="Mission">
           <MissionView
             planSteps={state.planSteps}
+            plans={state.plans}
+            activePlanId={state.activePlanId}
             subAgents={state.metrics.subagentTrace || state.metrics.activeSubagents || []}
             status={state.status}
           />

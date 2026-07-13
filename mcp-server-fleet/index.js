@@ -56,6 +56,12 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         required: ["device", "task"],
       },
     },
+    {
+      name: "list_capabilities",
+      description:
+        "Discover what THIS Orbit backend can actually do right now — which LLM/voice/search/browse are configured, which MCP connectors and service connections (GitHub, Slack, Notion, …) are connected, whether Telegram/Discord/Slack messaging is wired, and what fleet devices are paired. Call this BEFORE assuming a capability exists (e.g. before trying to message Telegram or use a connector). If something you need is unavailable, tell the user how to set it up rather than failing silently.",
+      inputSchema: { type: "object", properties: {} },
+    },
   ],
 }));
 
@@ -83,6 +89,22 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       return {
         content: [{ type: "text", text: `[${d.device} · ${d.status}]\n${d.output || "(no output returned)"}` }],
       };
+    }
+
+    if (name === "list_capabilities") {
+      const d = await api("/api/capabilities");
+      const caps = d.capabilities || {};
+      const label = (c) => {
+        if (!c) return "unknown";
+        if (c.configured && c.connected) return "ready";
+        if (c.configured && c.connected === null) return "configured";
+        if (c.configured) return "configured (not connected)";
+        return "unavailable";
+      };
+      const lines = Object.entries(caps).map(
+        ([k, c]) => `- ${k}: ${label(c)}${c && c.detail ? ` — ${c.detail}` : ""}`
+      );
+      return { content: [{ type: "text", text: `Orbit capabilities right now:\n${lines.join("\n")}` }] };
     }
 
     throw new Error(`Unknown tool: ${name}`);

@@ -2,7 +2,7 @@
 // GET /api/config, POST /api/config
 
 const { Router } = require("express");
-const { loadConfig, saveConfig } = require("../config");
+const { loadConfig, saveConfig, loadUiConfig, saveUiConfig } = require("../config");
 
 // Fields that only take effect when the harness process is (re)spawned, so a
 // change to one of them requires cycling active sessions. Everything else —
@@ -27,7 +27,27 @@ function createConfigRouter(activeSessionsMap) {
   const router = Router();
 
   router.get("/", (req, res) => {
-    res.json(loadConfig());
+    const config = loadConfig();
+    if (!config.litellm) config.litellm = {};
+    if (!config.litellm.baseURL) config.litellm.baseURL = process.env.LITELLM_BASE_URL || "";
+    if (!config.litellm.apiKey) config.litellm.apiKey = process.env.LITELLM_KEY || process.env.OPENAI_API_KEY || "";
+    if (!config.tts) config.tts = {};
+    if (!config.tts.url) config.tts.url = process.env.LOCAL_TTS_URL || "";
+    if (!config.tts.apiKey) config.tts.apiKey = process.env.LOCAL_TTS_KEY || "";
+    res.json(config);
+  });
+
+  router.get("/ui", (req, res) => {
+    res.json(loadUiConfig());
+  });
+
+  router.post("/ui", (req, res, next) => {
+    try {
+      saveUiConfig(req.body);
+      res.json({ success: true, message: "UI configuration saved." });
+    } catch (error) {
+      next(error);
+    }
   });
 
   router.post("/", (req, res, next) => {

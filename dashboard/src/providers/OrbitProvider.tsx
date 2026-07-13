@@ -1,6 +1,8 @@
 'use client';
 
-import React, { createContext, useContext, useReducer, useCallback } from 'react';
+import React, { createContext, useContext, useReducer, useCallback, useEffect } from 'react';
+
+const VOICE_STATE_KEY = 'orbit:voiceState';
 
 // ═══════════════════════════════════════════════════════════
 // State Shape
@@ -12,7 +14,9 @@ const initialState = {
   messages: [],
   logs: [],
   executionPlan: '',
-  planSteps: [],          // structured checklist from the orbit-plan tool (live Mission board)
+  planSteps: [],          // active plan's steps (back-compat; = plans[activePlanId].steps)
+  plans: [],              // all named plans this session: [{ planId, title, type, steps }]
+  activePlanId: '',       // which plan the Mission board shows by default
   reasoningHistory: [],
   
   // Metrics
@@ -53,6 +57,7 @@ const ADD_LOG = 'ADD_LOG';
 const CLEAR_LOGS = 'CLEAR_LOGS';
 const SET_LOGS = 'SET_LOGS';
 const SET_PLAN_STEPS = 'SET_PLAN_STEPS';
+const SET_PLAN_STATE = 'SET_PLAN_STATE';
 const SET_EXECUTION_PLAN = 'SET_EXECUTION_PLAN';
 const ADD_REASONING_GROUP = 'ADD_REASONING_GROUP';
 const UPDATE_REASONING_ENTRY = 'UPDATE_REASONING_ENTRY';
@@ -126,7 +131,17 @@ function orbitReducer(state, action) {
 
     case SET_PLAN_STEPS:
       return { ...state, planSteps: Array.isArray(action.payload) ? action.payload : [] };
-    
+
+    case SET_PLAN_STATE: {
+      const p = action.payload || {};
+      return {
+        ...state,
+        planSteps: Array.isArray(p.steps) ? p.steps : [],
+        plans: Array.isArray(p.plans) ? p.plans : [],
+        activePlanId: p.activePlanId || '',
+      };
+    }
+
     case ADD_REASONING_GROUP:
       return { ...state, reasoningHistory: [...state.reasoningHistory, action.payload] };
     
@@ -284,7 +299,22 @@ const OrbitDispatchContext = createContext(null);
 
 export function OrbitProvider({ children }) {
   const [state, dispatch] = useReducer(orbitReducer, initialState);
-  
+
+  // Persist the voice state across reloads. Read on mount (client-only, so no
+  // hydration mismatch) and write back whenever it changes — mute is now sticky
+  // for the whole session instead of resetting to 'audio' on every reload.
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(VOICE_STATE_KEY);
+      if (saved && saved !== initialState.voiceState) {
+        dispatch({ type: SET_VOICE_STATE, payload: saved });
+      }
+    } catch {}
+  }, []);
+  useEffect(() => {
+    try { localStorage.setItem(VOICE_STATE_KEY, state.voiceState); } catch {}
+  }, [state.voiceState]);
+
   return (
     <OrbitStateContext.Provider value={state}>
       <OrbitDispatchContext.Provider value={dispatch}>
@@ -327,6 +357,7 @@ export const actions = {
   clearLogs: () => ({ type: CLEAR_LOGS }),
   setLogs: (logs) => ({ type: SET_LOGS, payload: logs }),
   setPlanSteps: (steps) => ({ type: SET_PLAN_STEPS, payload: steps }),
+  setPlanState: (payload) => ({ type: SET_PLAN_STATE, payload }),
   setExecutionPlan: (plan) => ({ type: SET_EXECUTION_PLAN, payload: plan }),
   addReasoningGroup: (group) => ({ type: ADD_REASONING_GROUP, payload: group }),
   updateReasoningEntry: (content) => ({ type: UPDATE_REASONING_ENTRY, payload: content }),

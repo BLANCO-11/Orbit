@@ -72,41 +72,124 @@ const sessionPlans = new Map();       // sessionId → structured plan steps (th
 
 const PLAN_STATUSES = new Set(["pending", "active", "done", "blocked"]);
 
+function normalizePlanSteps(steps) {
+  return (Array.isArray(steps) ? steps : []).map((s, i) => ({
+    id: String(s.id || i + 1),
+    text: String(s.text || "").slice(0, 240),
+    status: PLAN_STATUSES.has(s.status) ? s.status : "pending",
+    deps: Array.isArray(s.deps) ? s.deps.map(String) : [],
+  })).filter((s) => s.text);
+}
+
+// Drop dep ids that don't exist, self-deps, and any edge that would form a cycle
+// (via DFS back-edge removal) so the DAG is always renderable/acyclic.
+function sanitizePlanDeps(steps) {
+  const ids = new Set(steps.map((s) => s.id));
+  for (const s of steps) s.deps = s.deps.filter((d) => d !== s.id && ids.has(d));
+  const byId = new Map(steps.map((s) => [s.id, s]));
+  const mark = new Map(); // 0/undefined unvisited, 1 in-stack, 2 done
+  const visit = (id) => {
+    mark.set(id, 1);
+    const s = byId.get(id);
+    s.deps = s.deps.filter((d) => {
+      const st = mark.get(d) || 0;
+      if (st === 1) return false;          // back-edge → cycle, drop it
+      if (st === 0) visit(d);
+      return true;
+    });
+    mark.set(id, 2);
+  };
+  for (const s of steps) if (!mark.get(s.id)) visit(s.id);
+  return steps;
+}
+
+// A step is "ready" when every dependency is done (informational for the DAG).
+function withReady(steps) {
+  const done = new Set(steps.filter((s) => s.status === "done").map((s) => s.id));
+  return steps.map((s) => ({ ...s, ready: (s.deps || []).every((d) => done.has(d)) }));
+}
+
+// Load a session's plan bucket from memory or rehydrate from the DB, handling
+// both the new multi-plan shape and the legacy single-plan (planSteps) shape.
+function loadPlanBucket(sessionId) {
+  const cached = sessionPlans.get(sessionId);
+  if (cached) return cached;
+  let bucket = { activePlanId: "default", plans: {} };
+  try {
+    const row = db.getSession(sessionId);
+    if (row && Array.isArray(row.plans) && row.plans.length) {
+      for (const p of row.plans) bucket.plans[p.planId] = p;
+      bucket.activePlanId = row.activePlanId || row.plans[0].planId;
+    } else if (row && Array.isArray(row.planSteps) && row.planSteps.length) {
+      bucket.plans.default = { planId: "default", title: "Plan", type: "task", steps: normalizePlanSteps(row.planSteps) };
+    }
+  } catch {}
+  sessionPlans.set(sessionId, bucket);
+  return bucket;
+}
+
+// Persist each plan as a workspace file so plans are real, visible artifacts
+// (workspace/plans/<planId>.json), in addition to the DB copy (Workstream F1).
+function persistPlanFiles(sessionId, bucket) {
+  try {
+    const fsx = require("fs");
+    const dirs = workspacePaths.sessionDirs(sessionId);
+    const plansDir = path.join(dirs.workspace, "plans");
+    fsx.mkdirSync(plansDir, { recursive: true });
+    for (const p of Object.values(bucket.plans)) {
+      fsx.writeFileSync(path.join(plansDir, `${p.planId}.json`), JSON.stringify(p, null, 2) + "\n");
+    }
+  } catch {}
+}
+
+function bucketToPayload(bucket) {
+  const plans = Object.values(bucket.plans).map((p) => ({ ...p, steps: withReady(p.steps) }));
+  const active = bucket.plans[bucket.activePlanId] || Object.values(bucket.plans)[0] || null;
+  return {
+    activePlanId: active ? active.planId : bucket.activePlanId,
+    plans,
+    steps: active ? withReady(active.steps) : [], // back-compat: active plan's steps
+  };
+}
+
 /**
- * Apply an orbit-plan tool call to the session's structured plan and return the
- * updated steps (or null if it wasn't a plan tool). The shared MCP process has
- * no session context, so the backend owns plan state — keyed here by sessionId.
+ * Apply an orbit-plan tool call to the session's structured plan(s) and return
+ * { activePlanId, plans, steps } (or null if it wasn't a plan tool). A session
+ * can hold MANY named plans (Workstream F). The shared MCP process has no session
+ * context, so the backend owns plan state — keyed here by sessionId.
  */
 function applyPlanTool(sessionId, name, args) {
   const isWrite = /plan_write$/.test(name);
   const isUpdate = /plan_update$/.test(name);
   if (!isWrite && !isUpdate) return null;
 
+  const bucket = loadPlanBucket(sessionId);
+
   if (isWrite) {
-    const steps = Array.isArray(args?.steps) ? args.steps : [];
-    const normalized = steps.map((s, i) => ({
-      id: String(s.id || i + 1),
-      text: String(s.text || "").slice(0, 240),
-      status: PLAN_STATUSES.has(s.status) ? s.status : "pending",
-      deps: Array.isArray(s.deps) ? s.deps.map(String) : [],
-    })).filter((s) => s.text);
-    sessionPlans.set(sessionId, normalized);
-    return normalized;
+    const planId = String(args?.planId || "default");
+    const steps = sanitizePlanDeps(normalizePlanSteps(args?.steps));
+    bucket.plans[planId] = {
+      planId,
+      title: String(args?.title || (planId === "default" ? "Plan" : planId)).slice(0, 120),
+      type: String(args?.type || "task").slice(0, 40),
+      steps,
+    };
+    bucket.activePlanId = planId;
+  } else {
+    const planId = String(args?.planId || bucket.activePlanId || "default");
+    const plan = bucket.plans[planId] || bucket.plans[bucket.activePlanId];
+    if (plan) {
+      const step = plan.steps.find((s) => s.id === String(args?.id));
+      if (step) {
+        if (PLAN_STATUSES.has(args?.status)) step.status = args.status;
+        if (typeof args?.text === "string" && args.text.trim()) step.text = args.text.slice(0, 240);
+      }
+      bucket.activePlanId = plan.planId;
+    }
   }
 
-  // update — rehydrate from the DB if we don't have the plan in memory (e.g. the
-  // server restarted mid-task), so an update never wipes a persisted plan.
-  let steps = sessionPlans.get(sessionId);
-  if (!steps) {
-    try { steps = db.getSession(sessionId)?.planSteps || []; } catch { steps = []; }
-    sessionPlans.set(sessionId, steps);
-  }
-  const step = steps.find((s) => s.id === String(args?.id));
-  if (step) {
-    if (PLAN_STATUSES.has(args?.status)) step.status = args.status;
-    if (typeof args?.text === "string" && args.text.trim()) step.text = args.text.slice(0, 240);
-  }
-  return steps;
+  persistPlanFiles(sessionId, bucket);
+  return bucketToPayload(bucket);
 }
 
 // Anti-flail limits: stop a turn that's spinning without making progress.
@@ -233,7 +316,25 @@ const fleet = createFleet({
       tokens = (p.tokens?.reported && !p.tokens.estimated ? p.tokens.reported.total : p.tokens?.total) || 0;
     } catch {}
     lead.subagentTracker.creditDelegate(device, { toolCalls, tokens, childSessionId: delegateSessionId });
+    try {
+      const existing = db.getSession(leadSessionId);
+      if (existing) {
+        db.saveSession({
+          ...existing,
+          subagentTree: lead.subagentTracker.toJSON()
+        });
+      }
+    } catch (e) {
+      console.error("[Fleet] Failed to save lead session subagent tree:", e.message);
+    }
     try { sendWithSession(lead.ws, { type: "subagent_metrics", ...subagentFields(lead.subagentTracker) }, leadSessionId); } catch {}
+    try { sendWithSession(lead.ws, { type: "refresh_sessions" }, leadSessionId); } catch {}
+  },
+  notifySessionCreated: (leadSessionId, delegateSessionId) => {
+    const lead = activeSessions.get(leadSessionId);
+    if (lead && lead.ws) {
+      sendWithSession(lead.ws, { type: "refresh_sessions" }, leadSessionId);
+    }
   },
 });
 app.use("/api/fleet", authMiddleware, createFleetRouter({ fleet }));
@@ -245,6 +346,17 @@ const createTelegramBridge = require("./telegram-bridge");
 const telegramBridge = createTelegramBridge({ db, decrypt, dispatch: fleet.dispatchToDevice });
 app.get("/api/telegram/status", authMiddleware, (req, res) => {
   res.json({ success: true, ...telegramBridge.status() });
+});
+
+// Capability manifest — the single source of truth for "what can Orbit do right
+// now?" (config + env + connectors + connections + telegram + fleet). Shared by
+// the dynamic prompt injection, the list_capabilities MCP tool, and headless
+// clients that want to hydrate the full app state (Workstreams D2/E/J).
+const { buildCapabilities } = require("./capabilities");
+const getCapabilities = () => buildCapabilities({ getConfig, mcpRegistry, telegramBridge, db });
+app.get("/api/capabilities", authMiddleware, (req, res) => {
+  try { res.json({ success: true, ...getCapabilities() }); }
+  catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
 // "channel" sink: everything off the web app — Telegram + Discord/Slack
@@ -686,6 +798,13 @@ async function handleStartTask(ws, userPrompt, sessionId, mode, systemPromptType
         events, config: getConfig(), sessionId, mode: activeMode,
         systemPromptType, skills: skills || [], model: activeModelName,
         excludeTools: excludeTools || null,
+        // Dynamic capability manifest, rendered fresh per session start and laid
+        // into the system prompt so the agent knows what it can use vs what
+        // needs setup — never hand-edited (Workstream D2).
+        capabilitiesBlock: (() => {
+          try { return require("./capabilities").renderPromptBlock(getCapabilities()); }
+          catch { return ""; }
+        })(),
       };
       let harness;
       if (remoteEntry) {
@@ -883,12 +1002,22 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
     // Structured plan tool → update the live Mission checklist for this session.
     // (Intercepted here because this per-session emitter has the sessionId the
     // shared orbit-plan MCP process lacks.)
-    const planSteps = applyPlanTool(sessionId, name, args);
-    if (planSteps) {
-      sendWithSession(ws, { type: "plan_state", steps: planSteps }, sessionId);
+    const planState = applyPlanTool(sessionId, name, args);
+    if (planState) {
+      sendWithSession(ws, {
+        type: "plan_state",
+        steps: planState.steps,            // back-compat: active plan's steps
+        plans: planState.plans,
+        activePlanId: planState.activePlanId,
+      }, sessionId);
       try {
         const existing = db.getSession(sessionId);
-        if (existing) db.saveSession({ ...existing, planSteps });
+        if (existing) db.saveSession({
+          ...existing,
+          planSteps: planState.steps,
+          plans: planState.plans,
+          activePlanId: planState.activePlanId,
+        });
       } catch {}
     }
 
@@ -918,7 +1047,7 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
 
       subagentTracker.spawnAgent(id, saName, parentId, inheritedMode, saPrompt);
       subagentTracker.setStatus(id, STATUS.WORKING);
-      metricsManager.addSubagent(sessionId, { id, name: saName, parentId, status: STATUS.WORKING, mode: inheritedMode });
+      metricsManager.addSubagent(sessionId, { id, name: saName, parentId, status: STATUS.WORKING, mode: inheritedMode, task: saPrompt });
 
       sendLog(ws, `[Subagent Spawn] Mode="${inheritedMode}" inherited by subagent "${saName}".`, false);
     } else if (subagentId && subagentTracker.getAgent(subagentId)) {
@@ -932,7 +1061,7 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
       const task = (args && args.task) || "";
       subagentTracker.spawnAgent(id, `⇢ ${device}`, null, mode || "chat", task);
       subagentTracker.setStatus(id, STATUS.WORKING);
-      metricsManager.addSubagent(sessionId, { id, name: `⇢ ${device}`, parentId: null, status: STATUS.WORKING, mode: mode || "chat" });
+      metricsManager.addSubagent(sessionId, { id, name: `⇢ ${device}`, parentId: null, status: STATUS.WORKING, mode: mode || "chat", task: task });
       sendWithSession(ws, {
         type: "subagent_metrics",
         ...metricsManager.toFrontendUpdate(sessionId),

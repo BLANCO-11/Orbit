@@ -88,12 +88,6 @@ function ChatMessageBase({
           </button>
         </div>
 
-        <div className="markdown-content" dangerouslySetInnerHTML={renderMarkdown(message.content)} />
-
-        {message.latency && (
-          <div className="mt-1 text-[11px] text-faint">Completed in {message.latency}s</div>
-        )}
-
         {message.tools && message.tools.length > 0 && (
           <ToolGroup
             tools={message.tools}
@@ -102,6 +96,17 @@ function ChatMessageBase({
             getToolSummary={getToolSummary}
             getToolOutput={getToolOutput}
           />
+        )}
+
+        {message.content && (
+          <div
+            className={`markdown-content ${message.tools && message.tools.length > 0 ? 'mt-3' : ''}`}
+            dangerouslySetInnerHTML={renderMarkdown(message.content)}
+          />
+        )}
+
+        {message.latency && (
+          <div className="mt-1 text-[11px] text-faint">Completed in {message.latency}s</div>
         )}
       </div>
     </div>
@@ -136,13 +141,18 @@ export default ChatMessage;
 // ── Tool group card ─────────────────────────────────────────────
 
 function ToolGroup({ tools, expandedTools, toggleTool, getToolSummary, getToolOutput }) {
-  const [isExpanded, setIsExpanded] = useState(true);
+  // Hidden/collapsed by default — only a compact affordance shows; never
+  // auto-expands, even while tools are running (kills the streaming noise).
+  const [isExpanded, setIsExpanded] = useState(false);
   const running = tools.filter((t) => t.status === 'running');
   const isRunning = running.length > 0;
   const names = [...new Set(tools.map((t) => t.name))].join(' · ');
+  const lastStatus = isRunning
+    ? getToolSummary(running[running.length - 1])
+    : `done · ${names}`;
 
   return (
-    <div className="mt-3 overflow-hidden rounded-[11px] border border-border bg-card shadow-card">
+    <div className="overflow-hidden rounded-[11px] border border-border bg-card shadow-card">
       <div
         onClick={() => setIsExpanded(!isExpanded)}
         role="button"
@@ -153,12 +163,12 @@ function ToolGroup({ tools, expandedTools, toggleTool, getToolSummary, getToolOu
         {isRunning ? (
           <Loader2 size={15} className="shrink-0 animate-spin text-warning" />
         ) : (
-          <Check size={15} className="shrink-0 text-success" strokeWidth={2.4} />
+          <Wrench size={14} className="shrink-0 text-faint" />
         )}
         <span className="text-[12.5px] font-semibold">
-          {isRunning ? getToolSummary(running[running.length - 1]) : `${tools.length} tool${tools.length > 1 ? 's' : ''} used`}
+          {tools.length} tool{tools.length > 1 ? 's' : ''}
         </span>
-        <span className="overflow-hidden text-ellipsis whitespace-nowrap text-xs text-faint">{names}</span>
+        <span className="overflow-hidden text-ellipsis whitespace-nowrap text-xs text-faint">{lastStatus}</span>
         {isExpanded ? (
           <ChevronDown size={14} className="ml-auto shrink-0 text-faint" />
         ) : (

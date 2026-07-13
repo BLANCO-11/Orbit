@@ -517,6 +517,7 @@ class SessionMetricsManager {
       parentId: subagentData.parentId || null,
       status: subagentData.status || "spawning",
       mode: subagentData.mode || metrics.mode || "",
+      task: subagentData.task || "",
       timeStart: new Date().toISOString(),
       timeEnd: null,
       toolCalls: [],

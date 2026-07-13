@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { TerminalSquare, CornerDownLeft } from 'lucide-react';
+import { useOrbitState } from '@/providers/OrbitProvider';
 
 interface Entry { command: string; stdout: string; stderr: string; code: number; timedOut: boolean }
 
@@ -12,6 +13,7 @@ interface Entry { command: string; stdout: string; stderr: string; code: number;
  * (20s cap). This is the operator's shell, not the agent's — not policy-gated.
  */
 export default function ConsoleTab() {
+  const { currentSessionId } = useOrbitState();
   const [cmd, setCmd] = useState('');
   const [history, setHistory] = useState<Entry[]>([]);
   const [busy, setBusy] = useState(false);
@@ -20,9 +22,11 @@ export default function ConsoleTab() {
   const inputHist = useRef<string[]>([]);
   const histIdx = useRef(-1);
 
+  // Console runs in the CURRENT session's workspace dir; re-fetch cwd on switch.
+  const sessionQ = currentSessionId ? `?session=${encodeURIComponent(currentSessionId)}` : '';
   useEffect(() => {
-    fetch('/api/console/cwd').then((r) => r.json()).then((d) => d.success && setCwd(d.cwd)).catch(() => {});
-  }, []);
+    fetch(`/api/console/cwd${sessionQ}`).then((r) => r.json()).then((d) => d.success && setCwd(d.cwd)).catch(() => {});
+  }, [sessionQ]);
   useEffect(() => { endRef.current?.scrollIntoView({ block: 'end' }); }, [history, busy]);
 
   const run = useCallback(async () => {
@@ -33,7 +37,7 @@ export default function ConsoleTab() {
     try {
       const res = await fetch('/api/console/exec', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ command }),
+        body: JSON.stringify({ command, session: currentSessionId || undefined }),
       });
       const d = await res.json();
       setHistory((h) => [...h, {
@@ -46,7 +50,7 @@ export default function ConsoleTab() {
       setHistory((h) => [...h, { command, stdout: '', stderr: 'Request failed.', code: 1, timedOut: false }]);
     }
     setBusy(false);
-  }, [cmd, busy]);
+  }, [cmd, busy, currentSessionId]);
 
   const onKey = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') { e.preventDefault(); run(); return; }

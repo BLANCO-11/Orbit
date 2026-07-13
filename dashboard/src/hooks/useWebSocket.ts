@@ -17,12 +17,34 @@ export function useWebSocket(
   } = {}
 ) {
   const dispatch = useOrbitDispatch();
+  // The WS onmessage closure is created once (connect deps are stable). Reading
+  // callbacks through a ref that we refresh every render means speech handlers
+  // always call the LATEST queueSentence/speakText — which capture the current
+  // voiceState — instead of the frozen mount-time ones. (Fixes session-wide mute.)
+  const optionsRef = useRef(options);
+  optionsRef.current = options;
   const socketRef = useRef(null);
   const reconnectTimerRef = useRef(null);
   const sessionIdRef = useRef('');
   const failedAttemptsRef = useRef(0);
   const unmountedRef = useRef(false);
   const [connectionState, setConnectionState] = useState('disconnected');
+
+  // ── Streaming coalescer ───────────────────────────────────────────────
+  // Backend emits a `message` frame per token, each carrying the FULL growing
+  // content string. Dispatching every frame re-runs marked.parse+DOMPurify on
+  // the last bubble each token, which stutters. Instead we hold the latest
+  // content in a ref and flush at most once per animation frame.
+  const pendingContentRef = useRef(null);
+  const rafRef = useRef(0);
+  const flushContent = useCallback(() => {
+    rafRef.current = 0;
+    if (pendingContentRef.current !== null) {
+      const content = pendingContentRef.current;
+      pendingContentRef.current = null;
+      dispatch(actions.updateLastMessage({ content }));
+    }
+  }, [dispatch]);
 
   const connect = useCallback(() => {
     if (!backendWsUrl) return;
@@ -45,14 +67,25 @@ export function useWebSocket(
         
         // Session isolation: ignore events from other sessions
         if (data.sessionId && data.sessionId !== sessionIdRef.current) return;
-        
+
+        // Any non-message frame must see the latest streamed text already
+        // committed, so flush the buffer synchronously before handling it.
+        if (data.type !== 'message' && pendingContentRef.current !== null) {
+          if (rafRef.current) cancelAnimationFrame(rafRef.current);
+          flushContent();
+        }
+
         switch (data.type) {
           case 'status':
             dispatch(actions.setStatus(data.status));
             break;
-            
+
           case 'message':
-            dispatch(actions.updateLastMessage({ content: data.content }));
+            // Coalesce: keep only the latest content, flush once per frame.
+            pendingContentRef.current = data.content;
+            if (!rafRef.current) {
+              rafRef.current = requestAnimationFrame(flushContent);
+            }
             break;
             
           case 'tool_start':
@@ -69,7 +102,15 @@ export function useWebSocket(
             break;
 
           case 'plan_state':
-            dispatch(actions.setPlanSteps(data.steps));
+            dispatch(actions.setPlanState({
+              steps: data.steps,
+              plans: data.plans,
+              activePlanId: data.activePlanId,
+            }));
+            break;
+            
+          case 'refresh_sessions':
+            window.dispatchEvent(new CustomEvent('orbit:refresh_sessions'));
             break;
             
           case 'reasoning_update':
@@ -89,14 +130,14 @@ export function useWebSocket(
             break;
             
           case 'speech_sentence':
-            if (options.onSpeechSentence) {
-              options.onSpeechSentence(data.content);
+            if (optionsRef.current.onSpeechSentence) {
+              optionsRef.current.onSpeechSentence(data.content);
             }
             break;
-            
+
           case 'intelligent_speech':
-            if (options.onIntelligentSpeech) {
-              options.onIntelligentSpeech(data.content);
+            if (optionsRef.current.onIntelligentSpeech) {
+              optionsRef.current.onIntelligentSpeech(data.content);
             }
             break;
             
@@ -214,6 +255,11 @@ export function useWebSocket(
     
     ws.onclose = () => {
       setConnectionState('disconnected');
+      // Commit any buffered streamed text before we stop.
+      if (pendingContentRef.current !== null) {
+        if (rafRef.current) cancelAnimationFrame(rafRef.current);
+        flushContent();
+      }
       if (unmountedRef.current) return; // deliberate close — don't resurrect
 
       failedAttemptsRef.current++;
@@ -233,7 +279,7 @@ export function useWebSocket(
     };
 
     socketRef.current = ws;
-  }, [backendWsUrl, dispatch]);
+  }, [backendWsUrl, dispatch, flushContent]);
 
   // Connect on mount, disconnect on unmount
   useEffect(() => {
@@ -242,6 +288,7 @@ export function useWebSocket(
     return () => {
       unmountedRef.current = true;
       if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
       if (socketRef.current) socketRef.current.close();
     };
   }, [connect]);
