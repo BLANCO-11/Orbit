@@ -10,6 +10,18 @@ const { Readable } = require("stream");
 const TTS_BASE_URL = process.env.LOCAL_TTS_URL || "http://127.0.0.1:6767";
 const TTS_MODEL = process.env.LOCAL_TTS_MODEL || "pocket-tts";
 
+// TTS is OPTIONAL: available only when a key is configured — via env
+// (LOCAL_TTS_KEY) or in-app Settings (config.tts.apiKey). The voice UI is hidden
+// entirely when this is empty.
+function resolveTtsKey(getConfig) {
+  try { return process.env.LOCAL_TTS_KEY || (getConfig && getConfig().tts && getConfig().tts.apiKey) || ""; }
+  catch { return process.env.LOCAL_TTS_KEY || ""; }
+}
+function resolveTtsUrl(getConfig) {
+  try { return process.env.LOCAL_TTS_URL || (getConfig && getConfig().tts && getConfig().tts.url) || TTS_BASE_URL; }
+  catch { return TTS_BASE_URL; }
+}
+
 function createModelsRouter(getConfig) {
   const router = Router();
   
@@ -32,14 +44,19 @@ function createModelsRouter(getConfig) {
 
 function createTtsRouter(getConfig) {
   const router = Router();
-  
+
+  // Availability probe — the dashboard hides all voice UI when this is false.
+  router.get("/status", (req, res) => {
+    res.json({ success: true, available: !!resolveTtsKey(getConfig) });
+  });
+
   router.post("/", async (req, res, next) => {
     const { text, voice } = req.body;
     if (!text) {
       return res.status(400).json({ success: false, message: "Text is required." });
     }
 
-    const ttsKey = process.env.LOCAL_TTS_KEY;
+    const ttsKey = resolveTtsKey(getConfig);
     if (!ttsKey) {
       return res.status(500).json({ success: false, message: "LOCAL_TTS_KEY not found in environment." });
     }
@@ -82,11 +99,11 @@ function createTtsRouter(getConfig) {
   return router;
 }
 
-function createVoicesRouter() {
+function createVoicesRouter(getConfig) {
   const router = Router();
   
   router.get("/", async (req, res, next) => {
-    const ttsKey = process.env.LOCAL_TTS_KEY;
+    const ttsKey = resolveTtsKey(getConfig);
     if (!ttsKey) return res.json([]);
 
     try {

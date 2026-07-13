@@ -147,6 +147,12 @@ function DashboardInner() {
       .catch(() => {});
   }, []);
   const activeDevice = harnesses.find((h) => h.id === harnessId) || harnesses[0];
+  // TTS is optional — only surface the voice UI when a TTS backend is configured
+  // (env LOCAL_TTS_KEY or Settings). STT (mic) is separate and always available.
+  const [ttsAvailable, setTtsAvailable] = useState(false);
+  useEffect(() => {
+    fetch('/api/tts/status').then((r) => r.json()).then((d) => setTtsAvailable(!!d.available)).catch(() => {});
+  }, []);
   const [activeProfileId, setActiveProfileId] = useState<string | null>(null);
   const [excludeTools, setExcludeTools] = useState<string[]>([]);
   const [centerView, setCenterView] = useState('timeline'); // timeline | mission
@@ -381,6 +387,7 @@ function DashboardInner() {
             securityConfig={securityConfig}
             setSecurityConfig={setSecurityConfig}
             systemPromptType={systemPromptType} setSystemPromptType={setSystemPromptType}
+            ttsAvailable={ttsAvailable}
             voiceResponse={state.voiceState === 'audio'}
             setVoiceResponse={(val) => dispatch(actions.setVoiceState(val ? 'audio' : 'disabled'))}
             models={models} voices={voices}
@@ -403,6 +410,7 @@ function DashboardInner() {
       <IconRail
         activeView={activeView}
         onViewChange={setActiveView}
+        ttsAvailable={ttsAvailable}
         voiceOn={state.voiceState === 'audio'}
         onToggleVoice={() =>
           dispatch(actions.setVoiceState(state.voiceState === 'audio' ? 'disabled' : 'audio'))
@@ -590,6 +598,7 @@ function DashboardInner() {
         }}
         prompt={prompt}
         setPrompt={setPrompt}
+        ttsAvailable={ttsAvailable}
         voiceState={state.voiceState}
         onVoiceStateToggle={() => {
           dispatch(actions.setVoiceState(

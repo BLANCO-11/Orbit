@@ -71,6 +71,7 @@ export default function ChatArea({
   setPrompt,
   voiceState,
   onVoiceStateToggle,
+  ttsAvailable,
   onToggleListening,
   isListening,
   onSubmit,
@@ -220,6 +221,7 @@ export default function ChatArea({
             status={status}
             voiceState={voiceState}
             onVoiceStateToggle={onVoiceStateToggle}
+            ttsAvailable={ttsAvailable}
             onToggleListening={onToggleListening}
             isListening={isListening}
             onSubmit={onSubmit}

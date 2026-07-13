@@ -181,7 +181,7 @@ app.use("/api/config", authMiddleware, createConfigRouter(activeSessions));
 app.use("/api/sessions", authMiddleware, createSessionsRouter());
 app.use("/api/models", authMiddleware, createModelsRouter(getConfig));
 app.use("/api/tts", authMiddleware, createTtsRouter(getConfig));
-app.use("/api/voices", authMiddleware, createVoicesRouter());
+app.use("/api/voices", authMiddleware, createVoicesRouter(getConfig));
 app.use("/api/notify", authMiddleware, createNotificationsRouter(notifyBus));
 app.use("/api/workspace", authMiddleware, createWorkspaceRouter());
 app.use("/api/console", authMiddleware, require("./routes/console")());

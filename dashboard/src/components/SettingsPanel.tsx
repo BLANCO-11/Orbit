@@ -85,6 +85,7 @@ export default function SettingsPanel({
   setSystemPromptType,
   voiceResponse,
   setVoiceResponse,
+  ttsAvailable,
   models,
   voices,
   onSave,
@@ -168,21 +169,31 @@ export default function SettingsPanel({
         </Select>
       </div>
 
-      <div>
-        <FieldLabel>LOCAL TTS VOICE</FieldLabel>
-        <Select value={settings.selectedVoice} onValueChange={(v) => onSettingsChange({ selectedVoice: v })}>
-          <SelectTrigger className="h-8 w-full text-sm"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {voices.length > 0 ? (
-              voices.map((v) => <SelectItem key={v.id} value={v.id}>{v.display_name || v.id}</SelectItem>)
-            ) : (
-              <SelectItem value="alba">alba (Default)</SelectItem>
-            )}
-          </SelectContent>
-        </Select>
-      </div>
-
-      <ToggleRow label="VOICE RESPONSES (TTS)" checked={voiceResponse} onCheckedChange={setVoiceResponse} />
+      {/* Voice (TTS) is optional — only shown when a TTS backend is configured
+          (env LOCAL_TTS_* or these fields). */}
+      {ttsAvailable ? (
+        <>
+          <div>
+            <FieldLabel>LOCAL TTS VOICE</FieldLabel>
+            <Select value={settings.selectedVoice} onValueChange={(v) => onSettingsChange({ selectedVoice: v })}>
+              <SelectTrigger className="h-8 w-full text-sm"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {voices.length > 0 ? (
+                  voices.map((v) => <SelectItem key={v.id} value={v.id}>{v.display_name || v.id}</SelectItem>)
+                ) : (
+                  <SelectItem value="alba">alba (Default)</SelectItem>
+                )}
+              </SelectContent>
+            </Select>
+          </div>
+          <ToggleRow label="VOICE RESPONSES (TTS)" checked={voiceResponse} onCheckedChange={setVoiceResponse} />
+        </>
+      ) : (
+        <p className="rounded-lg border border-border-soft bg-muted/40 px-2.5 py-2 text-[11px] leading-relaxed text-faint">
+          Voice output is off — no TTS backend configured. Set <code>LOCAL_TTS_URL</code> +
+          <code>LOCAL_TTS_KEY</code> in <code>.env</code> to enable the voice UI.
+        </p>
+      )}
 
       {/* ── Browser & Web Access ── */}
       <SectionLabel>Browser &amp; Web Access</SectionLabel>

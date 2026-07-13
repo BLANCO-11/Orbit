@@ -27,6 +27,7 @@ export default function ChatInput({
   isListening,
   onSubmit,
   onStop,
+  ttsAvailable,
   profileButton,
   harnessButton,
   modeButton,
@@ -190,16 +191,18 @@ export default function ChatInput({
             <Mic size={15} />
           </button>
 
-          <button
-            onClick={onVoiceStateToggle}
-            aria-label="Toggle speech output"
-            title={voiceState === 'audio' ? 'Speech on' : voiceState === 'mute' ? 'Muted' : 'Speech off'}
-            className={`grid size-8 place-items-center rounded-lg border border-border transition-colors hover:bg-muted ${
-              voiceState === 'audio' ? 'text-primary' : 'text-faint'
-            }`}
-          >
-            {voiceState === 'audio' ? <Volume2 size={15} /> : <VolumeX size={15} />}
-          </button>
+          {ttsAvailable && (
+            <button
+              onClick={onVoiceStateToggle}
+              aria-label="Toggle speech output"
+              title={voiceState === 'audio' ? 'Speech on' : voiceState === 'mute' ? 'Muted' : 'Speech off'}
+              className={`grid size-8 place-items-center rounded-lg border border-border transition-colors hover:bg-muted ${
+                voiceState === 'audio' ? 'text-primary' : 'text-faint'
+              }`}
+            >
+              {voiceState === 'audio' ? <Volume2 size={15} /> : <VolumeX size={15} />}
+            </button>
+          )}
 
           {isProcessing ? (
             <button

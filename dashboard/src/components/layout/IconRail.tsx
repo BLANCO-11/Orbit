@@ -18,13 +18,14 @@ interface IconRailProps {
   onViewChange: (view: RailView) => void;
   voiceOn: boolean;
   onToggleVoice: () => void;
+  ttsAvailable?: boolean;
 }
 
 /**
  * IconRail — far-left primary navigation (mock: Console / Fleet / Connectors /
  * Policies, with voice status + Settings pinned at the bottom).
  */
-export default function IconRail({ activeView, onViewChange, voiceOn, onToggleVoice }: IconRailProps) {
+export default function IconRail({ activeView, onViewChange, voiceOn, onToggleVoice, ttsAvailable = false }: IconRailProps) {
   return (
     <nav
       aria-label="Primary"
@@ -53,19 +54,22 @@ export default function IconRail({ activeView, onViewChange, voiceOn, onToggleVo
 
       <div className="flex-1" />
 
-      <button
-        onClick={onToggleVoice}
-        aria-label={voiceOn ? 'Voice responses on' : 'Voice responses off'}
-        title={voiceOn ? 'Voice: on' : 'Voice: off'}
-        className={`relative grid size-9 place-items-center rounded-[10px] transition-colors ${
-          voiceOn ? 'text-accent-foreground' : 'text-faint hover:text-muted-foreground'
-        } hover:bg-muted`}
-      >
-        {voiceOn ? <Volume2 size={16} /> : <VolumeX size={16} />}
-        {voiceOn && (
-          <span className="absolute right-1.5 top-1.5 size-[7px] rounded-full border-2 border-sidebar bg-success" />
-        )}
-      </button>
+      {/* Voice toggle only when a TTS backend is configured (env or Settings). */}
+      {ttsAvailable && (
+        <button
+          onClick={onToggleVoice}
+          aria-label={voiceOn ? 'Voice responses on' : 'Voice responses off'}
+          title={voiceOn ? 'Voice: on' : 'Voice: off'}
+          className={`relative grid size-9 place-items-center rounded-[10px] transition-colors ${
+            voiceOn ? 'text-accent-foreground' : 'text-faint hover:text-muted-foreground'
+          } hover:bg-muted`}
+        >
+          {voiceOn ? <Volume2 size={16} /> : <VolumeX size={16} />}
+          {voiceOn && (
+            <span className="absolute right-1.5 top-1.5 size-[7px] rounded-full border-2 border-sidebar bg-success" />
+          )}
+        </button>
+      )}
       {/* Settings lives on the header gear (single entrypoint) — not duplicated here. */}
     </nav>
   );
