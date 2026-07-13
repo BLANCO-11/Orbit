@@ -19,7 +19,7 @@ const IMG_EXT = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'ico', 'bmp'];
  *          else as text). Reuses /api/workspace/file (sandboxed to ./workspace).
  * Kept as a single tab so previewing doesn't spawn extra UI regions.
  */
-export default function PreviewTab() {
+export default function PreviewTab({ activeFilePath, onFilePathChange }: { activeFilePath?: string; onFilePathChange?: (path: string) => void }) {
   const { currentSessionId } = useOrbitState();
   const sessionQ = currentSessionId ? `&session=${encodeURIComponent(currentSessionId)}` : '';
   const [mode, setMode] = useState<Mode>('live');
@@ -45,8 +45,8 @@ export default function PreviewTab() {
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const loadFile = useCallback(async () => {
-    const p = filePath.trim();
+  const loadFile = useCallback(async (pathVal?: string) => {
+    const p = (pathVal !== undefined ? pathVal : filePath).trim();
     if (!p) return;
     setErr(null); setBusy(true); setFile(null);
     const name = p.split('/').filter(Boolean).pop() || p;
@@ -65,6 +65,14 @@ export default function PreviewTab() {
     } catch { setErr('Request failed.'); }
     setBusy(false);
   }, [filePath, sessionQ]);
+
+  useEffect(() => {
+    if (activeFilePath) {
+      setFilePath(activeFilePath);
+      setMode('file');
+      loadFile(activeFilePath);
+    }
+  }, [activeFilePath, loadFile]);
 
   const renderMd = (text: string) => {
     try { return { __html: DOMPurify.sanitize(marked.parse(text, { breaks: true }) as string) }; }
@@ -127,7 +135,7 @@ export default function PreviewTab() {
               placeholder="/workspace/README.md"
               className="min-w-0 flex-1 rounded-lg border border-border bg-background px-2.5 py-1.5 font-mono text-[11.5px] outline-none focus:border-ring"
             />
-            <button onClick={loadFile} aria-label="Open file" className="grid size-8 shrink-0 place-items-center rounded-lg border border-border text-muted-foreground hover:bg-muted hover:text-foreground">
+            <button onClick={() => loadFile()} aria-label="Open file" className="grid size-8 shrink-0 place-items-center rounded-lg border border-border text-muted-foreground hover:bg-muted hover:text-foreground">
               <RefreshCw size={13} className={busy ? 'animate-spin' : ''} />
             </button>
           </div>

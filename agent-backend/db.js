@@ -19,7 +19,7 @@ if (!fs.existsSync(dbPath) && fs.existsSync(legacyDbPath)) {
 const db = new DatabaseSync(dbPath);
 
 // ── Schema Versioning ───────────────────────────────────────────────
-const CURRENT_SCHEMA_VERSION = 11;
+const CURRENT_SCHEMA_VERSION = 12;
 const BACKUP_INTERVAL = 10; // auto-backup every N saves
 let saveCount = 0;
 
@@ -205,6 +205,19 @@ if (currentSchemaVersion < 11) {
   console.log(`[DB] Migrated sessions schema to version ${CURRENT_SCHEMA_VERSION}`);
 }
 
+if (currentSchemaVersion < 12) {
+  // Multiple named plans per session (Workstream F). `plans` holds the full
+  // [{planId,title,type,steps}] array; `active_plan_id` picks the selected one.
+  // plan_steps stays as the active plan's steps for back-compat.
+  try { db.exec("ALTER TABLE sessions ADD COLUMN plans TEXT NOT NULL DEFAULT '[]'"); } catch (e) {}
+  try { db.exec("ALTER TABLE sessions ADD COLUMN active_plan_id TEXT NOT NULL DEFAULT ''"); } catch (e) {}
+  db.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)").run(
+    "schema_version",
+    String(CURRENT_SCHEMA_VERSION)
+  );
+  console.log(`[DB] Migrated sessions schema to version ${CURRENT_SCHEMA_VERSION}`);
+}
+
 // ── Initialize tables ────────────────────────────────────────────────
 db.exec(`
   CREATE TABLE IF NOT EXISTS sessions (
@@ -295,6 +308,8 @@ function mapRow(row) {
     mode: row.mode || "",
     subagentTree: JSON.parse(row.subagent_tree || "{}"),
     planSteps: JSON.parse(row.plan_steps || "[]"),
+    plans: JSON.parse(row.plans || "[]"),
+    activePlanId: row.active_plan_id || "",
     runState: JSON.parse(row.run_state || "{}"),
     timestamp: row.timestamp,
     schemaVersion: row.schema_version || 0,
@@ -332,8 +347,8 @@ function enforceTTL() {
 
 function saveSession(session) {
   const stmt = db.prepare(`
-    INSERT INTO sessions (id, title, messages, logs, execution_plan, metrics, mode, subagent_tree, plan_steps, timestamp)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO sessions (id, title, messages, logs, execution_plan, metrics, mode, subagent_tree, plan_steps, plans, active_plan_id, timestamp)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       title = excluded.title,
       messages = excluded.messages,
@@ -343,6 +358,8 @@ function saveSession(session) {
       mode = excluded.mode,
       subagent_tree = excluded.subagent_tree,
       plan_steps = excluded.plan_steps,
+      plans = excluded.plans,
+      active_plan_id = excluded.active_plan_id,
       timestamp = excluded.timestamp
   `);
   stmt.run(
@@ -355,6 +372,8 @@ function saveSession(session) {
     session.mode || "",
     JSON.stringify(session.subagentTree || {}),
     JSON.stringify(session.planSteps || []),
+    JSON.stringify(session.plans || []),
+    session.activePlanId || "",
     session.timestamp || Date.now()
   );
 

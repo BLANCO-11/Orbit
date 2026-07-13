@@ -14,8 +14,11 @@ const DEFAULT_SETTINGS = {
   newReadPath: '',
   newWritePath: '',
   newBlockedPath: '',
+  newWriteBlockedPath: '',
   newAllowedPrefix: '',
   newAutoApprove: '',
+  ttsURL: '',
+  ttsKey: '',
 };
 
 /**
@@ -58,6 +61,7 @@ export function useSettings() {
       .then(res => res.json())
       .then(data => {
         setSecurityConfig(data);
+        const ttsInfo = data.tts || {};
         if (data.litellm) {
           updateSettings({
             baseURL: data.litellm.baseURL || '',
@@ -65,6 +69,13 @@ export function useSettings() {
             selectedNormalModel: data.litellm.selectedNormalModel || '',
             selectedReasoningModel: data.litellm.selectedReasoningModel || '',
             taskMode: data.litellm.taskMode || 'hybrid',
+            ttsURL: ttsInfo.url || '',
+            ttsKey: ttsInfo.apiKey || '',
+          });
+        } else {
+          updateSettings({
+            ttsURL: ttsInfo.url || '',
+            ttsKey: ttsInfo.apiKey || '',
           });
         }
         if (data.systemPromptType) setSystemPromptType(data.systemPromptType);
@@ -85,6 +96,10 @@ export function useSettings() {
         selectedNormalModel: settings.selectedNormalModel,
         selectedReasoningModel: settings.selectedReasoningModel,
         taskMode: settings.taskMode,
+      },
+      tts: {
+        url: settings.ttsURL,
+        apiKey: settings.ttsKey,
       },
     };
     fetch(`/api/config`, {

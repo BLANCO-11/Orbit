@@ -47,6 +47,8 @@ export default function Header({
   activeDevice,
   onToggleSidebarCollapse,
   sidebarCollapsed,
+  rightPanelCollapsed = false,
+  isVisible,
 }) {
   // Connection problems take priority over the agent's own status.
   const meta = connectionState === 'connecting'
@@ -99,7 +101,7 @@ export default function Header({
       <div className="flex items-center gap-2">
         {onSetCenterView && (
           <div className="mr-1 inline-flex rounded-lg border border-border-soft bg-background p-0.5">
-            {['timeline', 'mission'].map((v) => {
+            {['timeline', 'mission'].filter((v) => !isVisible || isVisible('views', v)).map((v) => {
               const isMission = v === 'mission';
               const hasPlan = isMission && planProgress && planProgress.total > 0;
               return (
@@ -130,20 +132,10 @@ export default function Header({
           {meta.label}
         </div>
 
-        {mounted && (
-          <IconBtn label={`Switch to ${theme.mode === 'dark' ? 'light' : 'dark'} theme`} onClick={onToggleTheme}>
-            {theme.mode === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
-          </IconBtn>
-        )}
-
         {notificationCenter}
 
-        <IconBtn label="Settings" onClick={onToggleSettings}>
-          <Settings size={15} />
-        </IconBtn>
-
-        {isMobile && (
-          <IconBtn label="Toggle panel" onClick={onToggleRightPanel}>
+        {(isMobile || isDesktop) && (
+          <IconBtn label={isDesktop ? 'Toggle Inspector' : 'Toggle panel'} onClick={onToggleRightPanel}>
             <PanelRight size={15} />
           </IconBtn>
         )}

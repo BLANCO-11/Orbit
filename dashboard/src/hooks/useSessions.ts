@@ -86,7 +86,7 @@ export function useSessions() {
   // per-session `metrics` in the `sessions` list is only a zero seed. Snapshot
   // live values into the list when leaving a session so switching back shows the
   // right numbers without a round-trip to the backend.
-  const { currentSessionId, sessionMode, metrics: liveMetrics, messages: liveMessages, executionPlan: livePlan, logs: liveLogs, planSteps: livePlanSteps } = useOrbitState();
+  const { currentSessionId, sessionMode, metrics: liveMetrics, messages: liveMessages, executionPlan: livePlan, logs: liveLogs, planSteps: livePlanSteps, plans: livePlans, activePlanId: liveActivePlanId } = useOrbitState();
 
   const [sessions, setSessions] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -101,7 +101,7 @@ export function useSessions() {
     loadSessions();
   }, []);
 
-  async function loadSessions() {
+  const loadSessions = useCallback(async () => {
     setIsLoading(true);
     let loaded = [];
     try {
@@ -130,9 +130,12 @@ export function useSessions() {
 
     setSessions(loaded);
 
-    // Restore from URL param
-    const params = new URLSearchParams(window.location.search);
-    const urlId = params.get('session');
+    // Restore from URL: prefer the path form /session/<id>, fall back to the
+    // legacy ?session=<id> query (Telegram deep links, saved URLs).
+    const pathMatch = window.location.pathname.match(/^\/session\/([^/?#]+)/);
+    const urlId = pathMatch
+      ? decodeURIComponent(pathMatch[1])
+      : new URLSearchParams(window.location.search).get('session');
     const active = urlId ? (loaded.find(s => s.id === urlId) || loaded[0]) : loaded[0];
 
     dispatch(actions.setCurrentSession(active.id));
@@ -141,10 +144,14 @@ export function useSessions() {
     dispatch(actions.setMetrics(normalizeMetricsForUI(active.metrics)));
     dispatch(actions.setExecutionPlan(active.executionPlan || ''));
     dispatch(actions.setLogs(active.logs || []));
-    dispatch(actions.setPlanSteps(active.planSteps || []));
+    dispatch(actions.setPlanState({
+      steps: active.planSteps || [],
+      plans: active.plans || [],
+      activePlanId: active.activePlanId || '',
+    }));
 
     setIsLoading(false);
-  }
+  }, [dispatch]);
 
   // ── Save helper ──
   const saveSession = useCallback((session, immediate = false) => {
@@ -229,7 +236,15 @@ export function useSessions() {
     dispatch(actions.setExecutionPlan(''));
     dispatch(actions.setMetrics({ ...EMPTY_METRICS }));
     dispatch(actions.setSessionMode(''));
-    dispatch(actions.setPlanSteps([]));
+    dispatch(actions.setPlanState({ steps: [], plans: [], activePlanId: '' }));
+
+    // Reflect the new session in the URL (path form).
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('session');
+      url.pathname = `/session/${encodeURIComponent(newId)}`;
+      window.history.pushState(null, '', url);
+    } catch {}
   }, [dispatch]);
 
   const switchSession = useCallback((sessionId) => {
@@ -251,6 +266,8 @@ export function useSessions() {
         // activity (logs are session-scoped — they must not bleed across).
         logs: (liveLogs && liveLogs.length) ? liveLogs : current.logs,
         planSteps: (livePlanSteps && livePlanSteps.length) ? livePlanSteps : current.planSteps,
+        plans: (livePlans && livePlans.length) ? livePlans : current.plans,
+        activePlanId: liveActivePlanId || current.activePlanId,
       };
       setSessions(prev => prev.map(s => (s.id === currentSessionId ? snapshot : s)));
       saveSession(snapshot, true);
@@ -264,14 +281,19 @@ export function useSessions() {
       dispatch(actions.setMetrics(normalizeMetricsForUI(target.metrics)));
       dispatch(actions.setExecutionPlan(target.executionPlan || ''));
       dispatch(actions.setLogs(target.logs || []));
-      dispatch(actions.setPlanSteps(target.planSteps || []));
+      dispatch(actions.setPlanState({
+        steps: target.planSteps || [],
+        plans: target.plans || [],
+        activePlanId: target.activePlanId || '',
+      }));
 
-      // Update URL
+      // Update URL to the path form /session/<id> (drop the legacy query param).
       const url = new URL(window.location.href);
-      url.searchParams.set('session', sessionId);
+      url.searchParams.delete('session');
+      url.pathname = `/session/${encodeURIComponent(sessionId)}`;
       window.history.pushState(null, '', url);
     }
-  }, [sessions, currentSessionId, saveSession, dispatch, liveMetrics, liveMessages, livePlan, liveLogs, livePlanSteps]);
+  }, [sessions, currentSessionId, saveSession, dispatch, liveMetrics, liveMessages, livePlan, liveLogs, livePlanSteps, livePlans, liveActivePlanId]);
 
   const deleteSession = useCallback(async (sessionId) => {
     const next = sessions.filter(s => s.id !== sessionId);
@@ -339,6 +361,12 @@ export function useSessions() {
     const clean = lastAssistant.content.replace(/<[^>]*>/g, '').trim();
     return clean.substring(0, 60) + (clean.length > 60 ? '...' : '');
   };
+
+  useEffect(() => {
+    const handleRefresh = () => loadSessions();
+    window.addEventListener('orbit:refresh_sessions', handleRefresh);
+    return () => window.removeEventListener('orbit:refresh_sessions', handleRefresh);
+  }, [loadSessions]);
 
   return {
     sessions, currentSessionId, searchQuery, setSearchQuery,

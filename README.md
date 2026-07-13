@@ -115,6 +115,12 @@ npm test           # security-guard tests
 
 Never commit `.env`, `agent-backend/security-config.json`, or `agent-backend/.orbit-secret` — they're gitignored and hold secrets. `security-config.example.json` is the safe, committed template.
 
+## Orbit as a Headless Backend
+
+Orbit can be run as a headless backend service (`agent-backend`). This allows third-party developers to connect their own dashboards, voice control suites, or external scripts.
+
+For detailed request/response structures, WebSocket event protocols, authentication, and stability notes, refer to the [API Specification Guide](file:///home/blanco/builds/LLM-OS-AGENT/API.md).
+
 ## Security notes
 
 - The backend binds to `127.0.0.1` only. Set `ORBIT_API_KEY` before exposing it beyond loopback.

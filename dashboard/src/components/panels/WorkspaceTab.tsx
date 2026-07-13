@@ -1,7 +1,7 @@
 // @ts-nocheck
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Folder, File, ChevronRight, ChevronDown, RefreshCw, ExternalLink, Eye, Code } from 'lucide-react';
 import { useOrbitState } from '@/providers/OrbitProvider';
 
@@ -9,7 +9,7 @@ import { useOrbitState } from '@/providers/OrbitProvider';
  * WorkspaceTab — File tree browser + file preview in a resizable split pane.
  */
 export default function WorkspaceTab() {
-  const { currentSessionId } = useOrbitState();
+  const { currentSessionId, status, metrics } = useOrbitState();
   const [tree, setTree] = useState([]);
   const [rootPath, setRootPath] = useState('/workspace');
   const [activeFile, setActiveFile] = useState(null);
@@ -35,6 +35,20 @@ export default function WorkspaceTab() {
   // Reset to the session root + reload when the active session changes.
   useEffect(() => { setActiveFile(null); setFileContent(null); setPreview(null); setRootPath('/workspace'); }, [currentSessionId]);
   useEffect(() => { fetchTree(); }, [fetchTree]);
+
+  // Live refresh: agent-written files should appear without a manual Refresh.
+  // Keep a ref to the latest fetchTree so these effects don't churn on its
+  // identity (rootPath/session changes are already handled above).
+  const fetchRef = useRef(fetchTree);
+  useEffect(() => { fetchRef.current = fetchTree; });
+  // Refetch when the agent finishes a turn (status → done) or a tool completes
+  // (toolCalls bumps) — this fires on agent_end / tool_end WS events.
+  useEffect(() => { fetchRef.current(); }, [status, metrics?.toolCalls]);
+  // Fallback: debounced ~4s poll while the Workspace tab is mounted (visible).
+  useEffect(() => {
+    const id = setInterval(() => fetchRef.current(), 4000);
+    return () => clearInterval(id);
+  }, []);
 
   const openFile = useCallback(async (filePath) => {
     setActiveFile(filePath);

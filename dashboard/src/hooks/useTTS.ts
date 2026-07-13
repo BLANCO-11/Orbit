@@ -20,6 +20,11 @@ function revokeItem(item) {
 export function useTTS(selectedVoice = 'alba') {
   const { voiceState } = useOrbitState();
   const dispatch = useOrbitDispatch();
+  // Belt-and-suspenders: speech can be triggered from long-lived closures (WS
+  // handlers). Read voiceState through a ref so the mute check always sees the
+  // CURRENT state, not whatever was captured when the callback was created.
+  const voiceStateRef = useRef(voiceState);
+  voiceStateRef.current = voiceState;
   // Browsers block audio.play() until the user has interacted with the page.
   // Warn once so a blocked first sentence reads as "needs a click", not broken.
   const autoplayWarnedRef = useRef(false);
@@ -48,7 +53,7 @@ export function useTTS(selectedVoice = 'alba') {
 
   // Queue a sentence for TTS
   const queueSentence = useCallback((sentence) => {
-    if (voiceState !== 'audio') return;
+    if (voiceStateRef.current !== 'audio') return;
     if (spokenSentencesRef.current.has(sentence)) return;
     
     spokenSentencesRef.current.add(sentence);
@@ -76,15 +81,15 @@ export function useTTS(selectedVoice = 'alba') {
           playNext();
         }
       });
-  }, [selectedVoice, voiceState]);
+  }, [selectedVoice]);
 
   // Queue multiple sentences from text
   const speakText = useCallback((text) => {
-    if (voiceState !== 'audio') return;
+    if (voiceStateRef.current !== 'audio') return;
     const clean = text.replace(/[*#`_\-\[\]]/g, '').replace(/\[.*?\]\(.*?\)/g, '');
     const sentences = clean.split(/(?<=[.!?])\s+/).map(s => s.trim()).filter(s => s.length > 2);
     sentences.forEach(queueSentence);
-  }, [voiceState, queueSentence]);
+  }, [queueSentence]);
 
   // Play next in queue
   const playNext = useCallback(() => {

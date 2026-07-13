@@ -70,6 +70,7 @@ class HarnessInterface {
     this.model = options.model || null; // effort-profile-resolved model (overrides config default)
     this.excludeTools = options.excludeTools || null; // tool names to disable this session (null = harness default)
     this.binaries = options.binaries || {};
+    this.capabilitiesBlock = options.capabilitiesBlock || ""; // dynamic "what's configured now" prompt block (Workstream D2)
   }
 
   /**

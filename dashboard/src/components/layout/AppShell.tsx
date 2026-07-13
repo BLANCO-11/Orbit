@@ -20,6 +20,8 @@ export default function AppShell({
   bottomNavItems,
   activeNavTab,
   onNavTabChange,
+  rightPanelCollapsed = false,
+  onToggleRightPanelCollapse,
 }: any) {
   const { isDesktop, isMobile } = useResponsive();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -35,7 +37,8 @@ export default function AppShell({
     <div className="flex h-full flex-col bg-background text-foreground">
       <Header
         onToggleSidebar={toggleSidebar}
-        onToggleRightPanel={toggleRightPanel}
+        onToggleRightPanel={isDesktop ? onToggleRightPanelCollapse : toggleRightPanel}
+        rightPanelCollapsed={rightPanelCollapsed}
         onToggleSidebarCollapse={() => setSidebarCollapsed((p) => !p)}
         sidebarCollapsed={sidebarCollapsed}
         isDesktop={isDesktop}
@@ -46,11 +49,17 @@ export default function AppShell({
       <div className="relative flex min-h-0 flex-1">
         {/* ── Sidebar ── (desktop: collapsible via the header toggle) */}
         {isDesktop ? (
-          !sidebarCollapsed && (
-            <aside className="flex w-[264px] shrink-0 flex-col border-r border-border-soft bg-sidebar">
+          <aside
+            style={{
+              width: sidebarCollapsed ? '0px' : '264px',
+              borderRightWidth: sidebarCollapsed ? '0px' : '1px',
+            }}
+            className="flex shrink-0 flex-col border-border-soft bg-sidebar overflow-hidden transition-all duration-300 ease-in-out"
+          >
+            <div className="w-[264px] h-full flex flex-col shrink-0">
               {sidebar}
-            </aside>
-          )
+            </div>
+          </aside>
         ) : (
           <>
             {sidebarOpen && <div onClick={closeSidebar} className="fixed inset-0 z-20 bg-black/40" />}
@@ -69,8 +78,16 @@ export default function AppShell({
 
         {/* ── Inspector ── */}
         {isDesktop ? (
-          <aside className="flex w-[372px] shrink-0 flex-col border-l border-border-soft bg-sidebar">
-            {rightPanel}
+          <aside
+            style={{
+              width: rightPanelCollapsed ? '0px' : '372px',
+              borderLeftWidth: rightPanelCollapsed ? '0px' : '1px',
+            }}
+            className="flex shrink-0 flex-col border-border-soft bg-sidebar overflow-hidden transition-all duration-300 ease-in-out"
+          >
+            <div className="w-[372px] h-full flex flex-col shrink-0">
+              {rightPanel}
+            </div>
           </aside>
         ) : (
           <>

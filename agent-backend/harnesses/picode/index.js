@@ -69,6 +69,29 @@ class PiCodeHarness extends HarnessInterface {
       console.error("[PiCodeHarness] orbit-system.md not found:", e.message);
     }
 
+    // Static operating manual — HOW to operate (file mgmt, planning, tracking,
+    // rules). Separated from orbit-system.md (WHAT Orbit is) per Workstream D1.
+    try {
+      const behavior = fs.readFileSync(path.join(promptsDir, "orbit-behavior.md"), "utf-8");
+      combinedPrompt = combinedPrompt + "\n\n" + behavior;
+    } catch (e) {
+      console.error("[PiCodeHarness] orbit-behavior.md not found:", e.message);
+    }
+
+    // Live capability × mode matrix, generated FROM the enforced policy config so
+    // the prompt can never drift from what the backend actually enforces (D1).
+    try {
+      const matrix = PiCodeHarness._renderPolicyMatrix(this.config);
+      if (matrix) combinedPrompt = combinedPrompt + "\n\n" + matrix;
+    } catch (e) { /* non-fatal */ }
+
+    // Dynamic capability manifest — "what's configured right now" — laid in fresh
+    // each session start so the agent knows what it can use vs what needs setup
+    // (Workstream D2). Rendered by the backend and passed via capabilitiesBlock.
+    if (this.capabilitiesBlock) {
+      combinedPrompt = combinedPrompt + "\n\n" + this.capabilitiesBlock;
+    }
+
     // Per-session workspace: create the session's dir tree and tell the agent
     // exactly where it may work, so it never dumps files at random (and never
     // into Orbit's source). This is dynamic — the paths are session-specific.
@@ -96,15 +119,15 @@ class PiCodeHarness extends HarnessInterface {
     }
     combinedPrompt = combinedPrompt +
       `\n\n## Your workspace (this session)\n` +
-      `You are running in an isolated per-session workspace. Your current directory IS your workspace.\n` +
-      `- \`${dirs.workspace}\` — your working dir (cwd). Do all task work here; relative paths land here.\n` +
-      `- \`${dirs.artifacts}\` — put FINISHED deliverables the user should keep here (reports, build outputs, exports).\n` +
-      `- \`${dirs.tmp}\` — scratch/downloads/intermediates; disposable.\n` +
+      `You are running in an isolated per-session workspace sandboxed under a single session directory. Layout of the session:\n` +
+      `- \`${dirs.workspace}\` (current working directory): Do all standard coding, scripting, and file creation here. Relative paths land here by default.\n` +
+      `- \`${dirs.artifacts}\` (accessible relatively via \`../artifacts/\`): Put finished deliverables, reports, build outputs, and export files here so they are preserved and shown on the dashboard.\n` +
+      `- \`${dirs.tmp}\` (accessible relatively via \`../tmp/\`): Use for temporary downloads, intermediate cache, or scratch files.\n` +
       `RULES:\n` +
-      `- Create every file INSIDE your workspace, using RELATIVE paths (e.g. \`weather.sh\`, \`./report.md\`) — NOT absolute paths like \`~/scripts/...\` or \`/home/...\`. The user only sees files in this workspace; anything you scatter elsewhere is invisible to them and asks for permission.\n` +
-      `- Prefer the \`write\` tool over \`bash\` heredocs/redirects for creating files (bash writes are harder to track).\n` +
-      `- If a task genuinely needs a file at a specific system path (e.g. a cron script that must persist), create it in your workspace first, then tell the user the path and ask before copying it out.\n` +
-      `- You cannot access other sessions' folders or protected paths (Orbit's own source, ~/.ssh, system dirs).\n` +
+      `- Use relative paths from your current working directory to access these folders (e.g. write code files to \`my_script.py\` and write finished deliverables to \`../artifacts/my_report.pdf\`). Do NOT use absolute paths like \`~/...\` or \`/home/...\`.\n` +
+      `- Do not create a folder named \`artifacts\` or \`tmp\` inside your working directory; write to the sibling directories (\`../artifacts/\` and \`../tmp/\`) instead.\n` +
+      `- Prefer the \`write\` tool over \`bash\` redirects/heredocs for creating files.\n` +
+      `- Accessing folders outside the session root directory is blocked or requires manual user approval.\n` +
       `Keep things tidy — this layout is how the user tracks and manages your work.`;
 
     if (modePromptFile) {
@@ -450,6 +473,30 @@ class PiCodeHarness extends HarnessInterface {
    * key in env or ~/.pi/web-search.json. When false, pi's web_search would fall
    * back to a browser sign-in, so we exclude it and rely on orbit-search.
    */
+  /**
+   * Render config.policyMatrix as a markdown table for the system prompt. This
+   * is the SINGLE authoritative matrix — generated from the enforced config so
+   * it can never disagree with what the backend actually gates (Workstream D1).
+   */
+  static _renderPolicyMatrix(config) {
+    const matrix = config && config.policyMatrix;
+    if (!matrix || typeof matrix !== "object") return "";
+    const modes = ["chat", "plan", "edit", "yolo"];
+    const rows = Object.entries(matrix).map(([cap, byMode]) => {
+      const cells = modes.map((m) => String((byMode && byMode[m]) || "—").padEnd(5));
+      return `| ${cap.padEnd(15)} | ${cells.join(" | ")} |`;
+    });
+    if (!rows.length) return "";
+    return [
+      "## Capability × mode policy (live)",
+      "Authoritative, generated from the backend's enforced policy config:",
+      "",
+      `| ${"capability".padEnd(15)} | ${modes.map((m) => m.padEnd(5)).join(" | ")} |`,
+      `|-${"-".repeat(15)}-|${modes.map(() => "-------").join("|")}|`,
+      ...rows,
+    ].join("\n");
+  }
+
   static _hasNativeSearchConfigured() {
     if (process.env.EXA_API_KEY || process.env.PERPLEXITY_API_KEY || process.env.GEMINI_API_KEY) return true;
     try {

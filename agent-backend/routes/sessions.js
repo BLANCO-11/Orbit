@@ -89,6 +89,11 @@ function createSessionsRouter() {
         if (!incoming.subagentTree || Object.keys(incoming.subagentTree).length === 0) {
           incoming.subagentTree = existing.subagentTree;
         }
+        if (!incoming.plans || incoming.plans.length === 0) {
+          incoming.plans = existing.plans;
+          incoming.planSteps = existing.planSteps;
+          incoming.activePlanId = existing.activePlanId;
+        }
       }
       db.saveSession(incoming);
       res.json({ success: true });

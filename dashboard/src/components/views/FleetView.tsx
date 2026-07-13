@@ -160,18 +160,18 @@ export default function FleetView() {
             </div>
 
             <SectionHead>
-              Devices · {devices.length}
+              Devices · {devices.filter((d: any) => !d.revoked).length}
               <button onClick={refreshDevices} aria-label="Refresh devices" className="ml-2 align-middle text-faint hover:text-muted-foreground">
                 <RefreshCw size={11} />
               </button>
             </SectionHead>
             <div className="flex flex-col gap-2">
-              {devices.length === 0 && (
+              {devices.filter((d: any) => !d.revoked).length === 0 && (
                 <div className="rounded-xl border border-dashed border-border px-4 py-4 text-center text-xs text-faint">
                   No paired devices yet{isThisDevice ? '' : ' — this browser is using the local dev connection'}.
                 </div>
               )}
-              {devices.map((d: any) => (
+              {devices.filter((d: any) => !d.revoked).map((d: any) => (
                 <div key={d.id} className="flex items-center gap-3 rounded-xl border border-border-soft bg-card px-4 py-3">
                   <div className="grid size-9 shrink-0 place-items-center rounded-[10px] border border-border bg-muted text-muted-foreground">
                     <DeviceIcon label={d.label} />

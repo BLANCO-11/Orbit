@@ -53,9 +53,12 @@ function createWorkspaceRouter() {
         return res.status(404).json({ success: false, message: "Directory not found." });
       }
 
+      // Denylist rather than hiding every dotfile — agent-written config/plan
+      // dotfiles (e.g. .env examples, .pi/) should be visible in the explorer.
+      const HIDDEN = new Set([".git", "node_modules", ".DS_Store"]);
       const entries = fs.readdirSync(resolved, { withFileTypes: true });
       const tree = entries
-        .filter(e => !e.name.startsWith(".") && e.name !== "node_modules")
+        .filter(e => !HIDDEN.has(e.name))
         .map(e => ({
           name: e.name,
           type: e.isDirectory() ? "directory" : "file",

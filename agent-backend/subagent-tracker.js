@@ -98,14 +98,23 @@ class SubagentTracker {
    */
   creditDelegate(device, { toolCalls = 0, tokens = 0, childSessionId } = {}) {
     const laneName = `⇢ ${device}`;
-    const lane = Array.from(this._agents.values())
+    let lane = Array.from(this._agents.values())
       .filter((a) => a.name === laneName && !a._credited)
       .sort((a, b) => new Date(b.timeStart) - new Date(a.timeStart))[0];
+    if (!lane) {
+      // Fallback: match any uncredited lane starting with "⇢"
+      lane = Array.from(this._agents.values())
+        .filter((a) => a.name.startsWith("⇢") && !a._credited)
+        .sort((a, b) => new Date(b.timeStart) - new Date(a.timeStart))[0];
+    }
     if (!lane) return;
     lane._credited = true;
     lane._delegatedToolCalls = toolCalls;
     lane.tokens.total = (lane.tokens.total || 0) + tokens;
     lane.childSessionId = childSessionId || null;
+    if (lane.name === "⇢ device") {
+      lane.name = `⇢ ${device}`;
+    }
     this._emit("subagent_update", { agentId: lane.id, status: lane.status });
   }
 

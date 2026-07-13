@@ -1,13 +1,10 @@
-'use client';
-
 import React from 'react';
-import { Activity, Folder, GitBranch, List, Monitor, TerminalSquare } from 'lucide-react';
+import { Activity, GitBranch, List, Monitor, TerminalSquare } from 'lucide-react';
 
 const TABS = [
   { id: 'agent', label: 'Overview', icon: Activity },
   { id: 'preview', label: 'Preview', icon: Monitor },
   { id: 'console', label: 'Console', icon: TerminalSquare },
-  { id: 'workspace', label: 'Workspace', icon: Folder },
   { id: 'trace', label: 'Trace', icon: GitBranch },
   { id: 'logs', label: 'Logs', icon: List },
 ] as const;
@@ -22,19 +19,27 @@ interface DetailPanelProps {
   badges?: Partial<Record<InspectorTab, number>>;
   /** Tabs to render with a live pulse, e.g. trace while a sub-agent is active. */
   pulse?: Partial<Record<InspectorTab, boolean>>;
+  isVisible?: (category: string, id: string) => boolean;
 }
 
 /**
- * DetailPanel — inspector segments: Overview · Preview · Console · Workspace ·
- * Trace · Logs. All six fit without a horizontal scrollbar: the active tab
- * shows icon + label, the rest are icon-only (label via tooltip). No scrolling
- * navbar — the whole strip is always visible.
+ * DetailPanel — inspector segments: Overview · Preview · Console ·
+ * Trace · Logs. Gated by component config.
  */
-export default function DetailPanel({ activeTab, onTabChange, children, badges = {}, pulse = {} }: DetailPanelProps) {
+export default function DetailPanel({ activeTab, onTabChange, children, badges = {}, pulse = {}, isVisible }: DetailPanelProps) {
+  const visibleTabs = TABS.filter(t => !isVisible || isVisible('tabs', t.id));
+  const isCurrentTabVisible = visibleTabs.some(t => t.id === activeTab);
+
+  React.useEffect(() => {
+    if (visibleTabs.length > 0 && !isCurrentTabVisible) {
+      onTabChange(visibleTabs[0].id);
+    }
+  }, [visibleTabs, isCurrentTabVisible, onTabChange]);
+
   return (
     <div className="flex h-full flex-col">
       <div role="tablist" aria-label="Inspector" className="flex shrink-0 items-stretch gap-0.5 border-b border-border-soft px-2">
-        {TABS.map((tab) => {
+        {visibleTabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
           return (
