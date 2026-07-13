@@ -36,13 +36,36 @@ export default function ExplorerSidebar({ onFileSelect }: ExplorerSidebarProps) 
     }
   }, [sessionQ]);
 
+  const expandedDirsRef = useRef(expandedDirs);
+  const dirContentsRef = useRef(dirContents);
+  useEffect(() => {
+    expandedDirsRef.current = expandedDirs;
+    dirContentsRef.current = dirContents;
+  });
+
   // Load the root of the session folder
   const loadRoot = useCallback(async () => {
     setLoading(true);
-    const files = await fetchDirectory('/workspace');
-    setRootFiles(files);
+    try {
+      const files = await fetchDirectory('/workspace');
+      setRootFiles(files);
+
+      // Also refresh any currently expanded directories
+      const currentExpanded = expandedDirsRef.current;
+      if (currentExpanded.size > 0) {
+        const nextContents = new Map(dirContentsRef.current);
+        for (const dirPath of currentExpanded) {
+          const contents = await fetch(`/api/workspace/tree?path=${encodeURIComponent(dirPath)}${sessionQ}`)
+            .then(r => r.json())
+            .then(d => d.tree || [])
+            .catch(() => []);
+          nextContents.set(dirPath, contents);
+        }
+        setDirContents(nextContents);
+      }
+    } catch {}
     setLoading(false);
-  }, [fetchDirectory]);
+  }, [fetchDirectory, sessionQ]);
 
   // Reload tree when session changes
   useEffect(() => {
@@ -60,8 +83,10 @@ export default function ExplorerSidebar({ onFileSelect }: ExplorerSidebarProps) 
     loadRootRef.current = loadRoot;
   });
   useEffect(() => {
-    loadRootRef.current();
-  }, [status, metrics?.toolCalls]);
+    if (currentSessionId) {
+      loadRootRef.current();
+    }
+  }, [status, metrics?.toolCalls, currentSessionId]);
 
   // Toggle directory expand/collapse and load content dynamically
   const handleToggleDir = async (dirPath: string) => {

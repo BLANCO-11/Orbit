@@ -38,6 +38,20 @@ function validatePath(action, targetPath, config, mode) {
     }
   }
 
+  // Check explicit write blocklist
+  if (action === "write" && config.writeBlockedPaths) {
+    for (const blocked of config.writeBlockedPaths) {
+      const resolvedBlocked = path.resolve(blocked);
+      if (resolved === resolvedBlocked || isUnderDirectory(resolvedBlocked, resolved)) {
+        return {
+          allowed: false,
+          reason: `Write access explicitly blocked to path: ${blocked}`,
+          resolvedPath: resolved
+        };
+      }
+    }
+  }
+
   // Plan mode: only reading and writing plans (under plan/ directory)
   if (activeMode === "plan") {
     const planDir = path.resolve(path.join(__dirname, "../plan"));

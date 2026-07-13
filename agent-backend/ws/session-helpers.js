@@ -38,10 +38,13 @@ function resolveTargetPath(inputPath) {
   return path.resolve(inputPath);
 }
 
-function isPathAllowed(targetPath, projectRoot = PROJECT_ROOT) {
+function isPathAllowed(targetPath, sessionId) {
   try {
     const resolved = resolveTargetPath(targetPath);
-    return resolved.startsWith(projectRoot + "/") || resolved === projectRoot;
+    const workspaceRoot = sessionId && sessionId !== "unknown"
+      ? require("../workspace-paths").sessionRoot(sessionId)
+      : PROJECT_ROOT;
+    return resolved.startsWith(workspaceRoot + "/") || resolved === workspaceRoot;
   } catch (e) {
     return false;
   }

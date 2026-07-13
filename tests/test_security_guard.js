@@ -109,9 +109,26 @@ function testCommands() {
   console.log("Shell command security tests passed!");
 }
 
+function testSubagentInheritance() {
+  console.log("Running sub-agent inheritance security tests...");
+  // A subagent inherits the mode of the parent (e.g. "edit" mode).
+  const subagentInheritedMode = "edit";
+  
+  // Test a sub-agent attempting to write outside the workspace
+  let res = validatePath("write", "/home/blanco/documents/secret.txt", mockConfig.fileSystem, subagentInheritedMode);
+  assert.strictEqual(res.allowed, false, "Subagent in inherited 'edit' mode should be blocked from writing outside allowed write directories");
+
+  // In chat mode, subagents shouldn't even be spawned, but if one tries to write, it should be blocked:
+  res = validatePath("write", "/home/blanco/builds/LLM-OS-AGENT/workspace/file.txt", mockConfig.fileSystem, "chat");
+  assert.strictEqual(res.allowed, false, "Subagent in inherited 'chat' mode should be blocked from writing anywhere");
+
+  console.log("Sub-agent inheritance security tests passed!");
+}
+
 try {
   testFileSystem();
   testCommands();
+  testSubagentInheritance();
   console.log("\nAll security guard tests completed successfully!");
 } catch (e) {
   console.error("Test failed:", e);

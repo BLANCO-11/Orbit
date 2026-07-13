@@ -62,8 +62,89 @@ All REST endpoints are prefixed with `/api`.
 - **`POST /api/config/ui`**: Set UI visibility configuration.
 
 ### Connectors & Harnesses
-- **`GET /api/connectors`**: List registered MCP connectors and their available tools.
+- **`GET /api/connectors`**: List registered MCP connectors and their available tools with their live status.
+- **`POST /api/connectors`**: Register or update an MCP connector. Accepts a JSON body:
+  ```json
+  {
+    "name": "my-mcp-server",
+    "command": "node",
+    "args": ["/path/to/server.js"],
+    "env": { "PORT": "3015" },
+    "url": ""
+  }
+  ```
+- **`DELETE /api/connectors/:name`**: Unregister/delete an MCP connector by its name.
 - **`GET /api/harnesses`**: List available runtimes/harnesses (local pi, OpenCode, paired remote fleet devices).
+- **`GET /api/harnesses/:id/tools`**: Retrieve the tools available under a specific harness.
+
+### Reusable Session Profiles
+Named templates containing default agent runtime settings. A session can load a profile by specifying its `profileId` on `start_task`.
+- **`GET /api/profiles`**: List all saved session profiles.
+- **`POST /api/profiles`**: Create or update a session profile. Accepts a JSON body:
+  ```json
+  {
+    "id": "optional-profile-id",
+    "name": "Quick Chat",
+    "description": "Fast answers, no tools",
+    "harnessType": "picode",
+    "mode": "chat",
+    "effort": "fast",
+    "promptId": "standard",
+    "skills": [],
+    "toolPolicy": { "excluded": [] },
+    "sandbox": "host"
+  }
+  ```
+- **`DELETE /api/profiles/:id`**: Delete a session profile by ID.
+
+### Event Channels (Webhooks & Schedules)
+Channels are inbound event triggers that run an agent profile headlessly and create an associated session.
+- **`GET /api/channels`**: List all active trigger channels.
+- **`POST /api/channels`**: Create or update a trigger channel. Accepts a JSON body:
+  ```json
+  {
+    "id": "optional-channel-id",
+    "name": "Git Push Alert",
+    "type": "webhook",
+    "profileId": "safe-edit",
+    "promptTemplate": "A new push was made to Git. Payload info: {{body}}",
+    "enabled": true,
+    "verify": "github",
+    "secret": "my-hmac-secret",
+    "intervalMinutes": null,
+    "dailyAt": null
+  }
+  ```
+- **`DELETE /api/channels/:id`**: Delete a trigger channel.
+- **`POST /api/channels/:id/test`**: Manually fire/test a channel trigger. Accepts a JSON payload body (e.g., `{"payload": {}}`).
+- **`POST /api/channels/:id/webhook`**: The public, unauthenticated receiver endpoint for webhook triggers. Validates HMAC signatures (GitHub, Slack) or Bearer tokens per configuration settings.
+
+### Prompt Library
+Base system prompts compiled and fed to the agent at spawn time.
+- **`GET /api/prompts`**: List all base system prompts in the library.
+- **`GET /api/prompts/:id`**: Retrieve the full markdown content of a prompt.
+- **`POST /api/prompts`**: Create or update a base system prompt. Accepts a JSON body:
+  ```json
+  {
+    "id": "my-custom-prompt",
+    "content": "# Persona\nYou are an operations coordinator..."
+  }
+  ```
+- **`DELETE /api/prompts/:id`**: Delete a base prompt (protected defaults like `standard` and `orbit-system` cannot be deleted).
+
+### Reusable Skills
+Skills are reusable instruction manuals appended to system prompts.
+- **`GET /api/skills`**: List all available skills.
+- **`GET /api/skills/:id`**: Retrieve the full markdown body and frontmatter description of a skill.
+- **`POST /api/skills`**: Create or update a skill. Accepts a JSON body:
+  ```json
+  {
+    "id": "my-reusable-skill",
+    "description": "Short summary",
+    "body": "Markdown text content..."
+  }
+  ```
+- **`DELETE /api/skills/:id`**: Delete a skill.
 
 ---
 

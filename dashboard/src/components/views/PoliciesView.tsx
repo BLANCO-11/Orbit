@@ -55,6 +55,19 @@ export default function PoliciesView() {
   const [saved, setSaved] = useState(false);
   const [budgets, setBudgets] = useState({ maxCostPerSession: 0, maxTokensPerSession: 0, maxSubagentDepth: 2 });
   const [budgetSaved, setBudgetSaved] = useState(false);
+  const [fileSystem, setFileSystem] = useState<{
+    allowedWritePaths: string[];
+    blockedPaths: string[];
+    writeBlockedPaths: string[];
+  }>({
+    allowedWritePaths: [],
+    blockedPaths: [],
+    writeBlockedPaths: [],
+  });
+  const [fsSaved, setFsSaved] = useState(false);
+  const [newAllowedWritePath, setNewAllowedWritePath] = useState('');
+  const [newBlockedPath, setNewBlockedPath] = useState('');
+  const [newWriteBlockedPath, setNewWriteBlockedPath] = useState('');
 
   useEffect(() => {
     fetch('/api/config')
@@ -69,9 +82,59 @@ export default function PoliciesView() {
           setMatrix(merged);
         }
         if (c.budgets) setBudgets({ maxSubagentDepth: 2, maxCostPerSession: 0, maxTokensPerSession: 0, ...c.budgets });
+        if (c.fileSystem) {
+          setFileSystem({
+            allowedWritePaths: c.fileSystem.allowedWritePaths || [],
+            blockedPaths: c.fileSystem.blockedPaths || [],
+            writeBlockedPaths: c.fileSystem.writeBlockedPaths || [],
+          });
+        }
       })
       .catch(() => {});
   }, []);
+
+  const addPath = (type: 'allowedWritePaths' | 'blockedPaths' | 'writeBlockedPaths', pathStr: string, setPathStr: (s: string) => void) => {
+    const val = pathStr.trim();
+    if (!val) return;
+    setFileSystem((prev) => {
+      const list = prev[type];
+      if (list.includes(val)) return prev;
+      return { ...prev, [type]: [...list, val] };
+    });
+    setPathStr('');
+  };
+
+  const removePath = (type: 'allowedWritePaths' | 'blockedPaths' | 'writeBlockedPaths', index: number) => {
+    setFileSystem((prev) => {
+      const list = [...prev[type]];
+      list.splice(index, 1);
+      return { ...prev, [type]: list };
+    });
+  };
+
+  const saveFileSystem = () => {
+    if (!config) return;
+    const updated = {
+      ...config,
+      fileSystem: {
+        ...config.fileSystem,
+        allowedWritePaths: fileSystem.allowedWritePaths,
+        blockedPaths: fileSystem.blockedPaths,
+        writeBlockedPaths: fileSystem.writeBlockedPaths,
+      }
+    };
+    fetch('/api/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updated),
+    })
+      .then((r) => r.json())
+      .then(() => {
+        setFsSaved(true);
+        setConfig(updated);
+        setTimeout(() => setFsSaved(false), 2500);
+      });
+  };
 
   const cycle = (cap: string, mode: string) => {
     setMatrix((m) => {
@@ -191,6 +254,122 @@ export default function PoliciesView() {
           {budgetField('Max sub-agent depth', 'maxSubagentDepth', 'deeper spawns are blocked')}
         </div>
         <p className="mt-2 text-xs text-faint">0 = unlimited (cost &amp; tokens). Budget/policy changes hot-reload — no restart.</p>
+
+        <div className="mt-8 flex items-center justify-between border-t border-border-soft pt-6">
+          <div className="text-[10.5px] font-bold uppercase tracking-[0.08em] text-faint">Filesystem Security Policies</div>
+          <div className="flex items-center gap-3">
+            {fsSaved && <span className="text-xs text-success">Saved filesystem policies.</span>}
+            <button onClick={saveFileSystem} disabled={!config} className="rounded-[9px] bg-primary px-4 py-1.5 text-[12.5px] font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-40">
+              Save filesystem policies
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-4 rounded-xl border border-border-soft bg-card px-4 py-3 mb-6">
+          <div className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Per-Session Workspace Safe Zone</div>
+          <p className="mt-1 text-[13px] text-muted-foreground">
+            Every session gets its own isolated tree under <code className="font-mono bg-muted px-1.5 py-0.5 rounded text-[12px]">~/.orbit/sessions/&lt;sessionId&gt;/</code>.
+            The agent runs inside <code className="font-mono bg-muted px-1.5 py-0.5 rounded text-[12px]">workspace/</code>, puts deliverables in <code className="font-mono bg-muted px-1.5 py-0.5 rounded text-[12px]">artifacts/</code>, and scratch files in <code className="font-mono bg-muted px-1.5 py-0.5 rounded text-[12px]">tmp/</code>.
+          </p>
+        </div>
+
+        <div className="space-y-4">
+          {/* Durable Write Allow-list */}
+          <div className="rounded-xl border border-border-soft bg-card p-4">
+            <div className="text-[12.5px] font-semibold">Durable Write Allow-list (allowedWritePaths)</div>
+            <p className="text-[11.5px] text-muted-foreground mb-3">
+              Directories outside the session workspace where writes are permitted without requiring in-chat approval.
+            </p>
+            <div className="space-y-2 mb-3">
+              {fileSystem.allowedWritePaths.length === 0 ? (
+                <div className="text-xs text-faint italic px-2">No paths explicitly allowed.</div>
+              ) : (
+                fileSystem.allowedWritePaths.map((p, idx) => (
+                  <div key={idx} className="flex items-center justify-between bg-background rounded-lg border border-border px-3 py-1.5 text-xs font-mono">
+                    <span>{p}</span>
+                    <button onClick={() => removePath('allowedWritePaths', idx)} className="text-destructive hover:text-destructive/80 font-bold px-1.5 py-0.5">✕</button>
+                  </div>
+                ))
+              )}
+            </div>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                placeholder="e.g. ~/projects or /tmp"
+                value={newAllowedWritePath}
+                onChange={(e) => setNewAllowedWritePath(e.target.value)}
+                className="flex-1 rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs outline-none focus:border-ring font-mono"
+              />
+              <button onClick={() => addPath('allowedWritePaths', newAllowedWritePath, setNewAllowedWritePath)} className="rounded-[9px] bg-secondary px-3 py-1.5 text-xs font-semibold text-secondary-foreground hover:bg-secondary/80">
+                + Add
+              </button>
+            </div>
+          </div>
+
+          {/* Hard Blocklist (No Read/Write) */}
+          <div className="rounded-xl border border-border-soft bg-card p-4">
+            <div className="text-[12.5px] font-semibold text-destructive/90">Hard Blocklist (blockedPaths)</div>
+            <p className="text-[11.5px] text-muted-foreground mb-3">
+              Paths where ALL access (read and write) is blocked. User consent cannot override these.
+            </p>
+            <div className="space-y-2 mb-3">
+              {fileSystem.blockedPaths.length === 0 ? (
+                <div className="text-xs text-faint italic px-2">No paths blocked.</div>
+              ) : (
+                fileSystem.blockedPaths.map((p, idx) => (
+                  <div key={idx} className="flex items-center justify-between bg-background rounded-lg border border-border px-3 py-1.5 text-xs font-mono">
+                    <span>{p}</span>
+                    <button onClick={() => removePath('blockedPaths', idx)} className="text-destructive hover:text-destructive/80 font-bold px-1.5 py-0.5">✕</button>
+                  </div>
+                ))
+              )}
+            </div>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                placeholder="e.g. ~/.ssh or /etc"
+                value={newBlockedPath}
+                onChange={(e) => setNewBlockedPath(e.target.value)}
+                className="flex-1 rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs outline-none focus:border-ring font-mono"
+              />
+              <button onClick={() => addPath('blockedPaths', newBlockedPath, setNewBlockedPath)} className="rounded-[9px] bg-secondary px-3 py-1.5 text-xs font-semibold text-secondary-foreground hover:bg-secondary/80">
+                + Add
+              </button>
+            </div>
+          </div>
+
+          {/* Write Blocked (Read-Only) */}
+          <div className="rounded-xl border border-border-soft bg-card p-4">
+            <div className="text-[12.5px] font-semibold text-warning">Write-Blocked Paths (writeBlockedPaths)</div>
+            <p className="text-[11.5px] text-muted-foreground mb-3">
+              Paths where reads are allowed but writes are blocked (e.g. to prevent the agent from changing Orbit's own source code).
+            </p>
+            <div className="space-y-2 mb-3">
+              {fileSystem.writeBlockedPaths.length === 0 ? (
+                <div className="text-xs text-faint italic px-2">No write-blocked paths.</div>
+              ) : (
+                fileSystem.writeBlockedPaths.map((p, idx) => (
+                  <div key={idx} className="flex items-center justify-between bg-background rounded-lg border border-border px-3 py-1.5 text-xs font-mono">
+                    <span>{p}</span>
+                    <button onClick={() => removePath('writeBlockedPaths', idx)} className="text-destructive hover:text-destructive/80 font-bold px-1.5 py-0.5">✕</button>
+                  </div>
+                ))
+              )}
+            </div>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                placeholder="e.g. /home/blanco/builds/LLM-OS-AGENT"
+                value={newWriteBlockedPath}
+                onChange={(e) => setNewWriteBlockedPath(e.target.value)}
+                className="flex-1 rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs outline-none focus:border-ring font-mono"
+              />
+              <button onClick={() => addPath('writeBlockedPaths', newWriteBlockedPath, setNewWriteBlockedPath)} className="rounded-[9px] bg-secondary px-3 py-1.5 text-xs font-semibold text-secondary-foreground hover:bg-secondary/80">
+                + Add
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

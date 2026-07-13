@@ -2,6 +2,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useOrbitState } from '@/providers/OrbitProvider';
 import {
   Check, Copy, ChevronDown, ChevronRight, Loader2, CheckCircle2,
   Shield, Edit3, Zap, Play, FileText, Search, Terminal, Globe, Wrench,
@@ -141,10 +142,13 @@ export default ChatMessage;
 // ── Tool group card ─────────────────────────────────────────────
 
 function ToolGroup({ tools, expandedTools, toggleTool, getToolSummary, getToolOutput }) {
+  const { status } = useOrbitState();
+  const isSessionRunning = status === 'running' || status === 'connecting';
+
   // Hidden/collapsed by default — only a compact affordance shows; never
   // auto-expands, even while tools are running (kills the streaming noise).
   const [isExpanded, setIsExpanded] = useState(false);
-  const running = tools.filter((t) => t.status === 'running');
+  const running = tools.filter((t) => t.status === 'running' && isSessionRunning);
   const isRunning = running.length > 0;
   const names = [...new Set(tools.map((t) => t.name))].join(' · ');
   const lastStatus = isRunning
@@ -191,7 +195,11 @@ function ToolGroup({ tools, expandedTools, toggleTool, getToolSummary, getToolOu
 }
 
 function ToolRow({ tool, isExpanded, onToggle, getToolSummary, getToolOutput }) {
-  const isRunning = tool.status === 'running';
+  const { status } = useOrbitState();
+  const isSessionRunning = status === 'running' || status === 'connecting';
+  const isRunning = tool.status === 'running' && isSessionRunning;
+  const isInterrupted = tool.status === 'running' && !isSessionRunning;
+
   const Icon = toolIcon(tool.name);
   const target = (() => {
     const a = tool.arguments || {};
@@ -210,20 +218,20 @@ function ToolRow({ tool, isExpanded, onToggle, getToolSummary, getToolOutput }) 
         {isRunning ? (
           <Loader2 size={13} className="shrink-0 animate-spin text-warning" />
         ) : (
-          <Icon size={13} className="shrink-0 text-faint" />
+          <Icon size={13} className={`shrink-0 ${isInterrupted ? 'text-faint/60 opacity-60' : 'text-faint'}`} />
         )}
-        <span className="font-medium">{tool.name}</span>
+        <span className={`font-medium ${isInterrupted ? 'text-muted-foreground/80' : ''}`}>{tool.name}</span>
         {target && (
           <span className="overflow-hidden text-ellipsis whitespace-nowrap font-mono text-xs text-faint">{target}</span>
         )}
         <span className="ml-auto shrink-0 font-mono text-[11px] tabular-nums text-faint">
-          {tool.latencyMs ? `${tool.latencyMs}ms` : isRunning ? 'running' : 'done'}
+          {tool.latencyMs ? `${tool.latencyMs}ms` : isRunning ? 'running' : isInterrupted ? 'interrupted' : 'done'}
         </span>
         {isExpanded ? <ChevronDown size={12} className="shrink-0 text-faint" /> : <ChevronRight size={12} className="shrink-0 text-faint" />}
       </div>
       {isExpanded && (
         <div className="border-t border-border-soft bg-muted/40 px-3 py-2">
-          <div className="mb-1 text-xs text-muted-foreground">{getToolSummary(tool)}</div>
+          <div className="mb-1 text-xs text-muted-foreground">{isInterrupted ? 'Tool call was cancelled or interrupted.' : getToolSummary(tool)}</div>
           {tool.result && (
             <pre className="max-h-[180px] overflow-auto whitespace-pre-wrap break-words rounded-md bg-background p-2 font-mono text-[11.5px] leading-relaxed">
               {getToolOutput(tool.result)}

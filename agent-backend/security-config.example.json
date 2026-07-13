@@ -8,7 +8,7 @@
   },
   "fileSystem": {
     "allowedReadPaths": ["~"],
-    "allowedWritePaths": [],
+    "allowedWritePaths": ["~/.orbit"],
     "blockedPaths": ["~/.ssh", "~/.aws", "~/.gnupg", "~/.gemini", "/etc", "/boot", "/sys"],
     "writeBlockedPaths": []
   },
