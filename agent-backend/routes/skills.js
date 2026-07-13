@@ -57,6 +57,7 @@ function resolveSkills(ids) {
 
 function createSkillsRouter() {
   const router = Router();
+
   router.get("/", (_req, res) => {
     try {
       res.json({ success: true, skills: listSkills() });
@@ -64,6 +65,50 @@ function createSkillsRouter() {
       res.status(500).json({ success: false, error: e.message });
     }
   });
+
+  // Full content of one skill (description + body) for the editor.
+  router.get("/:id", (req, res) => {
+    const id = req.params.id;
+    if (!ID_RE.test(id)) return res.status(400).json({ success: false, error: "invalid id" });
+    const skill = parseSkill(id);
+    if (!skill) return res.status(404).json({ success: false, error: "not found" });
+    res.json({ success: true, ...skill });
+  });
+
+  // Create or update a skill: writes skills/<id>/SKILL.md with frontmatter.
+  router.post("/", (req, res) => {
+    const { id, description, body } = req.body || {};
+    if (!id || !ID_RE.test(id)) {
+      return res.status(400).json({ success: false, error: "id must match [a-z0-9-], max 64 chars" });
+    }
+    if (!body || typeof body !== "string" || !body.trim()) {
+      return res.status(400).json({ success: false, error: "body is required" });
+    }
+    try {
+      const dir = path.join(SKILLS_DIR, id);
+      fs.mkdirSync(dir, { recursive: true });
+      const desc = String(description || "").replace(/\r?\n/g, " ").trim();
+      const md = `---\nname: ${id}\ndescription: ${desc}\n---\n\n${body.trim()}\n`;
+      fs.writeFileSync(path.join(dir, "SKILL.md"), md, "utf-8");
+      res.json({ success: true, skills: listSkills() });
+    } catch (e) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  router.delete("/:id", (req, res) => {
+    const id = req.params.id;
+    if (!ID_RE.test(id)) return res.status(400).json({ success: false, error: "invalid id" });
+    const dir = path.join(SKILLS_DIR, id);
+    if (!fs.existsSync(dir)) return res.status(404).json({ success: false, error: "not found" });
+    try {
+      fs.rmSync(dir, { recursive: true, force: true });
+      res.json({ success: true, skills: listSkills() });
+    } catch (e) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
   return router;
 }
 

@@ -1,15 +1,16 @@
 'use client';
 
 import React from 'react';
-import { Terminal, Server, Shield, Plug, Bot, Volume2, VolumeX } from 'lucide-react';
+import { Terminal, Server, Shield, Plug, Bot, Library, Volume2, VolumeX } from 'lucide-react';
 
-export type RailView = 'console' | 'agents' | 'fleet' | 'connectors' | 'policies' | 'settings';
+export type RailView = 'console' | 'agents' | 'fleet' | 'connectors' | 'policies' | 'library' | 'settings';
 
 const VIEWS: { id: RailView; label: string; icon: React.ComponentType<{ size?: number }> }[] = [
   { id: 'console', label: 'Console', icon: Terminal },
   { id: 'agents', label: 'Agents — session profiles', icon: Bot },
   { id: 'fleet', label: 'Fleet — harnesses & devices', icon: Server },
   { id: 'connectors', label: 'Connectors — MCP servers', icon: Plug },
+  { id: 'library', label: 'Library — prompts & skills', icon: Library },
   { id: 'policies', label: 'Policies', icon: Shield },
 ];
 

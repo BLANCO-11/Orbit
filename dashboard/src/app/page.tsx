@@ -31,6 +31,7 @@ import FleetView from '@/components/views/FleetView';
 import ConnectorsView from '@/components/views/ConnectorsView';
 import PoliciesView from '@/components/views/PoliciesView';
 import AgentsView from '@/components/views/AgentsView';
+import LibraryView from '@/components/views/LibraryView';
 
 // Components
 import SessionList from '@/components/SessionList';
@@ -171,7 +172,7 @@ function DashboardInner() {
   }, [dispatch, setSystemPromptType]);
   const [showThinking, setShowThinking] = useState(true);
   const [rightPanelTab, setRightPanelTab] = useState('agent');
-  const [activeView, setActiveView] = useState<'console' | 'agents' | 'fleet' | 'connectors' | 'policies' | 'settings'>('console');
+  const [activeView, setActiveView] = useState<'console' | 'agents' | 'fleet' | 'connectors' | 'policies' | 'library' | 'settings'>('console');
   const [activeNavTab, setActiveNavTab] = useState('chat');
   const [cmdPaletteOpen, setCmdPaletteOpen] = useState(false);
   const inputHistoryRef = useRef([]);
@@ -422,6 +423,7 @@ function DashboardInner() {
     {activeView === 'fleet' && <ComponentErrorBoundary label="Fleet"><FleetView /></ComponentErrorBoundary>}
     {activeView === 'connectors' && <ComponentErrorBoundary label="Connectors"><ConnectorsView /></ComponentErrorBoundary>}
     {activeView === 'policies' && <ComponentErrorBoundary label="Policies"><PoliciesView /></ComponentErrorBoundary>}
+    {activeView === 'library' && <ComponentErrorBoundary label="Library"><LibraryView /></ComponentErrorBoundary>}
     {activeView === 'settings' && settingsView}
     {activeView === 'console' && (
     <AppShell

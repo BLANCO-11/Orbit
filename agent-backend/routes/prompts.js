@@ -11,6 +11,8 @@ const path = require("path");
 const PROMPTS_DIR = path.join(__dirname, "../../prompts");
 const MODE_FILES = new Set(["plan-mode.md", "edit-mode.md", "yolo-mode.md"]);
 const ID_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
+// Can be edited but never deleted (default persona + the always-injected self-docs).
+const PROTECTED = new Set(["standard", "orbit-system"]);
 
 /** First markdown heading, else the filename stem title-cased. */
 function titleOf(content, stem) {
@@ -64,6 +66,35 @@ function createPromptsRouter() {
 
   router.get("/", (_req, res) => {
     try {
+      res.json({ success: true, prompts: listPrompts() });
+    } catch (e) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // Full content of one prompt (for the editor).
+  router.get("/:id", (req, res) => {
+    const id = req.params.id;
+    if (!ID_RE.test(id)) return res.status(400).json({ success: false, error: "invalid id" });
+    const file = path.join(PROMPTS_DIR, `${id}.md`);
+    if (!fs.existsSync(file)) return res.status(404).json({ success: false, error: "not found" });
+    try {
+      res.json({ success: true, id, content: fs.readFileSync(file, "utf-8"), protected: PROTECTED.has(id) });
+    } catch (e) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  router.delete("/:id", (req, res) => {
+    const id = req.params.id;
+    if (!ID_RE.test(id)) return res.status(400).json({ success: false, error: "invalid id" });
+    if (PROTECTED.has(id) || MODE_FILES.has(`${id}.md`)) {
+      return res.status(400).json({ success: false, error: "this prompt is protected and can't be deleted" });
+    }
+    const file = path.join(PROMPTS_DIR, `${id}.md`);
+    if (!fs.existsSync(file)) return res.status(404).json({ success: false, error: "not found" });
+    try {
+      fs.unlinkSync(file);
       res.json({ success: true, prompts: listPrompts() });
     } catch (e) {
       res.status(500).json({ success: false, error: e.message });
