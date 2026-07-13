@@ -1,7 +1,25 @@
+# dependencies
 node_modules/
+.pnp
+.pnp.js
+
+# build output
 .next/
+.next-verify/
+/out/
+/build
+*.tsbuildinfo
+next-env.d.ts
+
+# testing / coverage
+/coverage
+
+# env
 env/
 .env
+.env*.local
+
+# databases & runtime data
 *.db
 *.db-wal
 *.db-shm
@@ -9,9 +27,6 @@ agent-backend/security-config.json
 workspace/
 temp-test/
 test_tts.mp3
-*.log
-.DS_Store
-.next-verify/
 
 # runtime user data — session DB snapshots rotate every 5 min
 agent-backend/backups/
@@ -21,6 +36,19 @@ agent-backend/tool-catalog.json
 
 # encrypted-token key (never commit)
 agent-backend/.orbit-secret
+
+# logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# deploy
+.vercel
+
+# misc
+.DS_Store
+*.pem
 
 # planning docs — internal, not shipped
 plan/
