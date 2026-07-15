@@ -1,7 +1,7 @@
 # Graph Report - LLM-OS-AGENT  (2026-07-15)
 
 ## Corpus Check
-- 163 files · ~98,671 words
+- 163 files · ~98,727 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
@@ -10,7 +10,7 @@
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `a1a13a66`
+- Built from commit: `7a5c896a`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -239,7 +239,7 @@ Nodes (31): compilerOptions, allowJs, esModuleInterop, incremental, isolatedModu
 
 ### Community 10 - "Frontend Dependencies"
 Cohesion: 0.12
-Nodes (17): @base-ui/react, clsx, dependencies, @base-ui/react, clsx, http-proxy, lucide-react, marked (+9 more)
+Nodes (17): class-variance-authority, clsx, dependencies, class-variance-authority, clsx, http-proxy, lucide-react, marked (+9 more)
 
 ### Community 11 - "Chat UI & Mode Selectors"
 Cohesion: 0.06

@@ -1403,6 +1403,13 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
         suggestedMode: null,
         reason: `"${blockedHit}" is a ${blockKind} path — this is a hard guardrail that can't be overridden, even with permission.`,
       }, sessionId);
+      sendWithSession(ws, {
+        type: "tool_end",
+        toolCallId: id,
+        name,
+        result: `Blocked by Policy: "${blockedHit}" is protected.`,
+        latencyMs: 0
+      }, sessionId);
       const ses = activeSessions.get(sessionId);
       if (ses?.harness) ses.harness.cancel();
       sendStatus(ws, "done", sessionId);
@@ -1450,6 +1457,15 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
         reason: suggestion
           ? `"${name}" needs ${capability.replace(/_/g, " ")}, which ${activeMode} mode blocks. Switch to ${suggestion.toUpperCase()} mode.`
           : `"${name}" needs ${capability.replace(/_/g, " ")}, which is blocked in every mode by policy.`,
+      }, sessionId);
+      sendWithSession(ws, {
+        type: "tool_end",
+        toolCallId: id,
+        name,
+        result: suggestion
+          ? `Blocked by Policy: needs ${capability.replace(/_/g, " ")}. Switch to ${suggestion.toUpperCase()} mode.`
+          : `Blocked by Policy: needs ${capability.replace(/_/g, " ")}, which is blocked by policy.`,
+        latencyMs: 0
       }, sessionId);
       // Keep the legacy mode_suggestion for the existing frontend banner.
       if (suggestion) {

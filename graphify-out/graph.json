@@ -5183,7 +5183,7 @@
       "label": "shutdown()",
       "file_type": "code",
       "source_file": "agent-backend/server.js",
-      "source_location": "L1709",
+      "source_location": "L1725",
       "_origin": "ast",
       "id": "agent_backend_server_shutdown",
       "community": 3,
@@ -5193,7 +5193,7 @@
       "label": "ensureOrbitMcpServersRegistered()",
       "file_type": "code",
       "source_file": "agent-backend/server.js",
-      "source_location": "L1758",
+      "source_location": "L1774",
       "_origin": "ast",
       "id": "agent_backend_server_ensureorbitmcpserversregistered",
       "community": 3,
@@ -6426,7 +6426,7 @@
       "source_location": "L13",
       "_origin": "ast",
       "id": "dashboard_package_dependencies_base_ui_react",
-      "community": 10,
+      "community": 97,
       "norm_label": "@base-ui/react"
     },
     {
@@ -6436,7 +6436,7 @@
       "source_location": "L13",
       "_origin": "ast",
       "id": "base_ui_react",
-      "community": 10,
+      "community": 97,
       "norm_label": "@base-ui/react"
     },
     {
@@ -6446,7 +6446,7 @@
       "source_location": "L14",
       "_origin": "ast",
       "id": "dashboard_package_dependencies_class_variance_authority",
-      "community": 97,
+      "community": 10,
       "norm_label": "class-variance-authority"
     },
     {
@@ -6456,7 +6456,7 @@
       "source_location": "L14",
       "_origin": "ast",
       "id": "class_variance_authority",
-      "community": 97,
+      "community": 10,
       "norm_label": "class-variance-authority"
     },
     {
@@ -20424,7 +20424,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "agent-backend/server.js",
-      "source_location": "L1758",
+      "source_location": "L1774",
       "weight": 1.0,
       "source": "agent_backend_server",
       "target": "agent_backend_server_ensureorbitmcpserversregistered",
@@ -20837,7 +20837,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "agent-backend/server.js",
-      "source_location": "L1709",
+      "source_location": "L1725",
       "weight": 1.0,
       "source": "agent_backend_server",
       "target": "agent_backend_server_shutdown",
@@ -21365,7 +21365,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "agent-backend/server.js",
-      "source_location": "L1491",
+      "source_location": "L1507",
       "weight": 1.0,
       "source": "agent_backend_server_createharnesseventemitter",
       "target": "agent_backend_server_syncplansfromworkspace",
@@ -21420,7 +21420,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "agent-backend/server.js",
-      "source_location": "L1509",
+      "source_location": "L1525",
       "weight": 1.0,
       "source": "agent_backend_server_createharnesseventemitter",
       "target": "agent_backend_server_isunproductiveresult",
@@ -21585,7 +21585,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "agent-backend/server.js",
-      "source_location": "L1527",
+      "source_location": "L1543",
       "weight": 1.0,
       "source": "agent_backend_server_createharnesseventemitter",
       "target": "agent_backend_server_broadcastnotification",
@@ -21630,7 +21630,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "agent-backend/server.js",
-      "source_location": "L1624",
+      "source_location": "L1640",
       "weight": 1.0,
       "source": "agent_backend_server_createharnesseventemitter",
       "target": "agent_backend_services_tts_generateintelligentspeech"
@@ -21641,7 +21641,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "agent-backend/server.js",
-      "source_location": "L1576",
+      "source_location": "L1592",
       "weight": 1.0,
       "source": "agent_backend_server_createharnesseventemitter",
       "target": "agent_backend_subagent_tracker_subagenttracker_addreasoning"
@@ -21663,7 +21663,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "agent-backend/server.js",
-      "source_location": "L1536",
+      "source_location": "L1552",
       "weight": 1.0,
       "source": "agent_backend_server_createharnesseventemitter",
       "target": "agent_backend_subagent_tracker_subagenttracker_endtoolcall"
@@ -21685,7 +21685,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "agent-backend/server.js",
-      "source_location": "L1544",
+      "source_location": "L1560",
       "weight": 1.0,
       "source": "agent_backend_server_createharnesseventemitter",
       "target": "agent_backend_subagent_tracker_subagenttracker_markcompleted"
@@ -21729,7 +21729,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "agent-backend/server.js",
-      "source_location": "L1683",
+      "source_location": "L1699",
       "weight": 1.0,
       "source": "agent_backend_server_createharnesseventemitter",
       "target": "agent_backend_subagent_tracker_subagenttracker_tofrontendsummary"
@@ -21740,7 +21740,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "agent-backend/server.js",
-      "source_location": "L1647",
+      "source_location": "L1663",
       "weight": 1.0,
       "source": "agent_backend_server_createharnesseventemitter",
       "target": "agent_backend_subagent_tracker_subagenttracker_tojson"
@@ -21795,7 +21795,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "agent-backend/server.js",
-      "source_location": "L1420",
+      "source_location": "L1427",
       "weight": 1.0,
       "source": "agent_backend_server_createharnesseventemitter",
       "target": "agent_backend_ws_session_helpers_ispathinzones"
@@ -21806,7 +21806,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "agent-backend/server.js",
-      "source_location": "L1420",
+      "source_location": "L1427",
       "weight": 1.0,
       "source": "agent_backend_server_createharnesseventemitter",
       "target": "agent_backend_ws_session_helpers_resolvetargetpath"
@@ -30907,5 +30907,5 @@
       "source_file": "dashboard/public/next.svg"
     }
   ],
-  "built_at_commit": "a1a13a663c3b1725b86699e631278546ba579193"
+  "built_at_commit": "7a5c896a858ff9e4134d4dfac117eedf91407552"
 }
