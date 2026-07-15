@@ -66,6 +66,11 @@ function validatePath(action, targetPath, config, mode) {
     return { allowed: true, resolvedPath: resolved };
   }
 
+  // Always allow read/write access to the session's workspace plans directory
+  if (resolved.includes("/workspace/plans/") || resolved.endsWith("/workspace/plans")) {
+    return { allowed: true, resolvedPath: resolved };
+  }
+
   // Chat mode: no OS filesystem access
   if (activeMode === "chat") {
     return {

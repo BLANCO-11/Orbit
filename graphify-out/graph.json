@@ -180,19 +180,6 @@
       "norm_label": "orbit-search"
     },
     {
-      "label": "orbit-plan",
-      "file_type": "code",
-      "source_file": ".pi/mcp.json",
-      "source_location": "L1",
-      "metadata": {
-        "mcp_kind": "mcp_server"
-      },
-      "_origin": "ast",
-      "id": "pi_mcp_mcp_server_orbit_plan",
-      "community": 34,
-      "norm_label": "orbit-plan"
-    },
-    {
       "label": "orbit-adapter.js",
       "file_type": "code",
       "source_file": "agent-backend/adapter/orbit-adapter.js",
@@ -1159,7 +1146,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "agent_backend_env",
-      "community": 28,
+      "community": 43,
       "norm_label": "env.js"
     },
     {
@@ -1169,7 +1156,7 @@
       "source_location": "L4",
       "_origin": "ast",
       "id": "agent_backend_env_fs",
-      "community": 28,
+      "community": 43,
       "norm_label": "fs"
     },
     {
@@ -1179,7 +1166,7 @@
       "source_location": "L5",
       "_origin": "ast",
       "id": "agent_backend_env_os",
-      "community": 28,
+      "community": 43,
       "norm_label": "os"
     },
     {
@@ -1189,7 +1176,7 @@
       "source_location": "L7",
       "_origin": "ast",
       "id": "agent_backend_env_required_vars",
-      "community": 28,
+      "community": 43,
       "norm_label": "required_vars"
     },
     {
@@ -1199,7 +1186,7 @@
       "source_location": "L8",
       "_origin": "ast",
       "id": "agent_backend_env_recommended_vars",
-      "community": 28,
+      "community": 43,
       "norm_label": "recommended_vars"
     },
     {
@@ -1219,7 +1206,7 @@
       "source_location": "L29",
       "_origin": "ast",
       "id": "agent_backend_env_validateenv",
-      "community": 28,
+      "community": 43,
       "norm_label": "validateenv()"
     },
     {
@@ -1289,7 +1276,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "agent_backend_harnesses_container_index",
-      "community": 14,
+      "community": 25,
       "norm_label": "index.js"
     },
     {
@@ -1299,7 +1286,7 @@
       "source_location": "L17",
       "_origin": "ast",
       "id": "agent_backend_harnesses_container_index_execsync",
-      "community": 14,
+      "community": 25,
       "norm_label": "{ execsync }"
     },
     {
@@ -1309,7 +1296,7 @@
       "source_location": "L18",
       "_origin": "ast",
       "id": "agent_backend_harnesses_container_index_os",
-      "community": 14,
+      "community": 25,
       "norm_label": "os"
     },
     {
@@ -1319,7 +1306,7 @@
       "source_location": "L19",
       "_origin": "ast",
       "id": "agent_backend_harnesses_container_index_path",
-      "community": 14,
+      "community": 25,
       "norm_label": "path"
     },
     {
@@ -1329,7 +1316,7 @@
       "source_location": "L20",
       "_origin": "ast",
       "id": "agent_backend_harnesses_container_index_picodeharness",
-      "community": 14,
+      "community": 25,
       "norm_label": "picodeharness"
     },
     {
@@ -1339,7 +1326,7 @@
       "source_location": "L23",
       "_origin": "ast",
       "id": "agent_backend_harnesses_container_index_pi_runtime_dir",
-      "community": 14,
+      "community": 25,
       "norm_label": "pi_runtime_dir"
     },
     {
@@ -1349,7 +1336,7 @@
       "source_location": "L24",
       "_origin": "ast",
       "id": "agent_backend_harnesses_container_index_pi_config_dir",
-      "community": 14,
+      "community": 25,
       "norm_label": "pi_config_dir"
     },
     {
@@ -1359,7 +1346,7 @@
       "source_location": "L26",
       "_origin": "ast",
       "id": "agent_backend_harnesses_container_index_containerharness",
-      "community": 14,
+      "community": 25,
       "norm_label": "containerharness"
     },
     {
@@ -1369,7 +1356,7 @@
       "source_location": "L27",
       "_origin": "ast",
       "id": "agent_backend_harnesses_container_index_containerharness_getmetadata",
-      "community": 14,
+      "community": 25,
       "norm_label": ".getmetadata()"
     },
     {
@@ -1379,7 +1366,7 @@
       "source_location": "L32",
       "_origin": "ast",
       "id": "agent_backend_harnesses_container_index_containerharness_dockeravailable",
-      "community": 14,
+      "community": 25,
       "norm_label": ".dockeravailable()"
     },
     {
@@ -1389,7 +1376,7 @@
       "source_location": "L37",
       "_origin": "ast",
       "id": "agent_backend_harnesses_container_index_containerharness_buildspawncommand",
-      "community": 14,
+      "community": 25,
       "norm_label": "._buildspawncommand()"
     },
     {
@@ -1399,7 +1386,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "agent_backend_harnesses_index",
-      "community": 67,
+      "community": 55,
       "norm_label": "index.js"
     },
     {
@@ -1409,7 +1396,7 @@
       "source_location": "L4",
       "_origin": "ast",
       "id": "agent_backend_harnesses_index_picodeharness",
-      "community": 67,
+      "community": 55,
       "norm_label": "picodeharness"
     },
     {
@@ -1419,7 +1406,7 @@
       "source_location": "L5",
       "_origin": "ast",
       "id": "agent_backend_harnesses_index_opencodeharness",
-      "community": 67,
+      "community": 55,
       "norm_label": "opencodeharness"
     },
     {
@@ -1429,7 +1416,7 @@
       "source_location": "L7",
       "_origin": "ast",
       "id": "agent_backend_harnesses_index_loadharness",
-      "community": 67,
+      "community": 55,
       "norm_label": "loadharness()"
     },
     {
@@ -1579,7 +1566,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "agent_backend_harnesses_opencode_index",
-      "community": 67,
+      "community": 55,
       "norm_label": "index.js"
     },
     {
@@ -1589,7 +1576,7 @@
       "source_location": "L22",
       "_origin": "ast",
       "id": "agent_backend_harnesses_opencode_index_spawn",
-      "community": 67,
+      "community": 55,
       "norm_label": "{ spawn }"
     },
     {
@@ -1599,7 +1586,7 @@
       "source_location": "L23",
       "_origin": "ast",
       "id": "agent_backend_harnesses_opencode_index_fs",
-      "community": 67,
+      "community": 55,
       "norm_label": "fs"
     },
     {
@@ -1609,7 +1596,7 @@
       "source_location": "L24",
       "_origin": "ast",
       "id": "agent_backend_harnesses_opencode_index_path",
-      "community": 67,
+      "community": 55,
       "norm_label": "path"
     },
     {
@@ -1619,7 +1606,7 @@
       "source_location": "L25",
       "_origin": "ast",
       "id": "agent_backend_harnesses_opencode_index_harnessinterface",
-      "community": 67,
+      "community": 55,
       "norm_label": "harnessinterface"
     },
     {
@@ -1629,7 +1616,7 @@
       "source_location": "L26",
       "_origin": "ast",
       "id": "agent_backend_harnesses_opencode_index_workspacepaths",
-      "community": 67,
+      "community": 55,
       "norm_label": "workspacepaths"
     },
     {
@@ -1639,7 +1626,7 @@
       "source_location": "L30",
       "_origin": "ast",
       "id": "agent_backend_harnesses_opencode_index_opencode_tools",
-      "community": 67,
+      "community": 55,
       "norm_label": "opencode_tools"
     },
     {
@@ -1769,7 +1756,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "agent_backend_harnesses_picode_index",
-      "community": 14,
+      "community": 20,
       "norm_label": "index.js"
     },
     {
@@ -1779,7 +1766,7 @@
       "source_location": "L5",
       "_origin": "ast",
       "id": "agent_backend_harnesses_picode_index_spawn",
-      "community": 14,
+      "community": 20,
       "norm_label": "{ spawn }"
     },
     {
@@ -1789,7 +1776,7 @@
       "source_location": "L6",
       "_origin": "ast",
       "id": "agent_backend_harnesses_picode_index_fs",
-      "community": 14,
+      "community": 20,
       "norm_label": "fs"
     },
     {
@@ -1799,7 +1786,7 @@
       "source_location": "L7",
       "_origin": "ast",
       "id": "agent_backend_harnesses_picode_index_path",
-      "community": 14,
+      "community": 20,
       "norm_label": "path"
     },
     {
@@ -1809,7 +1796,7 @@
       "source_location": "L8",
       "_origin": "ast",
       "id": "agent_backend_harnesses_picode_index_os",
-      "community": 14,
+      "community": 20,
       "norm_label": "os"
     },
     {
@@ -1819,7 +1806,7 @@
       "source_location": "L9",
       "_origin": "ast",
       "id": "agent_backend_harnesses_picode_index_eventemitter",
-      "community": 14,
+      "community": 20,
       "norm_label": "eventemitter"
     },
     {
@@ -1829,7 +1816,7 @@
       "source_location": "L10",
       "_origin": "ast",
       "id": "agent_backend_harnesses_picode_index_harnessinterface",
-      "community": 14,
+      "community": 20,
       "norm_label": "harnessinterface"
     },
     {
@@ -1839,7 +1826,7 @@
       "source_location": "L11",
       "_origin": "ast",
       "id": "agent_backend_harnesses_picode_index_striptuichars_ismutatingtool_isreadonlytool_isconversationalprompt",
-      "community": 14,
+      "community": 20,
       "norm_label": "{ striptuichars, ismutatingtool, isreadonlytool, isconversationalprompt }"
     },
     {
@@ -1849,7 +1836,7 @@
       "source_location": "L12",
       "_origin": "ast",
       "id": "agent_backend_harnesses_picode_index_workspacepaths",
-      "community": 14,
+      "community": 20,
       "norm_label": "workspacepaths"
     },
     {
@@ -1859,7 +1846,7 @@
       "source_location": "L18",
       "_origin": "ast",
       "id": "agent_backend_harnesses_picode_index_web_native_search_tools",
-      "community": 14,
+      "community": 20,
       "norm_label": "web_native_search_tools"
     },
     {
@@ -1869,7 +1856,7 @@
       "source_location": "L19",
       "_origin": "ast",
       "id": "agent_backend_harnesses_picode_index_web_browse_fallback_tools",
-      "community": 14,
+      "community": 20,
       "norm_label": "web_browse_fallback_tools"
     },
     {
@@ -2049,7 +2036,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "agent_backend_harnesses_picode_parser",
-      "community": 14,
+      "community": 20,
       "norm_label": "parser.js"
     },
     {
@@ -2059,7 +2046,7 @@
       "source_location": "L5",
       "_origin": "ast",
       "id": "agent_backend_harnesses_picode_parser_striptuichars",
-      "community": 14,
+      "community": 67,
       "norm_label": "striptuichars()"
     },
     {
@@ -2069,7 +2056,7 @@
       "source_location": "L44",
       "_origin": "ast",
       "id": "agent_backend_harnesses_picode_parser_ismutatingtool",
-      "community": 14,
+      "community": 20,
       "norm_label": "ismutatingtool()"
     },
     {
@@ -2079,7 +2066,7 @@
       "source_location": "L49",
       "_origin": "ast",
       "id": "agent_backend_harnesses_picode_parser_isreadonlytool",
-      "community": 14,
+      "community": 20,
       "norm_label": "isreadonlytool()"
     },
     {
@@ -2089,7 +2076,7 @@
       "source_location": "L55",
       "_origin": "ast",
       "id": "agent_backend_harnesses_picode_parser_isconversationalprompt",
-      "community": 14,
+      "community": 20,
       "norm_label": "isconversationalprompt()"
     },
     {
@@ -2119,7 +2106,7 @@
       "source_location": "L11",
       "_origin": "ast",
       "id": "agent_backend_harnesses_remote_index_remoteharness",
-      "community": 154,
+      "community": 95,
       "norm_label": "remoteharness"
     },
     {
@@ -2129,7 +2116,7 @@
       "source_location": "L12",
       "_origin": "ast",
       "id": "agent_backend_harnesses_remote_index_remoteharness_constructor",
-      "community": 154,
+      "community": 95,
       "norm_label": ".constructor()"
     },
     {
@@ -2139,7 +2126,7 @@
       "source_location": "L18",
       "_origin": "ast",
       "id": "agent_backend_harnesses_remote_index_remoteharness_getmetadata",
-      "community": 154,
+      "community": 95,
       "norm_label": ".getmetadata()"
     },
     {
@@ -2149,7 +2136,7 @@
       "source_location": "L27",
       "_origin": "ast",
       "id": "agent_backend_harnesses_remote_index_remoteharness_send",
-      "community": 154,
+      "community": 95,
       "norm_label": "._send()"
     },
     {
@@ -2159,7 +2146,7 @@
       "source_location": "L38",
       "_origin": "ast",
       "id": "agent_backend_harnesses_remote_index_remoteharness_listtools",
-      "community": 154,
+      "community": 95,
       "norm_label": ".listtools()"
     },
     {
@@ -2169,7 +2156,7 @@
       "source_location": "L58",
       "_origin": "ast",
       "id": "agent_backend_harnesses_remote_index_remoteharness_connect",
-      "community": 154,
+      "community": 95,
       "norm_label": ".connect()"
     },
     {
@@ -2179,7 +2166,7 @@
       "source_location": "L80",
       "_origin": "ast",
       "id": "agent_backend_harnesses_remote_index_remoteharness_sendprompt",
-      "community": 154,
+      "community": 95,
       "norm_label": ".sendprompt()"
     },
     {
@@ -2189,7 +2176,7 @@
       "source_location": "L84",
       "_origin": "ast",
       "id": "agent_backend_harnesses_remote_index_remoteharness_cancel",
-      "community": 154,
+      "community": 95,
       "norm_label": ".cancel()"
     },
     {
@@ -2199,7 +2186,7 @@
       "source_location": "L88",
       "_origin": "ast",
       "id": "agent_backend_harnesses_remote_index_remoteharness_disconnect",
-      "community": 154,
+      "community": 95,
       "norm_label": ".disconnect()"
     },
     {
@@ -4149,7 +4136,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "agent_backend_routes_workspace",
-      "community": 20,
+      "community": 55,
       "norm_label": "workspace.js"
     },
     {
@@ -4159,7 +4146,7 @@
       "source_location": "L7",
       "_origin": "ast",
       "id": "agent_backend_routes_workspace_router",
-      "community": 20,
+      "community": 55,
       "norm_label": "{ router }"
     },
     {
@@ -4169,7 +4156,7 @@
       "source_location": "L8",
       "_origin": "ast",
       "id": "agent_backend_routes_workspace_fs",
-      "community": 20,
+      "community": 55,
       "norm_label": "fs"
     },
     {
@@ -4179,7 +4166,7 @@
       "source_location": "L9",
       "_origin": "ast",
       "id": "agent_backend_routes_workspace_path",
-      "community": 20,
+      "community": 55,
       "norm_label": "path"
     },
     {
@@ -4189,7 +4176,7 @@
       "source_location": "L10",
       "_origin": "ast",
       "id": "agent_backend_routes_workspace_exec",
-      "community": 20,
+      "community": 55,
       "norm_label": "{ exec }"
     },
     {
@@ -4199,7 +4186,7 @@
       "source_location": "L11",
       "_origin": "ast",
       "id": "agent_backend_routes_workspace_marked",
-      "community": 20,
+      "community": 55,
       "norm_label": "{ marked }"
     },
     {
@@ -4209,7 +4196,7 @@
       "source_location": "L12",
       "_origin": "ast",
       "id": "agent_backend_routes_workspace_workspacepaths",
-      "community": 20,
+      "community": 55,
       "norm_label": "workspacepaths"
     },
     {
@@ -4219,7 +4206,7 @@
       "source_location": "L18",
       "_origin": "ast",
       "id": "agent_backend_routes_workspace_rootfor",
-      "community": 20,
+      "community": 55,
       "norm_label": "rootfor()"
     },
     {
@@ -4229,7 +4216,7 @@
       "source_location": "L23",
       "_origin": "ast",
       "id": "agent_backend_routes_workspace_resolvepath",
-      "community": 20,
+      "community": 55,
       "norm_label": "resolvepath()"
     },
     {
@@ -4239,7 +4226,7 @@
       "source_location": "L37",
       "_origin": "ast",
       "id": "agent_backend_routes_workspace_createworkspacerouter",
-      "community": 20,
+      "community": 55,
       "norm_label": "createworkspacerouter()"
     },
     {
@@ -4249,7 +4236,7 @@
       "source_location": "L200",
       "_origin": "ast",
       "id": "agent_backend_routes_workspace_escapehtml",
-      "community": 20,
+      "community": 55,
       "norm_label": "escapehtml()"
     },
     {
@@ -4296,7 +4283,7 @@
       "label": "READ_ONLY_COMMANDS",
       "file_type": "code",
       "source_file": "agent-backend/security-guard.js",
-      "source_location": "L132",
+      "source_location": "L137",
       "_origin": "ast",
       "id": "agent_backend_security_guard_read_only_commands",
       "community": 16,
@@ -4306,7 +4293,7 @@
       "label": "isReadOnlyCommand()",
       "file_type": "code",
       "source_file": "agent-backend/security-guard.js",
-      "source_location": "L143",
+      "source_location": "L148",
       "_origin": "ast",
       "id": "agent_backend_security_guard_isreadonlycommand",
       "community": 16,
@@ -4316,7 +4303,7 @@
       "label": "validateCommand()",
       "file_type": "code",
       "source_file": "agent-backend/security-guard.js",
-      "source_location": "L160",
+      "source_location": "L165",
       "_origin": "ast",
       "id": "agent_backend_security_guard_validatecommand",
       "community": 16,
@@ -5196,7 +5183,7 @@
       "label": "shutdown()",
       "file_type": "code",
       "source_file": "agent-backend/server.js",
-      "source_location": "L1690",
+      "source_location": "L1701",
       "_origin": "ast",
       "id": "agent_backend_server_shutdown",
       "community": 3,
@@ -5206,7 +5193,7 @@
       "label": "ensureOrbitMcpServersRegistered()",
       "file_type": "code",
       "source_file": "agent-backend/server.js",
-      "source_location": "L1739",
+      "source_location": "L1750",
       "_origin": "ast",
       "id": "agent_backend_server_ensureorbitmcpserversregistered",
       "community": 3,
@@ -5229,7 +5216,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "agent_backend_services_plan_generator",
-      "community": 14,
+      "community": 67,
       "norm_label": "plan-generator.js"
     },
     {
@@ -5239,7 +5226,7 @@
       "source_location": "L4",
       "_origin": "ast",
       "id": "agent_backend_services_plan_generator_openai",
-      "community": 14,
+      "community": 67,
       "norm_label": "{ openai }"
     },
     {
@@ -5249,7 +5236,7 @@
       "source_location": "L5",
       "_origin": "ast",
       "id": "agent_backend_services_plan_generator_striptuichars",
-      "community": 14,
+      "community": 67,
       "norm_label": "{ striptuichars }"
     },
     {
@@ -5259,7 +5246,7 @@
       "source_location": "L15",
       "_origin": "ast",
       "id": "agent_backend_services_plan_generator_generateplan",
-      "community": 14,
+      "community": 67,
       "norm_label": "generateplan()"
     },
     {
@@ -5669,7 +5656,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "agent_backend_workspace_paths",
-      "community": 97,
+      "community": 55,
       "norm_label": "workspace-paths.js"
     },
     {
@@ -5679,7 +5666,7 @@
       "source_location": "L17",
       "_origin": "ast",
       "id": "agent_backend_workspace_paths_fs",
-      "community": 97,
+      "community": 55,
       "norm_label": "fs"
     },
     {
@@ -5689,7 +5676,7 @@
       "source_location": "L18",
       "_origin": "ast",
       "id": "agent_backend_workspace_paths_path",
-      "community": 97,
+      "community": 55,
       "norm_label": "path"
     },
     {
@@ -5699,7 +5686,7 @@
       "source_location": "L19",
       "_origin": "ast",
       "id": "agent_backend_workspace_paths_os",
-      "community": 97,
+      "community": 55,
       "norm_label": "os"
     },
     {
@@ -5709,7 +5696,7 @@
       "source_location": "L22",
       "_origin": "ast",
       "id": "agent_backend_workspace_paths_sessions_dir",
-      "community": 97,
+      "community": 55,
       "norm_label": "sessions_dir"
     },
     {
@@ -5719,7 +5706,7 @@
       "source_location": "L25",
       "_origin": "ast",
       "id": "agent_backend_workspace_paths_safeid",
-      "community": 97,
+      "community": 55,
       "norm_label": "safeid()"
     },
     {
@@ -5729,7 +5716,7 @@
       "source_location": "L31",
       "_origin": "ast",
       "id": "agent_backend_workspace_paths_sessionroot",
-      "community": 97,
+      "community": 55,
       "norm_label": "sessionroot()"
     },
     {
@@ -5739,7 +5726,7 @@
       "source_location": "L36",
       "_origin": "ast",
       "id": "agent_backend_workspace_paths_sessiondirs",
-      "community": 97,
+      "community": 55,
       "norm_label": "sessiondirs()"
     },
     {
@@ -5749,7 +5736,7 @@
       "source_location": "L47",
       "_origin": "ast",
       "id": "agent_backend_workspace_paths_ensuresessiondirs",
-      "community": 97,
+      "community": 55,
       "norm_label": "ensuresessiondirs()"
     },
     {
@@ -5759,7 +5746,7 @@
       "source_location": "L56",
       "_origin": "ast",
       "id": "agent_backend_workspace_paths_removesessiondirs",
-      "community": 97,
+      "community": 55,
       "norm_label": "removesessiondirs()"
     },
     {
@@ -6439,7 +6426,7 @@
       "source_location": "L13",
       "_origin": "ast",
       "id": "dashboard_package_dependencies_base_ui_react",
-      "community": 25,
+      "community": 10,
       "norm_label": "@base-ui/react"
     },
     {
@@ -6449,7 +6436,7 @@
       "source_location": "L13",
       "_origin": "ast",
       "id": "base_ui_react",
-      "community": 25,
+      "community": 10,
       "norm_label": "@base-ui/react"
     },
     {
@@ -6459,7 +6446,7 @@
       "source_location": "L14",
       "_origin": "ast",
       "id": "dashboard_package_dependencies_class_variance_authority",
-      "community": 10,
+      "community": 97,
       "norm_label": "class-variance-authority"
     },
     {
@@ -6469,7 +6456,7 @@
       "source_location": "L14",
       "_origin": "ast",
       "id": "class_variance_authority",
-      "community": 10,
+      "community": 97,
       "norm_label": "class-variance-authority"
     },
     {
@@ -8069,7 +8056,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "dashboard_src_components_panels_consoletab",
-      "community": 43,
+      "community": 155,
       "norm_label": "consoletab.tsx"
     },
     {
@@ -8079,7 +8066,7 @@
       "source_location": "L7",
       "_origin": "ast",
       "id": "dashboard_src_components_panels_consoletab_entry",
-      "community": 43,
+      "community": 155,
       "norm_label": "entry"
     },
     {
@@ -8089,7 +8076,7 @@
       "source_location": "L15",
       "_origin": "ast",
       "id": "dashboard_src_components_panels_consoletab_consoletab",
-      "community": 43,
+      "community": 155,
       "norm_label": "consoletab()"
     },
     {
@@ -8149,7 +8136,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "dashboard_src_components_panels_explorersidebar",
-      "community": 88,
+      "community": 155,
       "norm_label": "explorersidebar.tsx"
     },
     {
@@ -8159,7 +8146,7 @@
       "source_location": "L7",
       "_origin": "ast",
       "id": "dashboard_src_components_panels_explorersidebar_filenode",
-      "community": 88,
+      "community": 155,
       "norm_label": "filenode"
     },
     {
@@ -8169,7 +8156,7 @@
       "source_location": "L15",
       "_origin": "ast",
       "id": "dashboard_src_components_panels_explorersidebar_explorersidebarprops",
-      "community": 88,
+      "community": 155,
       "norm_label": "explorersidebarprops"
     },
     {
@@ -8179,7 +8166,7 @@
       "source_location": "L19",
       "_origin": "ast",
       "id": "dashboard_src_components_panels_explorersidebar_explorersidebar",
-      "community": 88,
+      "community": 155,
       "norm_label": "explorersidebar()"
     },
     {
@@ -8409,7 +8396,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "dashboard_src_components_panels_workspacetab",
-      "community": 43,
+      "community": 155,
       "norm_label": "workspacetab.tsx"
     },
     {
@@ -8419,7 +8406,7 @@
       "source_location": "L11",
       "_origin": "ast",
       "id": "dashboard_src_components_panels_workspacetab_workspacetab",
-      "community": 43,
+      "community": 155,
       "norm_label": "workspacetab()"
     },
     {
@@ -9309,7 +9296,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "dashboard_src_hooks_usesessions",
-      "community": 43,
+      "community": 1,
       "norm_label": "usesessions.ts"
     },
     {
@@ -9319,7 +9306,7 @@
       "source_location": "L12",
       "_origin": "ast",
       "id": "dashboard_src_hooks_usesessions_empty_metrics",
-      "community": 43,
+      "community": 1,
       "norm_label": "empty_metrics"
     },
     {
@@ -9329,7 +9316,7 @@
       "source_location": "L30",
       "_origin": "ast",
       "id": "dashboard_src_hooks_usesessions_normalizemetricsforui",
-      "community": 43,
+      "community": 1,
       "norm_label": "normalizemetricsforui()"
     },
     {
@@ -9339,7 +9326,7 @@
       "source_location": "L83",
       "_origin": "ast",
       "id": "dashboard_src_hooks_usesessions_usesessions",
-      "community": 43,
+      "community": 1,
       "norm_label": "usesessions()"
     },
     {
@@ -9599,7 +9586,7 @@
       "source_location": "L332",
       "_origin": "ast",
       "id": "dashboard_src_providers_orbitprovider_useorbitstate",
-      "community": 43,
+      "community": 155,
       "norm_label": "useorbitstate()"
     },
     {
@@ -12034,7 +12021,7 @@
       "label": "Truthfulness & grounding (non-negotiable)",
       "file_type": "document",
       "source_file": "prompts/orbit-system.md",
-      "source_location": "L104",
+      "source_location": "L103",
       "_origin": "ast",
       "id": "prompts_orbit_system_truthfulness_grounding_non_negotiable",
       "community": 54,
@@ -12044,7 +12031,7 @@
       "label": "Connectors & skills",
       "file_type": "document",
       "source_file": "prompts/orbit-system.md",
-      "source_location": "L119",
+      "source_location": "L118",
       "_origin": "ast",
       "id": "prompts_orbit_system_connectors_skills",
       "community": 54,
@@ -12054,7 +12041,7 @@
       "label": "Guiding the user",
       "file_type": "document",
       "source_file": "prompts/orbit-system.md",
-      "source_location": "L124",
+      "source_location": "L123",
       "_origin": "ast",
       "id": "prompts_orbit_system_guiding_the_user",
       "community": 54,
@@ -13064,16 +13051,6 @@
       "source_location": "L1",
       "weight": 1.0,
       "source": "pi_mcp",
-      "target": "pi_mcp_mcp_server_orbit_plan"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": ".pi/mcp.json",
-      "source_location": "L1",
-      "weight": 1.0,
-      "source": "pi_mcp",
       "target": "pi_mcp_mcp_server_orbit_search"
     },
     {
@@ -13137,17 +13114,6 @@
       "source_location": "L1",
       "weight": 1.0,
       "context": "command",
-      "source": "pi_mcp_mcp_server_orbit_plan",
-      "target": "mcp_command_node"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": ".pi/mcp.json",
-      "source_location": "L1",
-      "weight": 1.0,
-      "context": "command",
       "source": "pi_mcp_mcp_server_orbit_search",
       "target": "mcp_command_node"
     },
@@ -13180,16 +13146,6 @@
       "source_location": "L1",
       "weight": 1.0,
       "source": "pi_mcp_mcp_server_orbit_notify",
-      "target": "env_var_orbit_api"
-    },
-    {
-      "relation": "requires_env",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": ".pi/mcp.json",
-      "source_location": "L1",
-      "weight": 1.0,
-      "source": "pi_mcp_mcp_server_orbit_plan",
       "target": "env_var_orbit_api"
     },
     {
@@ -19957,7 +19913,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "agent-backend/security-guard.js",
-      "source_location": "L143",
+      "source_location": "L148",
       "weight": 1.0,
       "source": "agent_backend_security_guard",
       "target": "agent_backend_security_guard_isreadonlycommand",
@@ -19987,7 +19943,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "agent-backend/security-guard.js",
-      "source_location": "L132",
+      "source_location": "L137",
       "weight": 1.0,
       "source": "agent_backend_security_guard",
       "target": "agent_backend_security_guard_read_only_commands",
@@ -19997,7 +19953,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "agent-backend/security-guard.js",
-      "source_location": "L291",
+      "source_location": "L296",
       "weight": 1.0,
       "context": "collection",
       "source": "agent_backend_security_guard",
@@ -20008,7 +19964,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "agent-backend/security-guard.js",
-      "source_location": "L290",
+      "source_location": "L295",
       "weight": 1.0,
       "context": "collection",
       "source": "agent_backend_security_guard",
@@ -20075,7 +20031,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "agent-backend/security-guard.js",
-      "source_location": "L260",
+      "source_location": "L265",
       "weight": 1.0,
       "source": "agent_backend_security_guard_validatecommand",
       "target": "agent_backend_security_guard_isreadonlycommand",
@@ -20468,7 +20424,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "agent-backend/server.js",
-      "source_location": "L1739",
+      "source_location": "L1750",
       "weight": 1.0,
       "source": "agent_backend_server",
       "target": "agent_backend_server_ensureorbitmcpserversregistered",
@@ -20881,7 +20837,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "agent-backend/server.js",
-      "source_location": "L1690",
+      "source_location": "L1701",
       "weight": 1.0,
       "source": "agent_backend_server",
       "target": "agent_backend_server_shutdown",
@@ -21409,7 +21365,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "agent-backend/server.js",
-      "source_location": "L1472",
+      "source_location": "L1483",
       "weight": 1.0,
       "source": "agent_backend_server_createharnesseventemitter",
       "target": "agent_backend_server_syncplansfromworkspace",
@@ -21464,7 +21420,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "agent-backend/server.js",
-      "source_location": "L1490",
+      "source_location": "L1501",
       "weight": 1.0,
       "source": "agent_backend_server_createharnesseventemitter",
       "target": "agent_backend_server_isunproductiveresult",
@@ -21629,7 +21585,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "agent-backend/server.js",
-      "source_location": "L1508",
+      "source_location": "L1519",
       "weight": 1.0,
       "source": "agent_backend_server_createharnesseventemitter",
       "target": "agent_backend_server_broadcastnotification",
@@ -21674,7 +21630,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "agent-backend/server.js",
-      "source_location": "L1605",
+      "source_location": "L1616",
       "weight": 1.0,
       "source": "agent_backend_server_createharnesseventemitter",
       "target": "agent_backend_services_tts_generateintelligentspeech"
@@ -21685,7 +21641,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "agent-backend/server.js",
-      "source_location": "L1557",
+      "source_location": "L1568",
       "weight": 1.0,
       "source": "agent_backend_server_createharnesseventemitter",
       "target": "agent_backend_subagent_tracker_subagenttracker_addreasoning"
@@ -21707,7 +21663,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "agent-backend/server.js",
-      "source_location": "L1517",
+      "source_location": "L1528",
       "weight": 1.0,
       "source": "agent_backend_server_createharnesseventemitter",
       "target": "agent_backend_subagent_tracker_subagenttracker_endtoolcall"
@@ -21729,7 +21685,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "agent-backend/server.js",
-      "source_location": "L1525",
+      "source_location": "L1536",
       "weight": 1.0,
       "source": "agent_backend_server_createharnesseventemitter",
       "target": "agent_backend_subagent_tracker_subagenttracker_markcompleted"
@@ -21773,7 +21729,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "agent-backend/server.js",
-      "source_location": "L1664",
+      "source_location": "L1675",
       "weight": 1.0,
       "source": "agent_backend_server_createharnesseventemitter",
       "target": "agent_backend_subagent_tracker_subagenttracker_tofrontendsummary"
@@ -21784,7 +21740,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "agent-backend/server.js",
-      "source_location": "L1628",
+      "source_location": "L1639",
       "weight": 1.0,
       "source": "agent_backend_server_createharnesseventemitter",
       "target": "agent_backend_subagent_tracker_subagenttracker_tojson"
@@ -30576,7 +30532,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "prompts/orbit-system.md",
-      "source_location": "L119",
+      "source_location": "L118",
       "weight": 1.0,
       "source": "prompts_orbit_system_about_orbit_platform_self_knowledge",
       "target": "prompts_orbit_system_connectors_skills",
@@ -30596,7 +30552,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "prompts/orbit-system.md",
-      "source_location": "L124",
+      "source_location": "L123",
       "weight": 1.0,
       "source": "prompts_orbit_system_about_orbit_platform_self_knowledge",
       "target": "prompts_orbit_system_guiding_the_user",
@@ -30636,7 +30592,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "prompts/orbit-system.md",
-      "source_location": "L104",
+      "source_location": "L103",
       "weight": 1.0,
       "source": "prompts_orbit_system_about_orbit_platform_self_knowledge",
       "target": "prompts_orbit_system_truthfulness_grounding_non_negotiable",
@@ -30951,5 +30907,5 @@
       "source_file": "dashboard/public/next.svg"
     }
   ],
-  "built_at_commit": "817689e8ae237454b8445ef163afe3007316d605"
+  "built_at_commit": "6c07637f33b86c27d0f37d496f029e0e994f7700"
 }

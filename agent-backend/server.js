@@ -1368,7 +1368,18 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
     // by any per-device override. block → cancel; ask → surface a gate.
     const activeMode = mode || "chat";
     const cfg = getConfig();
-    const toolPaths = extractPathsFromArgs(args);
+    
+    // Resolve all target paths relative to the session's workspace
+    const sessionRoot = workspacePaths.sessionRoot(sessionId);
+    const rawPaths = extractPathsFromArgs(args);
+    if (args && args.path && typeof args.path === "string" && !rawPaths.includes(args.path)) {
+      rawPaths.push(args.path);
+    }
+    const toolPaths = rawPaths.map(p => {
+      if (p.startsWith("~")) return p.replace(/^~/, require("os").homedir());
+      if (path.isAbsolute(p)) return p;
+      return path.resolve(path.join(sessionRoot, "workspace", p));
+    });
 
     // (1) Hard blocklist — sits BELOW the permission layer: user consent cannot
     // override it. Two tiers:
@@ -1402,7 +1413,6 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
     // allow-list + any path the user granted this session. Writes elsewhere are
     // "outside" → require consent. Sessions are isolated: another session's root
     // is not in this zone, so cross-session writes also ask.
-    const sessionRoot = workspacePaths.sessionRoot(sessionId);
     const durableAllow = (cfg.fileSystem && cfg.fileSystem.allowedWritePaths) || [];
     const sessionPerms = sessionAllowedPaths.get(sessionId) || new Set();
     const safeZones = [sessionRoot, ...durableAllow];
@@ -1412,7 +1422,16 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
     const isOutside = outsidePaths.length > 0;
     const capability = policyEngine.toolToCapability(name, isOutside);
     const deviceOverrides = ws.device?.policyOverrides || null;
-    const { decision } = policyEngine.evaluate(capability, activeMode, cfg, deviceOverrides);
+    
+    // Auto-allow writing/reading plans in the workspace plans directory regardless of mode
+    const onlyTouchesPlans = toolPaths.length > 0 && toolPaths.every(p => {
+      const plansDir = path.join(sessionRoot, "workspace", "plans");
+      return p === plansDir || p.startsWith(plansDir + path.sep);
+    });
+
+    let { decision } = onlyTouchesPlans
+      ? { decision: "allow" }
+      : policyEngine.evaluate(capability, activeMode, cfg, deviceOverrides);
 
     if (decision === "block") {
       // Halt the turn so trailing blocked tool calls don't each re-fire the banner.

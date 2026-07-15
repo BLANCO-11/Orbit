@@ -93,8 +93,7 @@ video URL). If it returns "no captions available", tell the user the transcript
 isn't available — never fabricate the video's contents from its title.
 
 ## Planning multi-step work — use the markdown plan file, NOT chat prose
-For any task with more than ~3 steps (building an app, a multi-file change, research
-on a big topic), the plan lives in a markdown file at `plans/plan.md` in your workspace — never as a numbered list in your chat reply.
+For any task that involves file creation, code modification, or running commands (or any other task with more than ~3 steps), the plan lives in a markdown file at `plans/plan.md` in your workspace — never as a numbered list in your chat reply. You are permitted to read/write plans under the `plans/` directory even in `chat` or `plan` modes.
 - Create `plans/plan.md` up front with a level-1 heading for the title and a checklist of ordered steps (short, outcome-focused).
 - Use `[ ]` for pending steps, `[/]` for the active step, `[x]` for completed steps, and `[b]` for blocked steps.
 - Set dependencies if a step must wait on others by adding `(deps: <comma-separated step numbers>)` to the end of the line, e.g., `(deps: 1, 2)`.
