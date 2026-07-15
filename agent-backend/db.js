@@ -401,6 +401,33 @@ function getAllSessions() {
 }
 
 function deleteSession(id) {
+  try {
+    const row = db.prepare("SELECT subagent_tree FROM sessions WHERE id = ?").get(id);
+    if (row && row.subagent_tree) {
+      let tree;
+      try {
+        tree = JSON.parse(row.subagent_tree);
+      } catch {}
+      if (tree && Array.isArray(tree.agents)) {
+        for (const agent of tree.agents) {
+          if (agent.childSessionId) {
+            deleteSession(agent.childSessionId);
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.error(`[DB] Failed to cascade delete child sessions for ${id}:`, e.message);
+  }
+  
+  // Clean up workspace directories
+  try {
+    const workspacePaths = require("./workspace-paths");
+    workspacePaths.removeSessionDirs(id);
+  } catch (e) {
+    console.error(`[DB] Failed to remove workspace dirs for ${id}:`, e.message);
+  }
+
   const stmt = db.prepare("DELETE FROM sessions WHERE id = ?");
   stmt.run(id);
 }

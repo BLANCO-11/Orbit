@@ -296,17 +296,44 @@ export function useSessions() {
   }, [sessions, currentSessionId, saveSession, dispatch, liveMetrics, liveMessages, livePlan, liveLogs, livePlanSteps, livePlans, liveActivePlanId]);
 
   const deleteSession = useCallback(async (sessionId) => {
-    const next = sessions.filter(s => s.id !== sessionId);
-    if (sessionId === currentSessionId && next.length > 0) {
+    // Recursively find all child session IDs to remove them from UI state optimistically
+    const findChildren = (id, list) => {
+      let ids = [id];
+      const session = list.find(s => s.id === id);
+      const agents = session?.subagentTree?.agents || [];
+      for (const agent of agents) {
+        if (agent.childSessionId) {
+          ids = [...ids, ...findChildren(agent.childSessionId, list)];
+        }
+      }
+      return ids;
+    };
+
+    const toDeleteIds = new Set(findChildren(sessionId, sessions));
+    const next = sessions.filter(s => !toDeleteIds.has(s.id));
+
+    if (toDeleteIds.has(currentSessionId) && next.length > 0) {
       dispatch(actions.setCurrentSession(next[0].id));
       dispatch(actions.setMessages(next[0].messages || []));
       dispatch(actions.setSessionMode(next[0].mode || ''));
       dispatch(actions.setMetrics(normalizeMetricsForUI(next[0].metrics)));
       dispatch(actions.setLogs(next[0].logs || []));
+      dispatch(actions.setPlanState({
+        steps: next[0].planSteps || [],
+        plans: next[0].plans || [],
+        activePlanId: next[0].activePlanId || '',
+      }));
     }
+
     setSessions(next);
-    fetch(`/api/sessions/${sessionId}`, { method: 'DELETE' }).catch(() => {});
-  }, [sessions, currentSessionId, dispatch]);
+    
+    try {
+      await fetch(`/api/sessions/${sessionId}`, { method: 'DELETE' });
+    } catch {}
+    
+    // Refresh to ensure full synchronization with DB state
+    loadSessions();
+  }, [sessions, currentSessionId, dispatch, loadSessions]);
 
   // Clear the local "interrupted / running" flag for a session. The backend
   // owns runState and clears it on agent_end, but the list is loaded once and

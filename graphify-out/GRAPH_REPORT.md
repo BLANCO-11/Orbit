@@ -1,13 +1,18 @@
-# Graph Report - .  (2026-07-10)
+# Graph Report - LLM-OS-AGENT  (2026-07-15)
 
 ## Corpus Check
-- 132 files · ~58,347 words
+- 163 files · ~98,512 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 725 nodes · 1032 edges · 51 communities (32 shown, 19 thin omitted)
-- Extraction: 92% EXTRACTED · 8% INFERRED · 0% AMBIGUOUS · INFERRED: 87 edges (avg confidence: 0.63)
+- 1274 nodes · 1708 edges · 160 communities (85 shown, 75 thin omitted)
+- Extraction: 93% EXTRACTED · 7% INFERRED · 0% AMBIGUOUS · INFERRED: 127 edges (avg confidence: 0.54)
 - Token cost: 0 input · 0 output
+
+## Graph Freshness
+- Built from commit: `817689e8`
+- Run `git rev-parse HEAD` and compare to check if the graph is stale.
+- Run `graphify update .` after code changes (no API cost).
 
 ## Community Hubs (Navigation)
 - Dashboard Components & Settings Panel
@@ -35,7 +40,7 @@
 - Lightpanda MCP Server Package
 - Dashboard Entry & Theme
 - Lightpanda MCP Server
-- Harness Interface Contract
+- @base-ui/react
 - Auth Middleware & WS Auth
 - Dashboard Proxy Server
 - Environment Validation
@@ -45,7 +50,7 @@
 - Notifications Router
 - Health Router
 - Lightpanda MCP Config
-- Harness Loader
+- SubagentTracker
 - Request ID Middleware
 - Devices Router
 - Lightpanda Test
@@ -59,124 +64,228 @@
 - Next.js Logo Asset
 - Vercel Logo Asset
 - Window Icon Asset
+- HeadlessSocket
+- ProfilesView.tsx
+- claude-fable-5.md
+- About Orbit (platform self-knowledge)
+- OpenCodeHarness
+- prompts.js
+- page.tsx
+- AppShell.tsx
+- Orbit
+- 2. Dashboard WS protocol
+- channels.js
+- button.tsx
+- package.json
+- MissionView.tsx
+- index.js
+- crypto-store.js
+- index.js
+- policy-engine.js
+- skills.js
+- index.js
+- profiles.js
+- applyPlanTool
+- tool-catalog.js
+- PreviewTab.tsx
+- FleetView.tsx
+- PoliciesView.tsx
+- How you operate (Orbit operating manual)
+- DetailPanel.tsx
+- ConnectorsView.tsx
+- lightpanda.js
+- TraceTab.tsx
+- LibraryView.tsx
+- index.js
+- index.js
+- index.js
+- IconRail.tsx
+- standard.md
+- SidebarSwitcher.tsx
+- edit-mode.md
+- plan-mode.md
+- yolo-mode.md
+- connectors.js
+- fleet.js
+- harness.js
+- channel-scheduler.js
+- subagentFields
+- generateIntelligentSpeech
+- graphify.md
+- graphify.md
+- card.tsx
+- AGENTS.md
+- next
+- tailwind-merge
+- restart-orbit.sh
+- SKILL.md
+- SKILL.md
+- SKILL.md
+- AegisAgent Console Redesign Mock
+- Evenhandedness
+- Forbidden Memory Phrases
+- Knowledge Cutoff
+- MCP App Suggestions
+- Memory System
+- Claude Fable 5
+- Past Chats Tools
+- Persistent Storage for Artifacts
+- Preferences Info
+- Product Information
+- Refusal Handling
+- Tone and Formatting
+- Text-to-Speech Directives (Fable)
+- User Wellbeing
+- Ask Before Destructive Actions Directive
+- Ask Before Writing Directive
+- Edit Mode
+- Read Freely Directive
+- No Surprises Directive
+- Plan First Directive
+- Plan Mode
+- AegisOS-Agent
+- Be Concise Directive
+- Immediate Execution Directive
+- No Bullet Point Spiraling Directive
+- Proactive Notifications (aegis-notify)
+- Security Restrictions Directive
+- Standard Mode
+- Text-to-Speech Directives
+- Full Autonomy Directive
+- Immediate Execution Directive (YOLO)
+- YOLO Mode
+- AegisAgent (product overview)
+- agent-backend (Node/Express + Security Guard)
+- Claude Fable 5 prompt option
+- Dashboard (Next.js 16 + React 19 + Tailwind 4)
+- Lightpanda headless browser
+- MCP (Model Context Protocol)
+- mcp-server-lightpanda
+- Dynamic Security Guard (HITL)
+- Voice I/O (STT + TTS)
+- RemoteHarness
+- OrbitProvider.tsx
+- CommandPalette.tsx
+- PairDevice.tsx
 
 ## God Nodes (most connected - your core abstractions)
-1. `cn()` - 34 edges
-2. `SubagentTracker` - 23 edges
-3. `SessionMetricsManager` - 22 edges
-4. `createHarnessEventEmitter()` - 21 edges
-5. `{ DatabaseSync }` - 16 edges
-6. `compilerOptions` - 16 edges
-7. `estimateTokens()` - 13 edges
-8. `DashboardInner()` - 12 edges
-9. `handleStartTask()` - 11 edges
-10. `useAegisDispatch()` - 11 edges
+1. `{ DatabaseSync }` - 34 edges
+2. `createHarnessEventEmitter()` - 31 edges
+3. `cn()` - 31 edges
+4. `SessionMetricsManager` - 28 edges
+5. `SubagentTracker` - 26 edges
+6. `useOrbitState()` - 20 edges
+7. `PiCodeHarness` - 17 edges
+8. `handleStartTask()` - 17 edges
+9. `compilerOptions` - 16 edges
+10. `estimateTokens()` - 13 edges
 
 ## Surprising Connections (you probably didn't know these)
-- `Dynamic Security Guard (HITL)` --semantically_similar_to--> `Policy engine v2 (capability x mode matrix)`  [INFERRED] [semantically similar]
-  README.md → plan/REDESIGN-PLAN.md
-- `AegisAgent (product overview)` --semantically_similar_to--> `Local-first agent-operations console`  [INFERRED] [semantically similar]
-  README.md → plan/REDESIGN-PLAN.md
-- `Voice I/O (STT + TTS)` --semantically_similar_to--> `TTS / voice (first-class I/O)`  [INFERRED] [semantically similar]
-  README.md → plan/REDESIGN-PLAN.md
-- `Dashboard README (create-next-app boilerplate)` --conceptually_related_to--> `Dashboard (Next.js 16 + React 19 + Tailwind 4)`  [INFERRED]
-  dashboard/README.md → README.md
-- `Dashboard (Next.js 16 + React 19 + Tailwind 4)` --conceptually_related_to--> `Next.js agent rules (AGENTS.md)`  [INFERRED]
-  README.md → dashboard/AGENTS.md
+- `testFileSystem()` --calls--> `validatePath()`  [EXTRACTED]
+  tests/test_security_guard.js → agent-backend/security-guard.js
+- `testSubagentInheritance()` --calls--> `validatePath()`  [EXTRACTED]
+  tests/test_security_guard.js → agent-backend/security-guard.js
+- `Lightpanda No-Screenshot Placeholder Image` --conceptually_related_to--> `Chat Conversation Panel`  [INFERRED]
+  tests/example.png → {6FD2CFF3-36BE-4CC5-993D-F0C89E0D586F}.png
+- `createFleet()` --indirect_call--> `listDevices()`  [INFERRED]
+  agent-backend/fleet.js → agent-backend/db.js
+- `testCommands()` --calls--> `validateCommand()`  [EXTRACTED]
+  tests/test_security_guard.js → agent-backend/security-guard.js
 
 ## Import Cycles
 - None detected.
 
 ## Hyperedges (group relationships)
-- **AegisAgent redesign document set (what/why, how, approved look)** — plan_redesign_plan, plan_implementation_plan, plan_aegis_console_mock [EXTRACTED 0.90]
-- **One OTP pairing flow for devices and harnesses** — plan_redesign_plan_fleet, plan_redesign_plan_otp_pairing, plan_redesign_plan_device, plan_redesign_plan_harness, plan_redesign_plan_adapter_protocol [EXTRACTED 0.85]
-- **Console = timeline (⇄ mission) + inspector + composer** — plan_redesign_plan_console, plan_redesign_plan_unified_timeline, plan_redesign_plan_mission_view, plan_redesign_plan_inspector, plan_redesign_plan_composer [EXTRACTED 0.85]
 - **AegisOS-Agent Behavioral Mode Variants** — prompts_standard_standard_mode, prompts_edit_mode_edit_mode, prompts_plan_mode_plan_mode, prompts_yolo_mode_yolo_mode [INFERRED 0.95]
 - **Shared TTS + Notification + Security Framework** — prompts_standard_tts_directives, prompts_standard_proactive_notifications, prompts_standard_security_restrictions [INFERRED 0.85]
 - **Fable-5 Memory and Personalization Subsystem** — prompts_claude_fable_5_memory_system, prompts_claude_fable_5_forbidden_memory_phrases, prompts_claude_fable_5_past_chats_tools, prompts_claude_fable_5_preferences_info [INFERRED 0.85]
 - **Next.js Starter Assets** — dashboard_public_file_file_document_icon, dashboard_public_globe_globe_icon, dashboard_public_next_next_logo, dashboard_public_vercel_vercel_logo, dashboard_public_window_window_icon [INFERRED 0.75]
 
-## Communities (51 total, 19 thin omitted)
+## Communities (160 total, 75 thin omitted)
 
 ### Community 0 - "Dashboard Components & Settings Panel"
-Cohesion: 0.07
-Nodes (37): ErrorBoundaryState, PairDevice(), SessionList(), AGENT_MODES, SettingsPanel(), Badge(), badgeVariants, Button() (+29 more)
+Cohesion: 0.23
+Nodes (13): Badge(), badgeVariants, SelectContent(), SelectGroup(), SelectItem(), SelectLabel(), SelectScrollDownButton(), SelectScrollUpButton() (+5 more)
 
 ### Community 1 - "App Shell & Layout"
-Cohesion: 0.07
-Nodes (30): DashboardInner(), AppShell(), STATUS_META, DetailPanel(), TABS, useDebounce(), breakpoints, useResponsive() (+22 more)
+Cohesion: 0.25
+Nodes (11): DashboardInner(), useDebounce(), DEFAULT_SETTINGS, useSettings(), useSTT(), useTheme(), revokeItem(), useTTS() (+3 more)
 
 ### Community 2 - "Product Plans & Design Docs"
-Cohesion: 0.07
-Nodes (46): Next.js agent rules (AGENTS.md), dashboard/CLAUDE.md, Dashboard README (create-next-app boilerplate), AegisAgent Console Redesign Mock, AegisAgent Implementation Plan, devices table + pair endpoints (Phase 3), harness_instances registry (Phase 3), metrics.js real-usage wiring (Phase 1) (+38 more)
+Cohesion: 0.50
+Nodes (3): Deploy on Vercel, Getting Started, Learn More
 
 ### Community 3 - "Express Server & Routers"
-Cohesion: 0.05
-Nodes (39): activeSessions, app, authMiddleware, cors, createAuthMiddleware, createConfigRouter, createDevicesRouter, createHealthRouter (+31 more)
+Cohesion: 0.03
+Nodes (69): startScheduler(), ACTIVE_SA, activeSessions, app, authMiddleware, { buildCapabilities }, channelsRouter, { connectionsRouter, oauthRouter } (+61 more)
 
 ### Community 4 - "Subagent Tracker & Harness Events"
-Cohesion: 0.11
-Nodes (14): createHarnessEventEmitter(), getConfig(), handleStartTask(), SubagentTracker, extractPathsFromArgs(), getActiveSessionId(), isPathAllowed(), os (+6 more)
+Cohesion: 0.14
+Nodes (21): broadcastNotification(), createHarnessEventEmitter(), getCapabilities(), getConfig(), handleStartTask(), isFleetDispatchTool(), isUnproductiveResult(), runProfileHeadless() (+13 more)
 
 ### Community 5 - "Backend Dependencies"
 Cohesion: 0.06
 Nodes (35): concurrently, dotenv, express, openai, author, dependencies, dotenv, express (+27 more)
 
 ### Community 6 - "Metrics & Cost Tracking"
-Cohesion: 0.09
-Nodes (11): createEmptyMetrics(), estimateCost(), estimateTokens(), estimateTokensFromLines(), metricsManager, migrateLegacyMetrics(), MODEL_PRICING_PER_MILLION, { performance } (+3 more)
-
-### Community 7 - "Claude Fable 5 System Prompt"
-Cohesion: 0.08
-Nodes (33): Critical Child Safety Instructions, Evenhandedness, Forbidden Memory Phrases, Knowledge Cutoff, MCP App Suggestions, Memory System, Claude Fable 5, Past Chats Tools (+25 more)
+Cohesion: 0.07
+Nodes (14): computeCost(), createEmptyMetrics(), DEFAULT_RATES, estimateCost(), estimateTokens(), estimateTokensFromLines(), metricsManager, migrateLegacyMetrics() (+6 more)
 
 ### Community 8 - "Database & Device Pairing"
-Cohesion: 0.12
-Nodes (28): createDevice(), createPairingCode(), crypto, { DatabaseSync }, db, dbPath, deleteSession(), enforceTTL() (+20 more)
+Cohesion: 0.07
+Nodes (52): clearSessionRunning(), countProfiles(), createDevice(), createPairingCode(), crypto, { DatabaseSync }, db, dbPath (+44 more)
 
 ### Community 9 - "TypeScript Config"
 Cohesion: 0.06
 Nodes (31): compilerOptions, allowJs, esModuleInterop, incremental, isolatedModules, jsx, lib, module (+23 more)
 
 ### Community 10 - "Frontend Dependencies"
-Cohesion: 0.07
-Nodes (27): @base-ui/react, class-variance-authority, clsx, dependencies, @base-ui/react, class-variance-authority, clsx, dompurify (+19 more)
+Cohesion: 0.12
+Nodes (17): class-variance-authority, clsx, dependencies, class-variance-authority, clsx, http-proxy, lucide-react, marked (+9 more)
 
 ### Community 11 - "Chat UI & Mode Selectors"
-Cohesion: 0.11
-Nodes (11): MODE_META, ModeBadge(), ModePrompt(), MODES, ModeSelector(), PROMPT_TYPES, PromptTypeSelector(), ChatEmptyState() (+3 more)
+Cohesion: 0.06
+Nodes (17): EFFORTS, EffortSelectorProps, Harness, HarnessSelectorProps, MODE_META, ModeBadge(), ModePrompt(), MODES (+9 more)
 
 ### Community 12 - "Frontend Build Config"
-Cohesion: 0.09
-Nodes (22): devDependencies, eslint, eslint-config-next, tailwindcss, @tailwindcss/postcss, @types/node, @types/react, name (+14 more)
+Cohesion: 0.15
+Nodes (13): devDependencies, eslint, eslint-config-next, tailwindcss, @tailwindcss/postcss, @types/node, @types/react, eslint (+5 more)
 
 ### Community 13 - "shadcn Component Registry"
 Cohesion: 0.09
 Nodes (21): aliases, components, hooks, lib, ui, utils, iconLibrary, menuAccent (+13 more)
 
 ### Community 14 - "Harness Core & Plan Generator"
-Cohesion: 0.17
-Nodes (13): EventEmitter, fs, HarnessInterface, path, { spawn }, { stripTuiChars, isMutatingTool, isReadOnlyTool, isConversationalPrompt }, isConversationalPrompt(), isMutatingTool() (+5 more)
+Cohesion: 0.05
+Nodes (25): ContainerHarness, { execSync }, os, path, PI_CONFIG_DIR, PI_RUNTIME_DIR, PiCodeHarness, EventEmitter (+17 more)
 
 ### Community 15 - "Lightpanda MCP Client"
 Cohesion: 0.14
 Nodes (7): { Client }, LightpandaMcpClient, path, { StdioClientTransport }, assert, LightpandaMcpClient, testMcpClient()
 
 ### Community 16 - "Security Guard (Path/Command)"
-Cohesion: 0.21
-Nodes (12): isReadOnlyCommand(), isUnderDirectory(), path, READ_ONLY_COMMANDS, validateCommand(), validatePath(), assert, mockConfig (+4 more)
+Cohesion: 0.20
+Nodes (13): isReadOnlyCommand(), isUnderDirectory(), path, READ_ONLY_COMMANDS, validateCommand(), validatePath(), assert, mockConfig (+5 more)
 
 ### Community 17 - "Dashboard Screenshot & UI Elements"
 Cohesion: 0.18
 Nodes (11): AegisAgent Console Dashboard Screenshot, Action Feed (Tool Activity), Chat Composer Input (Send, Voice, Prompt Mode), Chat Conversation Panel, Dark Theme UI Design, Lightpanda Headless Browser, Paired Devices Indicator, Right Panel Tabs (Agent, Workspace, Plan, Logs, Settings) (+3 more)
 
 ### Community 18 - "Config Load/Save"
-Cohesion: 0.29
-Nodes (8): CONFIG_PATH, fs, loadConfig(), path, saveConfig(), createConfigRouter(), { loadConfig, saveConfig }, { Router }
+Cohesion: 0.11
+Nodes (26): CONFIG_PATH, ensureConfig(), ensureUiConfig(), EXAMPLE_PATH, fs, loadConfig(), loadUiConfig(), path (+18 more)
+
+### Community 19 - "PiCode Harness"
+Cohesion: 0.07
+Nodes (29): 1. Authentication & CORS, 1. Message Stream, 1. Start Task, 2. Cancel Task, 2. REST API Endpoints, 2. Tool Start, 3. Resume Task, 3. Tool End (+21 more)
 
 ### Community 20 - "Workspace Router"
 Cohesion: 0.24
-Nodes (9): createWorkspaceRouter(), escapeHtml(), { exec }, fs, { marked }, path, resolvePath(), { Router } (+1 more)
+Nodes (10): createWorkspaceRouter(), escapeHtml(), { exec }, fs, { marked }, path, resolvePath(), rootFor() (+2 more)
+
+### Community 21 - "React Error Boundaries"
+Cohesion: 0.13
+Nodes (20): buildCapabilities(), cap(), fs, hasNativeSearch(), os, path, providers, resolveTtsKey() (+12 more)
 
 ### Community 22 - "Lightpanda MCP Server Package"
 Cohesion: 0.20
@@ -184,7 +293,7 @@ Nodes (9): dependencies, @modelcontextprotocol/sdk, puppeteer-core, description,
 
 ### Community 23 - "Dashboard Entry & Theme"
 Cohesion: 0.28
-Nodes (5): ClientDashboard(), Dashboard, inter, metadata, ThemeScript()
+Nodes (5): ClientDashboard(), Dashboard, metadata, plusJakartaSans, ThemeScript()
 
 ### Community 24 - "Lightpanda MCP Server"
 Cohesion: 0.22
@@ -202,44 +311,243 @@ Cohesion: 0.25
 Nodes (7): app, { createServer }, handle, httpProxy, next, { parse }, proxy
 
 ### Community 28 - "Environment Validation"
-Cohesion: 0.29
-Nodes (6): discoverPiBinaries(), fs, os, RECOMMENDED_VARS, REQUIRED_VARS, validateEnv()
+Cohesion: 0.15
+Nodes (15): { discoverPiBinaries }, EventEmitter, main(), os, parseArgs(), path, PiCodeHarness, redeemCode() (+7 more)
 
 ### Community 29 - "Models & TTS Routes"
-Cohesion: 0.33
-Nodes (5): createModelsRouter(), createTtsRouter(), createVoicesRouter(), { OpenAI }, { Router }
+Cohesion: 0.31
+Nodes (7): createModelsRouter(), createTtsRouter(), createVoicesRouter(), { OpenAI }, { Readable }, resolveTtsKey(), { Router }
 
 ### Community 31 - "Harness Event Normalizer"
 Cohesion: 0.70
 Nodes (4): normalizeClaudeCodeEvent(), normalizeEvent(), normalizeOpenCodeEvent(), normalizePiCodeEvent()
 
-### Community 32 - "Notifications Router"
-Cohesion: 0.40
-Nodes (3): { exec }, { Router }, WebSocket
-
 ### Community 34 - "Lightpanda MCP Config"
+Cohesion: 0.40
+Nodes (9): LIGHTPANDA_WS, ORBIT_API, node, lightpanda, orbit-fleet, orbit-notify, orbit-plan, orbit-search (+1 more)
+
+### Community 39 - "Aegis Notify Script"
+Cohesion: 0.18
+Nodes (9): { Client }, fs, MCP_CONFIG_PATH, McpRegistry, path, readConfig(), { StdioClientTransport }, { StreamableHTTPClientTransport } (+1 more)
+
+### Community 43 - "Next Env Types"
+Cohesion: 0.29
+Nodes (7): ConsoleTab(), Entry, WorkspaceTab(), EMPTY_METRICS, normalizeMetricsForUI(), useSessions(), useOrbitState()
+
+### Community 51 - "HeadlessSocket"
+Cohesion: 0.15
+Nodes (5): createFleet(), HeadlessSocket, MODE_RANK, RANK_MODE, HeadlessSocket
+
+### Community 52 - "ProfilesView.tsx"
+Cohesion: 0.14
+Nodes (7): Channel, EMPTY, EFFORTS, EMPTY, MODES, Profile, SANDBOXES
+
+### Community 53 - "claude-fable-5.md"
+Cohesion: 0.15
+Nodes (12): After search, Connector directory first, Data Scope, Error Handling, Key Design Pattern, Limitations, Storage API, [third_party_mcp_app] tools need opt-in (+4 more)
+
+### Community 54 - "About Orbit (platform self-knowledge)"
+Cohesion: 0.15
+Nodes (12): About Orbit (platform self-knowledge), Capability × mode policy (enforced by the backend, not advisory), Channels & connectivity, Connectors & skills, Fleet — delegate to other devices, Guiding the user, Messaging the user & alerts — use the notify tools, never bash, Permission modes (the user picks one per turn; shown as a composer chip) (+4 more)
+
+### Community 56 - "prompts.js"
+Cohesion: 0.27
+Nodes (11): createPromptsRouter(), descriptionOf(), fs, listPrompts(), MODE_FILES, path, PROMPTS_DIR, PROTECTED (+3 more)
+
+### Community 57 - "page.tsx"
+Cohesion: 0.29
+Nodes (5): FleetView(), SCOPES, installApiAuthFetch(), getActiveCredential(), getDeviceToken()
+
+### Community 58 - "AppShell.tsx"
+Cohesion: 0.22
+Nodes (4): AppShell(), STATUS_META, breakpoints, useResponsive()
+
+### Community 59 - "Orbit"
+Cohesion: 0.18
+Nodes (10): Branching, Configuration, Features, Orbit, Orbit as a Headless Backend, Prerequisites, Project layout, Quickstart (+2 more)
+
+### Community 60 - "2. Dashboard WS protocol"
+Cohesion: 0.20
+Nodes (9): 1. Harness protocol, 2. Dashboard WS protocol, Backend → client, Backend → harness (stdin), Client → backend, Harness → backend (stdout, one JSON per line), Metrics semantics, Orbit Wire Protocol (+1 more)
+
+### Community 61 - "channels.js"
+Cohesion: 0.33
+Nodes (9): createChannelsRouter(), crypto, publicView(), renderTemplate(), { Router }, sanitize(), VALID_TYPE, VALID_VERIFY (+1 more)
+
+### Community 62 - "button.tsx"
+Cohesion: 0.15
+Nodes (5): ComponentErrorBoundary, ErrorBoundary, ErrorBoundaryState, Button(), buttonVariants
+
+### Community 63 - "package.json"
+Cohesion: 0.20
+Nodes (9): name, private, scripts, build, dev, lint, start, typecheck (+1 more)
+
+### Community 64 - "MissionView.tsx"
+Cohesion: 0.20
+Nodes (5): LANE, Plan, PlanStep, STATUS_COLOR, StepStatus
+
+### Community 65 - "index.js"
+Cohesion: 0.27
+Nodes (8): ANDROID_CLIENT, {
+  CallToolRequestSchema,
+  ListToolsRequestSchema,
+}, decodeEntities(), fetchYouTubeTranscript(), parseTimedText(), parseVideoId(), { Server }, { StdioServerTransport }
+
+### Community 66 - "crypto-store.js"
+Cohesion: 0.22
+Nodes (7): crypto, decrypt(), encrypt(), fs, KEY, KEY_FILE, path
+
+### Community 67 - "index.js"
+Cohesion: 0.18
+Nodes (9): loadHarness(), OpenCodeHarness, PiCodeHarness, fs, HarnessInterface, OPENCODE_TOOLS, path, { spawn } (+1 more)
+
+### Community 68 - "policy-engine.js"
+Cohesion: 0.28
+Nodes (7): byRank(), CAPABILITIES, DEFAULT_MATRIX, evaluate(), MODES, RANK, resolveMatrix()
+
+### Community 69 - "skills.js"
+Cohesion: 0.33
+Nodes (8): createSkillsRouter(), fs, listSkills(), parseSkill(), path, resolveSkills(), { Router }, SKILLS_DIR
+
+### Community 70 - "index.js"
+Cohesion: 0.31
+Nodes (7): {
+  CallToolRequestSchema,
+  ListToolsRequestSchema,
+}, decodeEntities(), searchDuckDuckGo(), { Server }, { StdioServerTransport }, unwrapDdg(), webSearch()
+
+### Community 71 - "profiles.js"
+Cohesion: 0.39
+Nodes (7): createProfilesRouter(), DEFAULT_PROFILES, { Router }, sanitize(), VALID_EFFORT, VALID_MODES, VALID_SANDBOX
+
+### Community 72 - "applyPlanTool"
+Cohesion: 0.25
+Nodes (11): applyPlanTool(), bucketToPayload(), loadPlanBucket(), normalizePlanSteps(), parseMarkdownPlan(), persistPlanFiles(), PLAN_STATUSES, sanitizePlanDeps() (+3 more)
+
+### Community 73 - "tool-catalog.js"
+Cohesion: 0.29
+Nodes (6): catalog, CATALOG_PATH, fs, path, persist(), recordObserved()
+
+### Community 74 - "PreviewTab.tsx"
+Cohesion: 0.29
+Nodes (6): dompurify, IMG_EXT, Mode, OpenFile, PreviewTab(), dompurify
+
+### Community 75 - "FleetView.tsx"
+Cohesion: 0.21
+Nodes (4): AGENT_MODES, SettingsPanel(), Switch(), useDevices()
+
+### Community 76 - "PoliciesView.tsx"
+Cohesion: 0.29
+Nodes (6): CAPABILITIES, CYCLE, DEFAULT_MATRIX, MODES, PoliciesView(), PolicyValue
+
+### Community 77 - "How you operate (Orbit operating manual)"
+Cohesion: 0.25
+Nodes (7): File management, Formatting, How you operate (Orbit operating manual), Implementation basics, Planning, Rules, Tracking
+
+### Community 78 - "DetailPanel.tsx"
+Cohesion: 0.29
+Nodes (6): react, DetailPanel(), DetailPanelProps, InspectorTab, TABS, react
+
+### Community 80 - "lightpanda.js"
+Cohesion: 0.67
+Nodes (5): containerState(), docker(), dockerAvailable(), ensureLightpandaRunning(), { execFile }
+
+### Community 81 - "TraceTab.tsx"
+Cohesion: 0.40
+Nodes (4): ACTIVE(), LANE_COLORS, TraceAgent, TraceTab()
+
+### Community 82 - "LibraryView.tsx"
+Cohesion: 0.47
+Nodes (5): estTokens(), fmt(), Item, LibraryView(), Tab
+
+### Community 83 - "index.js"
+Cohesion: 0.33
+Nodes (3): {
+  CallToolRequestSchema,
+  ListToolsRequestSchema,
+}, { Server }, { StdioServerTransport }
+
+### Community 84 - "index.js"
+Cohesion: 0.33
+Nodes (3): {
+  CallToolRequestSchema,
+  ListToolsRequestSchema,
+}, { Server }, { StdioServerTransport }
+
+### Community 85 - "index.js"
+Cohesion: 0.29
+Nodes (4): {
+  CallToolRequestSchema,
+  ListToolsRequestSchema,
+}, { Server }, STATUSES, { StdioServerTransport }
+
+### Community 86 - "IconRail.tsx"
+Cohesion: 0.40
+Nodes (3): IconRailProps, RailView, VIEWS
+
+### Community 87 - "standard.md"
+Cohesion: 0.40
+Nodes (4): Core Directives:, Proactive Notifications & Messaging:, Text-to-Speech (TTS) Directives:, Web Browsing — prefer the Lightpanda MCP browser:
+
+### Community 88 - "SidebarSwitcher.tsx"
+Cohesion: 0.25
+Nodes (3): ExplorerSidebar(), ExplorerSidebarProps, FileNode
+
+### Community 89 - "edit-mode.md"
 Cohesion: 0.50
-Nodes (3): LIGHTPANDA_WS, node, lightpanda
+Nodes (3): Core Directives:, Proactive Notifications:, Text-to-Speech (TTS) Directives:
+
+### Community 90 - "plan-mode.md"
+Cohesion: 0.50
+Nodes (3): Core Directives:, Proactive Notifications:, Text-to-Speech (TTS) Directives:
+
+### Community 91 - "yolo-mode.md"
+Cohesion: 0.50
+Nodes (3): Core Directives:, Proactive Notifications:, Text-to-Speech (TTS) Directives:
+
+### Community 97 - "subagentFields"
+Cohesion: 0.29
+Nodes (9): ensureSessionDirs(), fs, os, path, removeSessionDirs(), safeId(), sessionDirs(), sessionRoot() (+1 more)
+
+### Community 98 - "generateIntelligentSpeech"
+Cohesion: 0.22
+Nodes (6): ChatEmptyState(), ChatMessage, TOOL_ICONS, ToolGroup(), toolIcon(), ToolRow()
+
+### Community 102 - "card.tsx"
+Cohesion: 0.29
+Nodes (7): Card(), CardAction(), CardContent(), CardDescription(), CardFooter(), CardHeader(), CardTitle()
+
+### Community 155 - "OrbitProvider.tsx"
+Cohesion: 0.33
+Nodes (6): initialState, OrbitDispatchContext, OrbitProvider(), orbitReducer(), OrbitStateContext, useOrbit()
+
+### Community 156 - "CommandPalette.tsx"
+Cohesion: 0.40
+Nodes (4): Kbd(), CommandPalette(), COMMANDS, THEME_COMMANDS
+
+### Community 157 - "PairDevice.tsx"
+Cohesion: 0.60
+Nodes (3): PairDevice(), Input(), setDeviceToken()
 
 ## Knowledge Gaps
-- **269 isolated node(s):** `node`, `LIGHTPANDA_WS`, `fs`, `path`, `CONFIG_PATH` (+264 more)
+- **553 isolated node(s):** `LIGHTPANDA_WS`, `os`, `path`, `WebSocket`, `EventEmitter` (+548 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **19 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **75 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `dependencies` connect `Frontend Dependencies` to `Frontend Build Config`?**
-  _High betweenness centrality (0.032) - this node is a cross-community bridge._
-- **Why does `DashboardInner()` connect `App Shell & Layout` to `Frontend Dependencies`?**
-  _High betweenness centrality (0.031) - this node is a cross-community bridge._
-- **Why does `dompurify` connect `Frontend Dependencies` to `App Shell & Layout`?**
-  _High betweenness centrality (0.030) - this node is a cross-community bridge._
-- **What connects `node`, `LIGHTPANDA_WS`, `fs` to the rest of the system?**
-  _270 weakly-connected nodes found - possible documentation gaps or missing edges._
-- **Should `Dashboard Components & Settings Panel` be split into smaller, more focused modules?**
-  _Cohesion score 0.06612021857923497 - nodes in this community are weakly interconnected._
-- **Should `App Shell & Layout` be split into smaller, more focused modules?**
-  _Cohesion score 0.0711864406779661 - nodes in this community are weakly interconnected._
-- **Should `Product Plans & Design Docs` be split into smaller, more focused modules?**
-  _Cohesion score 0.07149758454106281 - nodes in this community are weakly interconnected._
+- **Why does `SubagentTracker` connect `SubagentTracker` to `Express Server & Routers`, `Subagent Tracker & Harness Events`, `Metrics & Cost Tracking`?**
+  _High betweenness centrality (0.021) - this node is a cross-community bridge._
+- **Why does `dependencies` connect `Frontend Dependencies` to `next`, `tailwind-merge`, `PreviewTab.tsx`, `DetailPanel.tsx`, `@base-ui/react`, `package.json`?**
+  _High betweenness centrality (0.015) - this node is a cross-community bridge._
+- **What connects `LIGHTPANDA_WS`, `os`, `path` to the rest of the system?**
+  _555 weakly-connected nodes found - possible documentation gaps or missing edges._
+- **Should `Express Server & Routers` be split into smaller, more focused modules?**
+  _Cohesion score 0.02774774774774775 - nodes in this community are weakly interconnected._
+- **Should `Subagent Tracker & Harness Events` be split into smaller, more focused modules?**
+  _Cohesion score 0.13846153846153847 - nodes in this community are weakly interconnected._
+- **Should `Backend Dependencies` be split into smaller, more focused modules?**
+  _Cohesion score 0.05555555555555555 - nodes in this community are weakly interconnected._
+- **Should `Metrics & Cost Tracking` be split into smaller, more focused modules?**
+  _Cohesion score 0.07308970099667775 - nodes in this community are weakly interconnected._

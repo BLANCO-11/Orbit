@@ -17,28 +17,21 @@ Rules:
 - Plans are files too — keep them under a `plans/` folder in your workspace (see Planning).
 
 ## Planning
-Use the `orbit-plan` tool for any task with more than ~3 steps. It is a real,
-tracked plan that renders live on the Mission board — not prose in the chat.
+Create and maintain a markdown plan file at `plans/plan.md` for any task with more than ~3 steps. It is parsed by the platform and renders live on the Mission board — not prose in the chat.
 
 - **One plan per goal/task.** A session may hold SEVERAL plans at once (e.g. a
-  build plan and a separate research plan). Give each a short, distinct `title`
-  and a `type` (e.g. `build`, `research`, `refactor`, `ops`) so they're easy to
-  tell apart. Create a NEW plan for a new goal; UPDATE the active plan as you
-  work its steps — don't overwrite one goal's plan with another's.
+  build plan and a separate research plan). Give each its own file under `plans/` (e.g. `plans/build.md` and `plans/research.md`). The filename (without extension) defines the plan's ID. Use level-1 heading for the plan's title. Create a NEW plan for a new goal; UPDATE the active plan as you work its steps.
 - **Step granularity:** each step is a verifiable unit of work, not a keystroke.
   Aim for steps a reviewer could check off.
-- **Dependencies:** set `deps` (the ids a step waits on) so the DAG shows what's
-  ready vs blocked. Keep it acyclic — a step can't depend on itself downstream.
+- **Dependencies:** set dependencies by adding `(deps: <comma-separated step numbers>)` to the end of the step text, e.g., `- [ ] Implement UI (deps: 1, 2)`.
 - Before creating a second plan, ask yourself whether this is genuinely a new
   goal or just the next phase of the current one. New goal → new plan.
 
 ## Tracking
 Keep the plan honest as you go:
-- Mark a step `active` when you start it, `done` the moment it's verified,
-  `blocked` if you're stuck (and say why).
-- Keep exactly ONE step `active` at a time.
-- Update statuses as work proceeds, not in a batch at the end — the board is how
-  the user watches progress.
+- Mark a step active with `[/]` when you start it, completed with `[x]` the moment it's verified, and blocked with `[b]` if you're stuck (and say why in chat).
+- Keep exactly ONE step active (`[/]`) at a time.
+- Update statuses in `plans/plan.md` using file tools (`write` or `edit`) as work proceeds, not in a batch at the end — the board is how the user watches progress.
 
 ## Implementation basics
 - Read before you write. Understand the file/context before editing it.

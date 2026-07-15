@@ -154,12 +154,13 @@ function PlanGraph({ steps }: { steps: PlanStep[] }) {
  * appears when it does). This is deliberately NOT the agent's free-form
  * reasoning — that lives in the Trace/chat accordions.
  */
-export default function MissionView({ planSteps = [], plans = [], activePlanId = '', subAgents = [], status }: {
+export default function MissionView({ planSteps = [], plans = [], activePlanId = '', subAgents = [], status, onSwitchSession }: {
   planSteps?: PlanStep[];
   plans?: Plan[];
   activePlanId?: string;
   subAgents?: any[];
   status?: string;
+  onSwitchSession?: (sessionId: string) => void;
 }) {
   const planList: Plan[] = Array.isArray(plans) && plans.length
     ? plans
@@ -288,17 +289,34 @@ export default function MissionView({ planSteps = [], plans = [], activePlanId =
               {subAgents.map((a, i) => (
                 <div
                   key={a.id || i}
-                  className="flex items-center gap-3 rounded-xl border border-border-soft bg-card px-4 py-2.5"
+                  onClick={() => a.childSessionId && onSwitchSession?.(a.childSessionId)}
+                  className={`flex items-center gap-3 rounded-xl border border-border-soft bg-card px-4 py-2.5 transition-all duration-150 ${
+                    a.childSessionId ? 'cursor-pointer hover:border-primary/30 hover:bg-accent/5 hover:shadow-sm' : ''
+                  }`}
                   style={{ borderLeft: `3px solid ${LANE[i % LANE.length]}` }}
                 >
                   <span className="min-w-0 flex-1">
-                    <span className="block font-mono text-[12.5px] font-semibold">{a.name}</span>
+                    <span className="block font-mono text-[12.5px] font-semibold flex items-center gap-2">
+                      {a.name}
+                      {a.childSessionId && (
+                        <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[9px] font-medium tracking-normal text-primary lowercase">
+                          has session
+                        </span>
+                      )}
+                    </span>
                     {a.task && <span className="block overflow-hidden text-ellipsis whitespace-nowrap text-[11px] text-faint">{a.task}</span>}
                   </span>
                   <span className="shrink-0 font-mono text-[10.5px] text-faint">
                     {(a.tokens || 0).toLocaleString()} tok · {a.toolCalls || 0} tools
                   </span>
-                  <AgentBadge status={a.status} />
+                  <div className="flex items-center gap-2">
+                    <AgentBadge status={a.status} />
+                    {a.childSessionId && onSwitchSession && (
+                      <span className="text-[11px] text-primary font-medium hover:underline shrink-0 pl-1">
+                        View ⇢
+                      </span>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>

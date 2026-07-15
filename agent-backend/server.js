@@ -129,7 +129,7 @@ function loadPlanBucket(sessionId) {
 }
 
 // Persist each plan as a workspace file so plans are real, visible artifacts
-// (workspace/plans/<planId>.json), in addition to the DB copy (Workstream F1).
+// (workspace/plans/<planId>.md), in addition to the DB copy.
 function persistPlanFiles(sessionId, bucket) {
   try {
     const fsx = require("fs");
@@ -137,9 +137,135 @@ function persistPlanFiles(sessionId, bucket) {
     const plansDir = path.join(dirs.workspace, "plans");
     fsx.mkdirSync(plansDir, { recursive: true });
     for (const p of Object.values(bucket.plans)) {
-      fsx.writeFileSync(path.join(plansDir, `${p.planId}.json`), JSON.stringify(p, null, 2) + "\n");
+      const mdContent = serializePlanToMarkdown(p);
+      fsx.writeFileSync(path.join(plansDir, `${p.planId}.md`), mdContent);
     }
-  } catch {}
+  } catch (e) {
+    console.error("[Plans] Failed to persist markdown plans:", e.message);
+  }
+}
+
+function serializePlanToMarkdown(plan) {
+  let md = `# ${plan.title || "Plan"}\n\n`;
+  for (const s of plan.steps || []) {
+    let marker = " ";
+    if (s.status === "done") marker = "x";
+    else if (s.status === "active") marker = "/";
+    else if (s.status === "blocked") marker = "b";
+    
+    let depStr = "";
+    if (s.deps && s.deps.length > 0) {
+      depStr = ` (deps: ${s.deps.join(", ")})`;
+    }
+    md += `- [${marker}] ${s.text}${depStr}\n`;
+  }
+  return md;
+}
+
+function parseMarkdownPlan(content, filename = "plan.md") {
+  const planId = path.basename(filename, ".md");
+  const lines = content.split("\n");
+  let title = planId === "plan" ? "Plan" : planId;
+  const steps = [];
+
+  let headerFound = false;
+  for (let line of lines) {
+    line = line.trim();
+    if (!headerFound && line.startsWith("# ")) {
+      title = line.substring(2).trim();
+      headerFound = true;
+      continue;
+    }
+
+    const match = line.match(/^[-*]\s+\[([ xX/\\bB!~-])\]\s+(.*)$/);
+    if (match) {
+      const marker = match[1].toLowerCase();
+      const rawText = match[2].trim();
+
+      let status = "pending";
+      if (marker === "x") status = "done";
+      else if (marker === "/" || marker === "-" || marker === "~") status = "active";
+      else if (marker === "b" || marker === "!" || marker === "B") status = "blocked";
+
+      let text = rawText;
+      let deps = [];
+      const depMatch = rawText.match(/\((?:deps|after):\s*([^)]+)\)/i);
+      if (depMatch) {
+        deps = depMatch[1].split(",").map(d => d.trim()).filter(Boolean);
+        text = rawText.replace(/\s*\((?:deps|after):\s*[^)]+\)/i, "").trim();
+      }
+
+      steps.push({
+        id: String(steps.length + 1),
+        text,
+        status,
+        deps,
+      });
+    }
+  }
+
+  return {
+    planId,
+    title: title.slice(0, 120),
+    type: "task",
+    steps: sanitizePlanDeps(steps),
+  };
+}
+
+function syncPlansFromWorkspace(sessionId) {
+  try {
+    const fsx = require("fs");
+    const dirs = workspacePaths.sessionDirs(sessionId);
+    const plansDir = path.join(dirs.workspace, "plans");
+    if (!fsx.existsSync(plansDir)) return null;
+
+    const files = fsx.readdirSync(plansDir);
+    const mdFiles = files.filter(f => f.endsWith(".md"));
+    if (mdFiles.length === 0) return null;
+
+    const bucket = loadPlanBucket(sessionId);
+    let changed = false;
+
+    for (const file of mdFiles) {
+      const filePath = path.join(plansDir, file);
+      const content = fsx.readFileSync(filePath, "utf-8");
+      const plan = parseMarkdownPlan(content, file);
+      
+      const existing = bucket.plans[plan.planId];
+      if (!existing || JSON.stringify(existing) !== JSON.stringify(plan)) {
+        bucket.plans[plan.planId] = plan;
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      if (!bucket.activePlanId || !bucket.plans[bucket.activePlanId]) {
+        bucket.activePlanId = Object.keys(bucket.plans)[0] || "default";
+      }
+      
+      sessionPlans.set(sessionId, bucket);
+      const payload = bucketToPayload(bucket);
+      
+      try {
+        const existing = db.getSession(sessionId);
+        if (existing) {
+          db.saveSession({
+            ...existing,
+            planSteps: payload.steps,
+            plans: payload.plans,
+            activePlanId: payload.activePlanId,
+          });
+        }
+      } catch (err) {
+        console.error("[DB] Failed to save session plan on workspace sync:", err.message);
+      }
+      
+      return payload;
+    }
+  } catch (e) {
+    console.error("[Plans] Error syncing plans from workspace:", e.message);
+  }
+  return null;
 }
 
 function bucketToPayload(bucket) {
@@ -262,6 +388,50 @@ if (!createAuthMiddleware.getSharedApiKey()) {
 // ── Mount Routes ────────────────────────────────────────────────────
 app.use("/api/config", authMiddleware, createConfigRouter(activeSessions));
 app.use("/api/sessions", authMiddleware, createSessionsRouter());
+
+app.post("/api/sessions/:sessionId/plan", authMiddleware, (req, res, next) => {
+  try {
+    const { sessionId } = req.params;
+    const { name, arguments: args } = req.body || {};
+    
+    if (!name || !args) {
+      return res.status(400).json({ success: false, message: "Missing name or arguments in payload." });
+    }
+
+    const planState = applyPlanTool(sessionId, name, args);
+    if (planState) {
+      const ws = activeSessions.get(sessionId)?.ws;
+      if (ws) {
+        sendWithSession(ws, {
+          type: "plan_state",
+          steps: planState.steps,
+          plans: planState.plans,
+          activePlanId: planState.activePlanId,
+        }, sessionId);
+      }
+      
+      try {
+        const existing = db.getSession(sessionId);
+        if (existing) {
+          db.saveSession({
+            ...existing,
+            planSteps: planState.steps,
+            plans: planState.plans,
+            activePlanId: planState.activePlanId,
+          });
+        }
+      } catch (err) {
+        console.error("[DB] Failed to save session plan on endpoint:", err.message);
+      }
+      
+      return res.json({ success: true, planState });
+    }
+    
+    return res.status(400).json({ success: false, message: "Tool is not a plan write or update." });
+  } catch (err) {
+    next(err);
+  }
+});
 app.use("/api/models", authMiddleware, createModelsRouter(getConfig));
 app.use("/api/tts", authMiddleware, createTtsRouter(getConfig));
 app.use("/api/voices", authMiddleware, createVoicesRouter(getConfig));
@@ -330,10 +500,27 @@ const fleet = createFleet({
     try { sendWithSession(lead.ws, { type: "subagent_metrics", ...subagentFields(lead.subagentTracker) }, leadSessionId); } catch {}
     try { sendWithSession(lead.ws, { type: "refresh_sessions" }, leadSessionId); } catch {}
   },
-  notifySessionCreated: (leadSessionId, delegateSessionId) => {
+  notifySessionCreated: (leadSessionId, delegateSessionId, device) => {
     const lead = activeSessions.get(leadSessionId);
-    if (lead && lead.ws) {
-      sendWithSession(lead.ws, { type: "refresh_sessions" }, leadSessionId);
+    if (lead) {
+      if (lead.subagentTracker && device) {
+        lead.subagentTracker.linkChildSession(device, delegateSessionId);
+        try {
+          const existing = db.getSession(leadSessionId);
+          if (existing) {
+            db.saveSession({
+              ...existing,
+              subagentTree: lead.subagentTracker.toJSON()
+            });
+          }
+        } catch (e) {
+          console.error("[Fleet] Failed to save lead session subagent tree on notify:", e.message);
+        }
+        try { sendWithSession(lead.ws, { type: "subagent_metrics", ...subagentFields(lead.subagentTracker) }, leadSessionId); } catch {}
+      }
+      if (lead.ws) {
+        sendWithSession(lead.ws, { type: "refresh_sessions" }, leadSessionId);
+      }
     }
   },
 });
@@ -568,14 +755,58 @@ wss.on("connection", (ws) => {
         }
       }
       
+      // ── subscribe ───────────────────────────────────────────
+      else if (data.type === "subscribe") {
+        const { sessionId } = data;
+        if (sessionId) {
+          ws.activeSessionId = sessionId;
+          const ses = activeSessions.get(sessionId);
+          if (ses) {
+            // Bind the active WebSocket to this running session
+            ses.ws = ws;
+            // Send the current running status immediately
+            const status = ses.harness?.piProcess ? (ses.status || "thinking") : "done";
+            sendStatus(ws, status, sessionId);
+          } else {
+            sendStatus(ws, "done", sessionId);
+          }
+          
+          // Send the current plan state immediately if it exists
+          try {
+            const planState = loadPlanBucket(sessionId);
+            if (planState) {
+              sendWithSession(ws, {
+                type: "plan_state",
+                steps: planState.plans.default?.steps || [],
+                plans: Object.values(planState.plans),
+                activePlanId: planState.activePlanId,
+              }, sessionId);
+            }
+          } catch (e) {
+            console.error("[WS] Failed to send plan state on subscribe:", e.message);
+          }
+        }
+      }
+
       // ── mode_switch ─────────────────────────────────────────
       else if (data.type === "mode_switch") {
         const { sessionId, mode } = data;
-        const ses = activeSessions.get(sessionId || ws.activeSessionId);
+        const sid = sessionId || ws.activeSessionId;
+        const ses = activeSessions.get(sid);
         if (ses?.harness) {
           try { ses.harness.disconnect(); } catch {}
         }
-        activeSessions.delete(sessionId || ws.activeSessionId);
+        activeSessions.delete(sid);
+        
+        try {
+          const existing = db.getSession(sid);
+          if (existing) {
+            db.saveSession({ ...existing, mode });
+          }
+        } catch (e) {
+          console.error("[DB] Failed to update session mode on switch:", e.message);
+        }
+
         sendLog(ws, `[Mode Switch] Session switched to "${mode || "chat"}". Next prompt will use new behavior.`, false);
       }
       
@@ -628,9 +859,19 @@ wss.on("connection", (ws) => {
         if (ses?.harness) { try { ses.harness.disconnect(); } catch {} }
         activeSessions.delete(sid);
 
+        try {
+          const existing = db.getSession(sid);
+          if (existing) {
+            db.saveSession({ ...existing, mode });
+          }
+        } catch (e) {
+          console.error("[DB] Failed to update session mode on rerun:", e.message);
+        }
+
         if (rerunPrompt) {
           sendLog(ws, `[Mode Switch Rerun] Re-sending prompt with mode "${mode}"`, false);
-          await handleStartTask(ws, rerunPrompt, sid, mode, st, rerunSkills);
+          const contextPrompt = `[System Note: You suggested switching to ${mode} mode. The user approved this request, switched the session permission mode to "${mode}", and re-submitted your prompt. Please review your active workspace plan under plans/ and resume your task. Original prompt: "${rerunPrompt}"]`;
+          await handleStartTask(ws, contextPrompt, sid, mode, st, rerunSkills);
         }
       }
     } catch (err) {
@@ -761,6 +1002,35 @@ async function handleStartTask(ws, userPrompt, sessionId, mode, systemPromptType
     console.error(`[SubagentTracker] Error restoring history for ${sessionId}:`, e.message);
   }
   
+  // Ensure session workspace dirs exist
+  const dirs = workspacePaths.ensureSessionDirs(sessionId);
+  try {
+    const fsx = require("fs");
+    const plansDir = path.join(dirs.workspace, "plans");
+    fsx.mkdirSync(plansDir, { recursive: true });
+    
+    const mdFiles = fsx.existsSync(plansDir) ? fsx.readdirSync(plansDir).filter(f => f.endsWith(".md")) : [];
+    if (mdFiles.length === 0) {
+      const bucket = loadPlanBucket(sessionId);
+      if (bucket && bucket.plans && Object.keys(bucket.plans).length > 0) {
+        persistPlanFiles(sessionId, bucket);
+        sendLog(ws, `Rehydrated ${Object.keys(bucket.plans).length} plan(s) to workspace/plans/`, false, sessionId);
+      }
+    } else {
+      const planState = syncPlansFromWorkspace(sessionId);
+      if (planState) {
+        sendWithSession(ws, {
+          type: "plan_state",
+          steps: planState.steps,
+          plans: planState.plans,
+          activePlanId: planState.activePlanId,
+        }, sessionId);
+      }
+    }
+  } catch (e) {
+    console.error("[Plans] Rehydration/Sync failed on task start:", e.message);
+  }
+
   // ── Spawn or reuse harness ────────────────────────────────
   // A session may target a specific harness by id: "local" (or unset) runs the
   // local pi child process; a remote id runs on the connected orbit-adapter of
@@ -849,7 +1119,13 @@ async function handleStartTask(ws, userPrompt, sessionId, mode, systemPromptType
 
   // Mark the session as running so an interrupted turn (harness death / server
   // restart) is detectable and resumable. Cleared on agent_end / close.
-  try { db.setSessionRunning(sessionId, { activePrompt: userPrompt, mode: activeMode }); } catch {}
+  try {
+    db.setSessionRunning(sessionId, { activePrompt: userPrompt, mode: activeMode });
+    const existing = db.getSession(sessionId);
+    if (existing) {
+      db.saveSession({ ...existing, mode: activeMode });
+    }
+  } catch {}
 
   // Send the prompt
   await sessionItem.harness.sendPrompt(userPrompt);
@@ -980,6 +1256,20 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
     sendWithSession(ws, { type: "reasoning_update", content: text }, sessionId);
   });
   
+  function saveSubagentTree(sid, tracker) {
+    try {
+      const existing = db.getSession(sid);
+      if (existing) {
+        db.saveSession({
+          ...existing,
+          subagentTree: tracker.toJSON()
+        });
+      }
+    } catch (e) {
+      console.error("[DB] Failed to save subagent tree:", e.message);
+    }
+  }
+
   events.on("tool_call_start", ({ id, name, arguments: args, subagentId }) => {
     // If this turn was already halted (policy block or anti-flail), ignore the
     // tool calls pi still emits before cancel() lands — otherwise every trailing
@@ -1048,11 +1338,13 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
       subagentTracker.spawnAgent(id, saName, parentId, inheritedMode, saPrompt);
       subagentTracker.setStatus(id, STATUS.WORKING);
       metricsManager.addSubagent(sessionId, { id, name: saName, parentId, status: STATUS.WORKING, mode: inheritedMode, task: saPrompt });
+      saveSubagentTree(sessionId, subagentTracker);
 
       sendLog(ws, `[Subagent Spawn] Mode="${inheritedMode}" inherited by subagent "${saName}".`, false);
     } else if (subagentId && subagentTracker.getAgent(subagentId)) {
       // This tool call is being made BY a subagent (nested tool use) — record it against the subagent, not the session.
       subagentTracker.startToolCall(subagentId, id, name, args);
+      saveSubagentTree(sessionId, subagentTracker);
     } else if (isFleetDispatchTool(name)) {
       // The lead delegating to a device. The delegated run is its own session,
       // but surface it here as a sub-agent lane so it shows in the Mission board
@@ -1062,6 +1354,7 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
       subagentTracker.spawnAgent(id, `⇢ ${device}`, null, mode || "chat", task);
       subagentTracker.setStatus(id, STATUS.WORKING);
       metricsManager.addSubagent(sessionId, { id, name: `⇢ ${device}`, parentId: null, status: STATUS.WORKING, mode: mode || "chat", task: task });
+      saveSubagentTree(sessionId, subagentTracker);
       sendWithSession(ws, {
         type: "subagent_metrics",
         ...metricsManager.toFrontendUpdate(sessionId),
@@ -1175,6 +1468,17 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
 
     sendWithSession(ws, { type: "tool_end", toolCallId: id, name, result, latencyMs }, sessionId);
 
+    // Sync plans from workspace in case file tools modified any plans
+    const planState = syncPlansFromWorkspace(sessionId);
+    if (planState) {
+      sendWithSession(ws, {
+        type: "plan_state",
+        steps: planState.steps,
+        plans: planState.plans,
+        activePlanId: planState.activePlanId,
+      }, sessionId);
+    }
+
     // ── Anti-flail guard ──────────────────────────────────────
     // Stop a turn that's spinning: too many tool calls overall, or a run of
     // empty/errored results (the "spiral across search engines" failure mode).
@@ -1212,6 +1516,7 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
     if (subagentId && subagentTracker.getAgent(subagentId)) {
       const subLatencyMs = subagentTracker.endToolCall(subagentId, id, resultStr);
       metricsManager.addSubagentToolCall(sessionId, subagentId, name, null, resultStr, subLatencyMs);
+      saveSubagentTree(sessionId, subagentTracker);
     }
 
     // Fleet dispatch lane completion — the delegated device finished and its
@@ -1219,12 +1524,14 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
     if (isFleetDispatchTool(name) && subagentTracker.getAgent(id)) {
       subagentTracker.markCompleted(id, resultStr);
       metricsManager.completeSubagent(sessionId, id, resultStr);
+      saveSubagentTree(sessionId, subagentTracker);
     }
 
     // Subagent completion
     if (name === "subagent") {
       subagentTracker.markCompleted(id, resultStr);
       metricsManager.completeSubagent(sessionId, id, resultStr);
+      saveSubagentTree(sessionId, subagentTracker);
 
       // Aggregate subagent tokens into session totals
       const subTokens = subagentTracker.getAgent(id)?.tokens;
@@ -1249,6 +1556,7 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
   events.on("subagent_reasoning", ({ subagentId, delta, tokens }) => {
     subagentTracker.addReasoning(subagentId, delta, tokens);
     metricsManager.addSubagentReasoning(sessionId, subagentId, delta, tokens);
+    saveSubagentTree(sessionId, subagentTracker);
     
     sendWithSession(ws, {
       type: "subagent_metrics",
@@ -1262,6 +1570,7 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
     subagentTracker.setStatus(subagentId, status);
     const normalizedStatus = subagentTracker.getAgent(subagentId)?.status;
     metricsManager.updateSubagent(sessionId, subagentId, { status: normalizedStatus });
+    saveSubagentTree(sessionId, subagentTracker);
 
     sendWithSession(ws, {
       type: "subagent_metrics",
@@ -1321,6 +1630,17 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
       }
     } catch (e) {
       console.error(`[Metrics] turn-end persist failed for ${sessionId}:`, e.message);
+    }
+
+    // Sync plans from workspace at turn end
+    const planState = syncPlansFromWorkspace(sessionId);
+    if (planState) {
+      sendWithSession(ws, {
+        type: "plan_state",
+        steps: planState.steps,
+        plans: planState.plans,
+        activePlanId: planState.activePlanId,
+      }, sessionId);
     }
 
     // Turn finished cleanly — no longer resumable.
@@ -1422,7 +1742,6 @@ function ensureOrbitMcpServersRegistered() {
     "orbit-notify": path.join(__dirname, "../mcp-server-notify/index.js"),
     "orbit-transcript": path.join(__dirname, "../mcp-server-transcript/index.js"),
     "orbit-search": path.join(__dirname, "../mcp-server-search/index.js"),
-    "orbit-plan": path.join(__dirname, "../mcp-server-plan/index.js"),
   };
   try {
     const fs = require("fs");
@@ -1432,6 +1751,13 @@ function ensureOrbitMcpServersRegistered() {
       : { settings: { toolPrefix: "mcp" }, mcpServers: {} };
     cfg.mcpServers = cfg.mcpServers || {};
     let changed = false;
+
+    if (cfg.mcpServers["orbit-plan"]) {
+      delete cfg.mcpServers["orbit-plan"];
+      changed = true;
+      console.log("[Orbit MCP] Removed orbit-plan from .pi/mcp.json");
+    }
+
     for (const [id, entry] of Object.entries(servers)) {
       const desired = {
         command: "node",

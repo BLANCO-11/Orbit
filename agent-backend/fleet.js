@@ -87,7 +87,7 @@ function createFleet({ db, harnessRegistry, handleStartTask, getSessionMode, cre
         timestamp: Date.now(),
       });
       if (notifySessionCreated && leadSessionId) {
-        try { notifySessionCreated(leadSessionId, sessionId); } catch {}
+        try { notifySessionCreated(leadSessionId, sessionId, harnessId); } catch {}
       }
     } catch (e) {
       console.error("[Fleet] initial save failed:", e.message);

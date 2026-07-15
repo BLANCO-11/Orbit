@@ -342,6 +342,25 @@ class SubagentTracker {
     return "";
   }
 
+  /**
+   * Associate a child session ID with a subagent lane without marking it completed.
+   */
+  linkChildSession(device, childSessionId) {
+    const laneName = `⇢ ${device}`;
+    let lane = Array.from(this._agents.values())
+      .filter((a) => a.name === laneName && !a.childSessionId)
+      .sort((a, b) => new Date(b.timeStart) - new Date(a.timeStart))[0];
+    if (!lane) {
+      lane = Array.from(this._agents.values())
+        .filter((a) => a.name.startsWith("⇢") && !a.childSessionId)
+        .sort((a, b) => new Date(b.timeStart) - new Date(a.timeStart))[0];
+    }
+    if (lane) {
+      lane.childSessionId = childSessionId;
+      this._emit("subagent_update", { agentId: lane.id, status: lane.status });
+    }
+  }
+
   // ── Serialization ─────────────────────────────────────────────────
 
   /**

@@ -280,6 +280,7 @@ function orbitReducer(state, action) {
     case RESET_RUN:
       return {
         ...state,
+        messages: state.messages.filter((m) => !m.isModeSuggestion),
         logs: [],
         executionPlan: '',
         metrics: { ...state.metrics, latency: 0 },

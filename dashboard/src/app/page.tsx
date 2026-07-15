@@ -106,10 +106,13 @@ function DashboardInner() {
     updateCurrentSession, getSessionPreview, clearRunState,
   } = useSessions();
 
-  // Keep WebSocket session ID in sync
+  // Keep WebSocket session ID in sync and subscribe on the backend
   useEffect(() => {
     setSessionId(state.currentSessionId);
-  }, [state.currentSessionId, setSessionId]);
+    if (sendMessage && state.currentSessionId) {
+      sendMessage({ type: 'subscribe', sessionId: state.currentSessionId });
+    }
+  }, [state.currentSessionId, setSessionId, sendMessage]);
 
   // Persist the conversation into the session record whenever a turn settles.
   // The streamed assistant reply otherwise lives only in reducer state and is
@@ -353,11 +356,13 @@ function DashboardInner() {
 
   const handleSetSessionMode = useCallback((mode) => {
     dispatch(actions.setSessionMode(mode));
+    dispatch(actions.removeModeSuggestions());
     if (sendMessage) {
       sendMessage({ type: 'mode_switch', sessionId: state.currentSessionId, mode });
     }
-    updateCurrentSession({ mode }, true);
-  }, [sendMessage, state.currentSessionId, dispatch, updateCurrentSession]);
+    const cleanMessages = state.messages.filter(m => !m.isModeSuggestion);
+    updateCurrentSession({ mode, messages: cleanMessages }, true);
+  }, [sendMessage, state.currentSessionId, state.messages, dispatch, updateCurrentSession]);
 
   const handleManualCompact = useCallback(() => {
     if (sendMessage) {
@@ -448,12 +453,8 @@ function DashboardInner() {
   // ── Session switch with WebSocket cancel ──
   const handleSwitchSession = useCallback((sessionId) => {
     stopSpeaking();
-    // Cancel old session's agent
-    if (sendMessage && state.currentSessionId) {
-      sendMessage({ type: 'cancel_session', sessionId: state.currentSessionId });
-    }
     switchSession(sessionId);
-  }, [stopSpeaking, sendMessage, state.currentSessionId, switchSession]);
+  }, [stopSpeaking, switchSession]);
 
   // ── Load older messages ──
   const handleLoadOlderMessages = useCallback((container) => {
@@ -680,6 +681,7 @@ function DashboardInner() {
             activePlanId={state.activePlanId}
             subAgents={state.metrics.subagentTrace || state.metrics.activeSubagents || []}
             status={state.status}
+            onSwitchSession={handleSwitchSession}
           />
         </ComponentErrorBoundary>
       ) : (

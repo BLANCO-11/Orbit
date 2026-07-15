@@ -57,17 +57,6 @@
       "env": {
         "ORBIT_API": "http://127.0.0.1:6800"
       }
-    },
-    "orbit-plan": {
-      "command": "node",
-      "args": [
-        "/home/blanco/builds/LLM-OS-AGENT/mcp-server-plan/index.js"
-      ],
-      "transport": "stdio",
-      "lifecycle": "eager",
-      "env": {
-        "ORBIT_API": "http://127.0.0.1:6800"
-      }
     }
   }
 }

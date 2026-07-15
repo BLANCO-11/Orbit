@@ -19,6 +19,35 @@ const {
 
 const STATUSES = ["pending", "active", "done", "blocked"];
 
+const API = process.env.ORBIT_API || "http://127.0.0.1:6800";
+const API_KEY = process.env.ORBIT_API_KEY || "";
+const SESSION_ID = process.env.ORBIT_SESSION || "";
+
+async function postPlanUpdate(payload) {
+  if (!SESSION_ID) {
+    console.error("[plan-mcp] No ORBIT_SESSION env var set; skipping HTTP sync.");
+    return;
+  }
+  const headers = { "Content-Type": "application/json" };
+  if (API_KEY) headers["Authorization"] = `Bearer ${API_KEY}`;
+  try {
+    const res = await fetch(`${API}/api/sessions/${SESSION_ID}/plan`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(payload),
+    });
+    const text = await res.text();
+    let json;
+    try { json = JSON.parse(text); } catch { json = { raw: text }; }
+    if (!res.ok || json.success === false) {
+      console.error(`[plan-mcp] HTTP sync failed: ${json.error || json.message || text}`);
+    }
+    return json;
+  } catch (err) {
+    console.error(`[plan-mcp] HTTP request failed: ${err.message}`);
+  }
+}
+
 const server = new Server(
   { name: "orbit-plan", version: "1.0.0" },
   { capabilities: { tools: {} } },
@@ -86,12 +115,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }));
       const done = normalized.filter((s) => s.status === "done").length;
       const planId = String(args?.planId || "default");
+      
+      // POST the plan state to the backend
+      await postPlanUpdate({ name, arguments: args });
+
       return { content: [{ type: "text", text: `Plan "${planId}" set (${normalized.length} steps, ${done} done). The checklist is now live in the Mission board. Update it with plan_update as you complete each step.` }] };
     }
     if (name === "plan_update") {
       if (!args?.id) throw new Error("id is required");
       if (!STATUSES.includes(args?.status)) throw new Error(`status must be one of: ${STATUSES.join(", ")}`);
       const planId = String(args?.planId || "default");
+
+      // POST the plan update to the backend
+      await postPlanUpdate({ name, arguments: args });
+
       return { content: [{ type: "text", text: `Plan "${planId}" · step ${args.id} → ${args.status}.` }] };
     }
     throw new Error(`Unknown tool: ${name}`);

@@ -59,6 +59,9 @@ export function useWebSocket(
       }
       failedAttemptsRef.current = 0;
       setConnectionState('connected');
+      if (sessionIdRef.current) {
+        ws.send(JSON.stringify({ type: 'subscribe', sessionId: sessionIdRef.current }));
+      }
     };
     
     ws.onmessage = (event) => {

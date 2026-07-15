@@ -36,6 +36,12 @@ function ChatMessageBase({
   const isUser = message.role === 'user';
 
   if (message.isModeSuggestion) {
+    const MODE_RANK = { '': -1, chat: 0, plan: 1, edit: 2, yolo: 3 };
+    const currentRank = MODE_RANK[sessionMode || ''] ?? -1;
+    const suggestedRank = MODE_RANK[message.suggestedMode || ''] ?? -1;
+    if (currentRank >= suggestedRank) {
+      return null;
+    }
     return (
       <ModeSuggestionCard
         message={message}
