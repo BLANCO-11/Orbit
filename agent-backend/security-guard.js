@@ -52,22 +52,16 @@ function validatePath(action, targetPath, config, mode) {
     }
   }
 
-  // Plan mode: only reading and writing plans (under plan/ directory)
+  // Plan mode: only reading and writing plans (under workspace/plans/ directory)
   if (activeMode === "plan") {
-    const planDir = path.resolve(path.join(__dirname, "../plan"));
-    const isPlanPath = resolved === planDir || isUnderDirectory(planDir, resolved);
+    const isPlanPath = resolved.includes("/workspace/plans/") || resolved.endsWith("/workspace/plans");
     if (!isPlanPath) {
       return {
         allowed: false,
-        reason: `Plan mode restriction: reading and writing is restricted to the plans directory only (${planDir}). Path: ${targetPath}`,
+        reason: `Plan mode restriction: reading and writing is restricted to the plans directory only. Path: ${targetPath}`,
         resolvedPath: resolved
       };
     }
-    return { allowed: true, resolvedPath: resolved };
-  }
-
-  // Always allow read/write access to the session's workspace plans directory
-  if (resolved.includes("/workspace/plans/") || resolved.endsWith("/workspace/plans")) {
     return { allowed: true, resolvedPath: resolved };
   }
 

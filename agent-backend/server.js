@@ -1423,8 +1423,8 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
     const capability = policyEngine.toolToCapability(name, isOutside);
     const deviceOverrides = ws.device?.policyOverrides || null;
     
-    // Auto-allow writing/reading plans in the workspace plans directory regardless of mode
-    const onlyTouchesPlans = toolPaths.length > 0 && toolPaths.every(p => {
+    // Auto-allow writing/reading plans in the workspace plans directory in PLAN, EDIT, or YOLO modes
+    const onlyTouchesPlans = activeMode !== "chat" && toolPaths.length > 0 && toolPaths.every(p => {
       const plansDir = path.join(sessionRoot, "workspace", "plans");
       return p === plansDir || p.startsWith(plansDir + path.sep);
     });
