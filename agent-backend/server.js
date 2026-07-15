@@ -1086,7 +1086,7 @@ async function handleStartTask(ws, userPrompt, sessionId, mode, systemPromptType
       }
 
       await harness.connect();
-      sessionItem = { harness, ws, mode: activeMode, subagentTracker, deviceId: ws.device?.id || null, harnessId: remoteEntry ? remoteEntry.id : (harnessId || "local"), sandbox: activeSandbox };
+      sessionItem = { harness, ws, status: "thinking", mode: activeMode, subagentTracker, deviceId: ws.device?.id || null, harnessId: remoteEntry ? remoteEntry.id : (harnessId || "local"), sandbox: activeSandbox };
       activeSessions.set(sessionId, sessionItem);
     } catch (err) {
       console.error(`[handleStartTask] Failed to spawn harness:`, err);
@@ -1096,6 +1096,7 @@ async function handleStartTask(ws, userPrompt, sessionId, mode, systemPromptType
     }
   }
   
+  sessionItem.status = "executing";
   sendStatus(ws, "executing", sessionId);
   
   // ── Metrics auto-save ─────────────────────────────────────
@@ -1330,6 +1331,7 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
           message: `Sub-agent depth ${depth} exceeds the cap of ${maxDepth}. Raise it in Policies to allow deeper nesting.`,
         }, sessionId);
         const ses = activeSessions.get(sessionId);
+        if (ses) ses.status = "done";
         if (ses?.harness) ses.harness.cancel();
         sendStatus(ws, "done", sessionId);
         return;
@@ -1411,6 +1413,7 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
         latencyMs: 0
       }, sessionId);
       const ses = activeSessions.get(sessionId);
+      if (ses) ses.status = "done";
       if (ses?.harness) ses.harness.cancel();
       sendStatus(ws, "done", sessionId);
       return;
@@ -1472,6 +1475,7 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
         sendWithSession(ws, { type: "mode_suggestion", mode: suggestion, reason: `The agent needs ${suggestion.toUpperCase()} mode to use "${name}".` }, sessionId);
       }
       const ses = activeSessions.get(sessionId);
+      if (ses) ses.status = "done";
       if (ses?.harness) ses.harness.cancel();
       sendStatus(ws, "done", sessionId);
       return;
@@ -1535,6 +1539,7 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
             : `this turn hit ${g.calls} tool calls`;
           sendLog(ws, `[Anti-flail] Stopping turn — ${why}.`, false, sessionId);
           const ses = activeSessions.get(sessionId);
+          if (ses) ses.status = "done";
           if (ses?.harness) { try { ses.harness.cancel(); } catch {} }
           sendWithSession(ws, {
             type: "message", role: "assistant",
@@ -1679,6 +1684,8 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
     }
 
     // Turn finished cleanly — no longer resumable.
+    const ses = activeSessions.get(sessionId);
+    if (ses) ses.status = "done";
     try { db.clearSessionRunning(sessionId); } catch {}
     sendStatus(ws, "done", sessionId);
   });
@@ -1712,6 +1719,8 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
   });
   
   events.on("error", ({ message }) => {
+    const ses = activeSessions.get(sessionId);
+    if (ses) ses.status = "error";
     sendStatus(ws, "error", sessionId);
     sendLog(ws, `Fatal error: ${message}`, false, sessionId);
   });

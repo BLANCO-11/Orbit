@@ -1,7 +1,7 @@
 # Graph Report - LLM-OS-AGENT  (2026-07-15)
 
 ## Corpus Check
-- 163 files · ~98,727 words
+- 163 files · ~98,770 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
@@ -10,7 +10,7 @@
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `7a5c896a`
+- Built from commit: `05fe6ab9`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 

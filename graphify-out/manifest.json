@@ -110,8 +110,8 @@
     "semantic_hash": ""
   },
   "agent-backend/server.js": {
-    "mtime": 1784134574.4090407,
-    "ast_hash": "32f71faaf08665067c986148784b7001",
+    "mtime": 1784135463.6406403,
+    "ast_hash": "7c7c2cff786980efd563a5adb62c25c1",
     "semantic_hash": ""
   },
   "agent-backend/services/plan-generator.js": {
