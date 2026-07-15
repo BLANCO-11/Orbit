@@ -159,20 +159,32 @@ export default function FleetView() {
                   Connect a remote harness:
                 </div>
                 {pairing && secondsLeft > 0 ? (
-                  <div className="flex flex-col gap-2.5 text-left max-w-full overflow-x-auto">
-                    <div>
-                      <span className="font-medium text-muted-foreground block mb-0.5">1. Standard Adapter:</span>
-                      <code className="font-mono bg-muted/60 border border-border px-2 py-1 rounded text-accent-foreground block select-all break-all whitespace-pre-wrap">
-                        node orbit-adapter.js --server ws://{typeof window !== 'undefined' ? window.location.hostname + ':6800' : 'localhost:6800'} --code {pairing.code}
-                      </code>
-                    </div>
-                    <div>
-                      <span className="font-medium text-muted-foreground block mb-0.5">2. One-Click Bootstrap (Pipes directly to Node):</span>
-                      <code className="font-mono bg-muted/60 border border-border px-2 py-1 rounded text-accent-foreground block select-all break-all whitespace-pre-wrap">
-                        curl -sSf "http://{typeof window !== 'undefined' ? window.location.host : 'localhost:6801'}/api/pair/bootstrap?code={pairing.code}" | node
-                      </code>
-                    </div>
-                  </div>
+                  (() => {
+                    const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
+                    const wsServerUrl = typeof window !== 'undefined' 
+                      ? `${isHttps ? 'wss' : 'ws'}://${window.location.hostname}${isHttps ? '' : ':6800'}`
+                      : 'ws://localhost:6800';
+                    const bootstrapOrigin = typeof window !== 'undefined'
+                      ? `${window.location.protocol}//${window.location.host}`
+                      : 'http://localhost:6801';
+                    
+                    return (
+                      <div className="flex flex-col gap-2.5 text-left max-w-full overflow-x-auto">
+                        <div>
+                          <span className="font-medium text-muted-foreground block mb-0.5">1. Standard Adapter:</span>
+                          <code className="font-mono bg-muted/60 border border-border px-2 py-1 rounded text-accent-foreground block select-all break-all whitespace-pre-wrap">
+                            node orbit-adapter.js --server {wsServerUrl} --code {pairing.code}
+                          </code>
+                        </div>
+                        <div>
+                          <span className="font-medium text-muted-foreground block mb-0.5">2. One-Click Bootstrap (Pipes directly to Node):</span>
+                          <code className="font-mono bg-muted/60 border border-border px-2 py-1 rounded text-accent-foreground block select-all break-all whitespace-pre-wrap">
+                            curl -sSf "{bootstrapOrigin}/api/pair/bootstrap?code={pairing.code}" | node
+                          </code>
+                        </div>
+                      </div>
+                    );
+                  })()
                 ) : (
                   <div className="py-2 text-center text-muted-foreground">
                     Click <span className="font-semibold">Generate pairing code</span> on the left to show setup commands.

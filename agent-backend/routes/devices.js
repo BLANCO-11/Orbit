@@ -24,10 +24,11 @@ function createDevicesRouter(db, authMiddleware, getDashboardOrigin) {
       return res.status(400).send("// Error: Invalid, expired, or already-used pairing code.");
     }
     
-    // Detect host/origin from req
+    // Detect host/origin and secure protocol dynamically from req
     const host = req.get("host") || "127.0.0.1:6800";
-    const serverUrl = `ws://${host}`;
-    const bootstrapOrigin = `http://${host}`;
+    const isSecure = req.secure || req.headers["x-forwarded-proto"] === "https";
+    const serverUrl = `${isSecure ? "wss" : "ws"}://${host}`;
+    const bootstrapOrigin = `${isSecure ? "https" : "http"}://${host}`;
     
     const script = `
 // Dynamic variables injected by the Orbit Server at request-time

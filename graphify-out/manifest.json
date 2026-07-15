@@ -75,8 +75,8 @@
     "semantic_hash": ""
   },
   "agent-backend/routes/devices.js": {
-    "mtime": 1784145033.2021725,
-    "ast_hash": "c48d53917c9d7e5c4fec086f2eaae59a",
+    "mtime": 1784145191.7469158,
+    "ast_hash": "4553735c6496fc971f4d7b144ee5f943",
     "semantic_hash": ""
   },
   "agent-backend/routes/health.js": {
@@ -745,8 +745,8 @@
     "semantic_hash": ""
   },
   "dashboard/src/components/views/FleetView.tsx": {
-    "mtime": 1784145088.3117678,
-    "ast_hash": "09fac319e7515e24811d439a91ffb178",
+    "mtime": 1784145200.6088378,
+    "ast_hash": "62dab1822f37a9745c01d2191a6013b3",
     "semantic_hash": ""
   },
   "dashboard/src/components/views/LibraryView.tsx": {
