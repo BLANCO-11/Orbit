@@ -154,8 +154,30 @@ export default function FleetView() {
                   </div>
                 </div>
               ))}
-              <div className="rounded-xl border border-dashed border-border px-4 py-3 text-center text-xs text-faint">
-                Connect a remote harness: run <span className="font-mono">orbit-adapter --code &lt;pairing code&gt;</span> on any machine with pi installed.
+              <div className="rounded-xl border border-dashed border-border px-4 py-4 text-center text-xs text-faint">
+                <div className="font-semibold text-muted-foreground mb-2 text-center">
+                  Connect a remote harness:
+                </div>
+                {pairing && secondsLeft > 0 ? (
+                  <div className="flex flex-col gap-2.5 text-left max-w-full overflow-x-auto">
+                    <div>
+                      <span className="font-medium text-muted-foreground block mb-0.5">1. Standard Adapter:</span>
+                      <code className="font-mono bg-muted/60 border border-border px-2 py-1 rounded text-accent-foreground block select-all break-all whitespace-pre-wrap">
+                        node orbit-adapter.js --server ws://{typeof window !== 'undefined' ? window.location.hostname + ':6800' : 'localhost:6800'} --code {pairing.code}
+                      </code>
+                    </div>
+                    <div>
+                      <span className="font-medium text-muted-foreground block mb-0.5">2. One-Click Bootstrap (Pipes directly to Node):</span>
+                      <code className="font-mono bg-muted/60 border border-border px-2 py-1 rounded text-accent-foreground block select-all break-all whitespace-pre-wrap">
+                        curl -sSf "http://{typeof window !== 'undefined' ? window.location.host : 'localhost:6801'}/api/pair/bootstrap?code={pairing.code}" | node
+                      </code>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="py-2 text-center text-muted-foreground">
+                    Click <span className="font-semibold">Generate pairing code</span> on the left to show setup commands.
+                  </div>
+                )}
               </div>
             </div>
 
