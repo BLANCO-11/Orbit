@@ -1696,10 +1696,14 @@ process.on("SIGINT", () => shutdown("SIGINT"));
 // port always match THIS install.
 function ensureOrbitMcpServersRegistered() {
   const servers = {
-    "orbit-fleet": path.join(__dirname, "./fleet-mcp.js"),
-    "orbit-notify": path.join(__dirname, "../mcp-server-notify/index.js"),
-    "orbit-transcript": path.join(__dirname, "../mcp-server-transcript/index.js"),
-    "orbit-search": path.join(__dirname, "../mcp-server-search/index.js"),
+    "orbit-fleet": { path: path.join(__dirname, "./fleet-mcp.js") },
+    "orbit-notify": { path: path.join(__dirname, "../mcp-server-notify/index.js") },
+    "orbit-transcript": { path: path.join(__dirname, "../mcp-server-transcript/index.js") },
+    "orbit-search": { path: path.join(__dirname, "../mcp-server-search/index.js") },
+    "lightpanda": {
+      path: path.join(__dirname, "../mcp-server-lightpanda/index.js"),
+      env: { LIGHTPANDA_WS: process.env.LIGHTPANDA_WS || "ws://127.0.0.1:9222" }
+    }
   };
   try {
     const fs = require("fs");
@@ -1719,12 +1723,13 @@ function ensureOrbitMcpServersRegistered() {
     for (const [id, entry] of Object.entries(servers)) {
       const desired = {
         command: "node",
-        args: [entry],
+        args: [entry.path],
         transport: "stdio",
         lifecycle: "eager",
         env: {
           ORBIT_API: `http://127.0.0.1:${PORT}`,
           ...(process.env.ORBIT_API_KEY ? { ORBIT_API_KEY: process.env.ORBIT_API_KEY } : {}),
+          ...(entry.env || {})
         },
       };
       if (JSON.stringify(cfg.mcpServers[id]) !== JSON.stringify(desired)) {

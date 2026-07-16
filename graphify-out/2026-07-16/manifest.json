@@ -10,14 +10,14 @@
     "semantic_hash": ""
   },
   "agent-backend/db.js": {
-    "mtime": 1784184077.2220535,
-    "ast_hash": "139f3b34c3704b93ece6b2656abe8718",
+    "mtime": 1784186618.2466645,
+    "ast_hash": "bc22363d7eec4fa403821371873994a9",
     "semantic_hash": ""
   },
   "agent-backend/env.js": {
-    "mtime": 1783660909.4483528,
-    "ast_hash": "7917ea1fa05a22c62c9f60adae589edf",
-    "semantic_hash": "7917ea1fa05a22c62c9f60adae589edf"
+    "mtime": 1784186623.7195816,
+    "ast_hash": "d38831e15978b6ae130dff35fff2881e",
+    "semantic_hash": ""
   },
   "agent-backend/harnesses/index.js": {
     "mtime": 1783892547.945889,
@@ -110,8 +110,8 @@
     "semantic_hash": ""
   },
   "agent-backend/server.js": {
-    "mtime": 1784184696.4575565,
-    "ast_hash": "2238d83bc21aa3b1e3c454a4b0123ca4",
+    "mtime": 1784186637.2403772,
+    "ast_hash": "a4b35d129b5214f9bd2d530bd1d02b12",
     "semantic_hash": ""
   },
   "agent-backend/services/plan-generator.js": {

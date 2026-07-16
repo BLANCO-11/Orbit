@@ -52,3 +52,6 @@ yarn-error.log*
 
 # planning docs — internal, not shipped
 plan/
+
+# local agent config
+.pi/
