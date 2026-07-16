@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useLayoutEffect } from 'react';
 import ApprovalBanner from '@/components/ApprovalBanner';
 import ChatMessage, { ChatEmptyState } from '@/components/ChatMessage';
 import ReasoningAccordion from './ReasoningAccordion';
@@ -89,10 +89,10 @@ export default function ChatArea({
 
   const handleScroll = (e) => {
     const container = e.currentTarget;
-    // Recompute stickiness on every user scroll: within ~120px of the bottom
-    // counts as "following along".
+    // Recompute stickiness on every user scroll: within ~20px of the bottom
+    // counts as "following along". If they scroll up even slightly, release the lock.
     const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
-    stickToBottomRef.current = distanceFromBottom < 120;
+    stickToBottomRef.current = distanceFromBottom < 20;
     if (container.scrollTop === 0 && onLoadOlder && hasMoreMessages) {
       onLoadOlder(container);
     }
@@ -105,13 +105,11 @@ export default function ChatArea({
   // is exactly the stutter we're removing; a continuously-growing instant pin
   // reads as smooth because the text simply flows upward. Gated on
   // stickToBottomRef so a user reading earlier messages isn't yanked down.
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!stickToBottomRef.current) return;
     const container = containerRef.current;
     if (!container) return;
-    requestAnimationFrame(() => {
-      container.scrollTop = container.scrollHeight;
-    });
+    container.scrollTop = container.scrollHeight;
   }, [messages]);
 
   const isProcessing = status === 'thinking' || status === 'executing';
