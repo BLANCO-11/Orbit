@@ -1,6 +1,6 @@
 // agent-backend/routes/fleet.js
 // HTTP surface for orchestrated-lead fleet dispatch. Called by the
-// `orbit-fleet` MCP tool server (mcp-server-fleet/index.js), which is what the
+// `orbit-fleet` MCP tool server (agent-backend/fleet-mcp.js), which is what the
 // lead agent actually invokes. Kept separate so the agent reaches it the same
 // way it reaches any tool.
 

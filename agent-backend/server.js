@@ -278,45 +278,7 @@ function bucketToPayload(bucket) {
   };
 }
 
-/**
- * Apply an orbit-plan tool call to the session's structured plan(s) and return
- * { activePlanId, plans, steps } (or null if it wasn't a plan tool). A session
- * can hold MANY named plans (Workstream F). The shared MCP process has no session
- * context, so the backend owns plan state — keyed here by sessionId.
- */
-function applyPlanTool(sessionId, name, args) {
-  const isWrite = /plan_write$/.test(name);
-  const isUpdate = /plan_update$/.test(name);
-  if (!isWrite && !isUpdate) return null;
 
-  const bucket = loadPlanBucket(sessionId);
-
-  if (isWrite) {
-    const planId = String(args?.planId || "default");
-    const steps = sanitizePlanDeps(normalizePlanSteps(args?.steps));
-    bucket.plans[planId] = {
-      planId,
-      title: String(args?.title || (planId === "default" ? "Plan" : planId)).slice(0, 120),
-      type: String(args?.type || "task").slice(0, 40),
-      steps,
-    };
-    bucket.activePlanId = planId;
-  } else {
-    const planId = String(args?.planId || bucket.activePlanId || "default");
-    const plan = bucket.plans[planId] || bucket.plans[bucket.activePlanId];
-    if (plan) {
-      const step = plan.steps.find((s) => s.id === String(args?.id));
-      if (step) {
-        if (PLAN_STATUSES.has(args?.status)) step.status = args.status;
-        if (typeof args?.text === "string" && args.text.trim()) step.text = args.text.slice(0, 240);
-      }
-      bucket.activePlanId = plan.planId;
-    }
-  }
-
-  persistPlanFiles(sessionId, bucket);
-  return bucketToPayload(bucket);
-}
 
 // Anti-flail limits: stop a turn that's spinning without making progress.
 const MAX_TOOL_CALLS_PER_TURN = 40;        // hard runaway backstop
@@ -389,49 +351,7 @@ if (!createAuthMiddleware.getSharedApiKey()) {
 app.use("/api/config", authMiddleware, createConfigRouter(activeSessions));
 app.use("/api/sessions", authMiddleware, createSessionsRouter());
 
-app.post("/api/sessions/:sessionId/plan", authMiddleware, (req, res, next) => {
-  try {
-    const { sessionId } = req.params;
-    const { name, arguments: args } = req.body || {};
-    
-    if (!name || !args) {
-      return res.status(400).json({ success: false, message: "Missing name or arguments in payload." });
-    }
 
-    const planState = applyPlanTool(sessionId, name, args);
-    if (planState) {
-      const ws = activeSessions.get(sessionId)?.ws;
-      if (ws) {
-        sendWithSession(ws, {
-          type: "plan_state",
-          steps: planState.steps,
-          plans: planState.plans,
-          activePlanId: planState.activePlanId,
-        }, sessionId);
-      }
-      
-      try {
-        const existing = db.getSession(sessionId);
-        if (existing) {
-          db.saveSession({
-            ...existing,
-            planSteps: planState.steps,
-            plans: planState.plans,
-            activePlanId: planState.activePlanId,
-          });
-        }
-      } catch (err) {
-        console.error("[DB] Failed to save session plan on endpoint:", err.message);
-      }
-      
-      return res.json({ success: true, planState });
-    }
-    
-    return res.status(400).json({ success: false, message: "Tool is not a plan write or update." });
-  } catch (err) {
-    next(err);
-  }
-});
 app.use("/api/models", authMiddleware, createModelsRouter(getConfig));
 app.use("/api/tts", authMiddleware, createTtsRouter(getConfig));
 app.use("/api/voices", authMiddleware, createVoicesRouter(getConfig));
@@ -1290,27 +1210,7 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
 
     sendWithSession(ws, { type: "tool_start", toolCallId: id, name, arguments: args }, sessionId);
 
-    // Structured plan tool → update the live Mission checklist for this session.
-    // (Intercepted here because this per-session emitter has the sessionId the
-    // shared orbit-plan MCP process lacks.)
-    const planState = applyPlanTool(sessionId, name, args);
-    if (planState) {
-      sendWithSession(ws, {
-        type: "plan_state",
-        steps: planState.steps,            // back-compat: active plan's steps
-        plans: planState.plans,
-        activePlanId: planState.activePlanId,
-      }, sessionId);
-      try {
-        const existing = db.getSession(sessionId);
-        if (existing) db.saveSession({
-          ...existing,
-          planSteps: planState.steps,
-          plans: planState.plans,
-          activePlanId: planState.activePlanId,
-        });
-      } catch {}
-    }
+
 
     // Track subagent spawns
     if (name === "subagent") {
@@ -1782,7 +1682,7 @@ process.on("SIGINT", () => shutdown("SIGINT"));
 // port always match THIS install.
 function ensureOrbitMcpServersRegistered() {
   const servers = {
-    "orbit-fleet": path.join(__dirname, "../mcp-server-fleet/index.js"),
+    "orbit-fleet": path.join(__dirname, "./fleet-mcp.js"),
     "orbit-notify": path.join(__dirname, "../mcp-server-notify/index.js"),
     "orbit-transcript": path.join(__dirname, "../mcp-server-transcript/index.js"),
     "orbit-search": path.join(__dirname, "../mcp-server-search/index.js"),

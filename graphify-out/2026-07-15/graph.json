@@ -1146,7 +1146,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "agent_backend_env",
-      "community": 28,
+      "community": 43,
       "norm_label": "env.js"
     },
     {
@@ -1156,7 +1156,7 @@
       "source_location": "L4",
       "_origin": "ast",
       "id": "agent_backend_env_fs",
-      "community": 28,
+      "community": 43,
       "norm_label": "fs"
     },
     {
@@ -1166,7 +1166,7 @@
       "source_location": "L5",
       "_origin": "ast",
       "id": "agent_backend_env_os",
-      "community": 28,
+      "community": 43,
       "norm_label": "os"
     },
     {
@@ -1176,7 +1176,7 @@
       "source_location": "L7",
       "_origin": "ast",
       "id": "agent_backend_env_required_vars",
-      "community": 28,
+      "community": 43,
       "norm_label": "required_vars"
     },
     {
@@ -1186,7 +1186,7 @@
       "source_location": "L8",
       "_origin": "ast",
       "id": "agent_backend_env_recommended_vars",
-      "community": 28,
+      "community": 43,
       "norm_label": "recommended_vars"
     },
     {
@@ -1206,68 +1206,8 @@
       "source_location": "L29",
       "_origin": "ast",
       "id": "agent_backend_env_validateenv",
-      "community": 28,
+      "community": 43,
       "norm_label": "validateenv()"
-    },
-    {
-      "label": "fleet-mcp.js",
-      "file_type": "code",
-      "source_file": "agent-backend/fleet-mcp.js",
-      "source_location": "L1",
-      "_origin": "ast",
-      "id": "agent_backend_fleet_mcp",
-      "community": 67,
-      "norm_label": "fleet-mcp.js"
-    },
-    {
-      "label": "{ Server }",
-      "file_type": "code",
-      "source_file": "agent-backend/fleet-mcp.js",
-      "source_location": "L9",
-      "_origin": "ast",
-      "id": "agent_backend_fleet_mcp_server",
-      "community": 67,
-      "norm_label": "{ server }"
-    },
-    {
-      "label": "{ StdioServerTransport }",
-      "file_type": "code",
-      "source_file": "agent-backend/fleet-mcp.js",
-      "source_location": "L10",
-      "_origin": "ast",
-      "id": "agent_backend_fleet_mcp_stdioservertransport",
-      "community": 67,
-      "norm_label": "{ stdioservertransport }"
-    },
-    {
-      "label": "{\n  CallToolRequestSchema,\n  ListToolsRequestSchema,\n}",
-      "file_type": "code",
-      "source_file": "agent-backend/fleet-mcp.js",
-      "source_location": "L11",
-      "_origin": "ast",
-      "id": "agent_backend_fleet_mcp_calltoolrequestschema_listtoolsrequestschema",
-      "community": 67,
-      "norm_label": "{\n  calltoolrequestschema,\n  listtoolsrequestschema,\n}"
-    },
-    {
-      "label": "api()",
-      "file_type": "code",
-      "source_file": "agent-backend/fleet-mcp.js",
-      "source_location": "L19",
-      "_origin": "ast",
-      "id": "agent_backend_fleet_mcp_api",
-      "community": 67,
-      "norm_label": "api()"
-    },
-    {
-      "label": "run()",
-      "file_type": "code",
-      "source_file": "agent-backend/fleet-mcp.js",
-      "source_location": "L116",
-      "_origin": "ast",
-      "id": "agent_backend_fleet_mcp_run",
-      "community": 67,
-      "norm_label": "run()"
     },
     {
       "label": "fleet.js",
@@ -1336,7 +1276,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "agent_backend_harnesses_container_index",
-      "community": 62,
+      "community": 25,
       "norm_label": "index.js"
     },
     {
@@ -1346,7 +1286,7 @@
       "source_location": "L17",
       "_origin": "ast",
       "id": "agent_backend_harnesses_container_index_execsync",
-      "community": 62,
+      "community": 25,
       "norm_label": "{ execsync }"
     },
     {
@@ -1356,7 +1296,7 @@
       "source_location": "L18",
       "_origin": "ast",
       "id": "agent_backend_harnesses_container_index_os",
-      "community": 62,
+      "community": 25,
       "norm_label": "os"
     },
     {
@@ -1366,7 +1306,7 @@
       "source_location": "L19",
       "_origin": "ast",
       "id": "agent_backend_harnesses_container_index_path",
-      "community": 62,
+      "community": 25,
       "norm_label": "path"
     },
     {
@@ -1376,7 +1316,7 @@
       "source_location": "L20",
       "_origin": "ast",
       "id": "agent_backend_harnesses_container_index_picodeharness",
-      "community": 62,
+      "community": 25,
       "norm_label": "picodeharness"
     },
     {
@@ -1386,7 +1326,7 @@
       "source_location": "L23",
       "_origin": "ast",
       "id": "agent_backend_harnesses_container_index_pi_runtime_dir",
-      "community": 62,
+      "community": 25,
       "norm_label": "pi_runtime_dir"
     },
     {
@@ -1396,7 +1336,7 @@
       "source_location": "L24",
       "_origin": "ast",
       "id": "agent_backend_harnesses_container_index_pi_config_dir",
-      "community": 62,
+      "community": 25,
       "norm_label": "pi_config_dir"
     },
     {
@@ -1406,7 +1346,7 @@
       "source_location": "L26",
       "_origin": "ast",
       "id": "agent_backend_harnesses_container_index_containerharness",
-      "community": 62,
+      "community": 25,
       "norm_label": "containerharness"
     },
     {
@@ -1416,7 +1356,7 @@
       "source_location": "L27",
       "_origin": "ast",
       "id": "agent_backend_harnesses_container_index_containerharness_getmetadata",
-      "community": 62,
+      "community": 25,
       "norm_label": ".getmetadata()"
     },
     {
@@ -1426,7 +1366,7 @@
       "source_location": "L32",
       "_origin": "ast",
       "id": "agent_backend_harnesses_container_index_containerharness_dockeravailable",
-      "community": 62,
+      "community": 25,
       "norm_label": ".dockeravailable()"
     },
     {
@@ -1436,7 +1376,7 @@
       "source_location": "L37",
       "_origin": "ast",
       "id": "agent_backend_harnesses_container_index_containerharness_buildspawncommand",
-      "community": 62,
+      "community": 25,
       "norm_label": "._buildspawncommand()"
     },
     {
@@ -1446,7 +1386,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "agent_backend_harnesses_index",
-      "community": 20,
+      "community": 55,
       "norm_label": "index.js"
     },
     {
@@ -1456,7 +1396,7 @@
       "source_location": "L4",
       "_origin": "ast",
       "id": "agent_backend_harnesses_index_picodeharness",
-      "community": 20,
+      "community": 55,
       "norm_label": "picodeharness"
     },
     {
@@ -1466,7 +1406,7 @@
       "source_location": "L5",
       "_origin": "ast",
       "id": "agent_backend_harnesses_index_opencodeharness",
-      "community": 20,
+      "community": 55,
       "norm_label": "opencodeharness"
     },
     {
@@ -1476,7 +1416,7 @@
       "source_location": "L7",
       "_origin": "ast",
       "id": "agent_backend_harnesses_index_loadharness",
-      "community": 20,
+      "community": 55,
       "norm_label": "loadharness()"
     },
     {
@@ -1816,7 +1756,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "agent_backend_harnesses_picode_index",
-      "community": 43,
+      "community": 20,
       "norm_label": "index.js"
     },
     {
@@ -1826,7 +1766,7 @@
       "source_location": "L5",
       "_origin": "ast",
       "id": "agent_backend_harnesses_picode_index_spawn",
-      "community": 43,
+      "community": 20,
       "norm_label": "{ spawn }"
     },
     {
@@ -1836,7 +1776,7 @@
       "source_location": "L6",
       "_origin": "ast",
       "id": "agent_backend_harnesses_picode_index_fs",
-      "community": 43,
+      "community": 20,
       "norm_label": "fs"
     },
     {
@@ -1846,7 +1786,7 @@
       "source_location": "L7",
       "_origin": "ast",
       "id": "agent_backend_harnesses_picode_index_path",
-      "community": 43,
+      "community": 20,
       "norm_label": "path"
     },
     {
@@ -1856,7 +1796,7 @@
       "source_location": "L8",
       "_origin": "ast",
       "id": "agent_backend_harnesses_picode_index_os",
-      "community": 43,
+      "community": 20,
       "norm_label": "os"
     },
     {
@@ -1866,7 +1806,7 @@
       "source_location": "L9",
       "_origin": "ast",
       "id": "agent_backend_harnesses_picode_index_eventemitter",
-      "community": 43,
+      "community": 20,
       "norm_label": "eventemitter"
     },
     {
@@ -1876,7 +1816,7 @@
       "source_location": "L10",
       "_origin": "ast",
       "id": "agent_backend_harnesses_picode_index_harnessinterface",
-      "community": 43,
+      "community": 20,
       "norm_label": "harnessinterface"
     },
     {
@@ -1886,7 +1826,7 @@
       "source_location": "L11",
       "_origin": "ast",
       "id": "agent_backend_harnesses_picode_index_striptuichars_ismutatingtool_isreadonlytool_isconversationalprompt",
-      "community": 43,
+      "community": 20,
       "norm_label": "{ striptuichars, ismutatingtool, isreadonlytool, isconversationalprompt }"
     },
     {
@@ -1896,7 +1836,7 @@
       "source_location": "L12",
       "_origin": "ast",
       "id": "agent_backend_harnesses_picode_index_workspacepaths",
-      "community": 43,
+      "community": 20,
       "norm_label": "workspacepaths"
     },
     {
@@ -1906,7 +1846,7 @@
       "source_location": "L18",
       "_origin": "ast",
       "id": "agent_backend_harnesses_picode_index_web_native_search_tools",
-      "community": 43,
+      "community": 20,
       "norm_label": "web_native_search_tools"
     },
     {
@@ -1916,7 +1856,7 @@
       "source_location": "L19",
       "_origin": "ast",
       "id": "agent_backend_harnesses_picode_index_web_browse_fallback_tools",
-      "community": 43,
+      "community": 20,
       "norm_label": "web_browse_fallback_tools"
     },
     {
@@ -2096,7 +2036,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "agent_backend_harnesses_picode_parser",
-      "community": 43,
+      "community": 20,
       "norm_label": "parser.js"
     },
     {
@@ -2106,7 +2046,7 @@
       "source_location": "L5",
       "_origin": "ast",
       "id": "agent_backend_harnesses_picode_parser_striptuichars",
-      "community": 83,
+      "community": 67,
       "norm_label": "striptuichars()"
     },
     {
@@ -2116,7 +2056,7 @@
       "source_location": "L44",
       "_origin": "ast",
       "id": "agent_backend_harnesses_picode_parser_ismutatingtool",
-      "community": 43,
+      "community": 20,
       "norm_label": "ismutatingtool()"
     },
     {
@@ -2126,7 +2066,7 @@
       "source_location": "L49",
       "_origin": "ast",
       "id": "agent_backend_harnesses_picode_parser_isreadonlytool",
-      "community": 43,
+      "community": 20,
       "norm_label": "isreadonlytool()"
     },
     {
@@ -2136,7 +2076,7 @@
       "source_location": "L55",
       "_origin": "ast",
       "id": "agent_backend_harnesses_picode_parser_isconversationalprompt",
-      "community": 43,
+      "community": 20,
       "norm_label": "isconversationalprompt()"
     },
     {
@@ -3660,30 +3600,10 @@
       "norm_label": "{ router }"
     },
     {
-      "label": "fs",
-      "file_type": "code",
-      "source_file": "agent-backend/routes/devices.js",
-      "source_location": "L11",
-      "_origin": "ast",
-      "id": "agent_backend_routes_devices_fs",
-      "community": 37,
-      "norm_label": "fs"
-    },
-    {
-      "label": "path",
-      "file_type": "code",
-      "source_file": "agent-backend/routes/devices.js",
-      "source_location": "L12",
-      "_origin": "ast",
-      "id": "agent_backend_routes_devices_path",
-      "community": 37,
-      "norm_label": "path"
-    },
-    {
       "label": "createDevicesRouter()",
       "file_type": "code",
       "source_file": "agent-backend/routes/devices.js",
-      "source_location": "L14",
+      "source_location": "L12",
       "_origin": "ast",
       "id": "agent_backend_routes_devices_createdevicesrouter",
       "community": 37,
@@ -4936,7 +4856,7 @@
       "source_location": "L133",
       "_origin": "ast",
       "id": "agent_backend_server_persistplanfiles",
-      "community": 3,
+      "community": 72,
       "norm_label": "persistplanfiles()"
     },
     {
@@ -4946,7 +4866,7 @@
       "source_location": "L148",
       "_origin": "ast",
       "id": "agent_backend_server_serializeplantomarkdown",
-      "community": 3,
+      "community": 72,
       "norm_label": "serializeplantomarkdown()"
     },
     {
@@ -4980,10 +4900,20 @@
       "norm_label": "buckettopayload()"
     },
     {
+      "label": "applyPlanTool()",
+      "file_type": "code",
+      "source_file": "agent-backend/server.js",
+      "source_location": "L287",
+      "_origin": "ast",
+      "id": "agent_backend_server_applyplantool",
+      "community": 72,
+      "norm_label": "applyplantool()"
+    },
+    {
       "label": "isUnproductiveResult()",
       "file_type": "code",
       "source_file": "agent-backend/server.js",
-      "source_location": "L288",
+      "source_location": "L326",
       "_origin": "ast",
       "id": "agent_backend_server_isunproductiveresult",
       "community": 4,
@@ -4993,7 +4923,7 @@
       "label": "sessionAllowedPaths",
       "file_type": "code",
       "source_file": "agent-backend/server.js",
-      "source_location": "L294",
+      "source_location": "L332",
       "_origin": "ast",
       "id": "agent_backend_server_sessionallowedpaths",
       "community": 3,
@@ -5003,7 +4933,7 @@
       "label": "getConfig()",
       "file_type": "code",
       "source_file": "agent-backend/server.js",
-      "source_location": "L301",
+      "source_location": "L339",
       "_origin": "ast",
       "id": "agent_backend_server_getconfig",
       "community": 4,
@@ -5013,7 +4943,7 @@
       "label": "{ nodePath, piPath }",
       "file_type": "code",
       "source_file": "agent-backend/server.js",
-      "source_location": "L302",
+      "source_location": "L340",
       "_origin": "ast",
       "id": "agent_backend_server_nodepath_pipath",
       "community": 3,
@@ -5023,7 +4953,7 @@
       "label": "app",
       "file_type": "code",
       "source_file": "agent-backend/server.js",
-      "source_location": "L305",
+      "source_location": "L343",
       "_origin": "ast",
       "id": "agent_backend_server_app",
       "community": 3,
@@ -5033,7 +4963,7 @@
       "label": "server",
       "file_type": "code",
       "source_file": "agent-backend/server.js",
-      "source_location": "L320",
+      "source_location": "L358",
       "_origin": "ast",
       "id": "agent_backend_server_server",
       "community": 3,
@@ -5043,7 +4973,7 @@
       "label": "harnessRegistry",
       "file_type": "code",
       "source_file": "agent-backend/server.js",
-      "source_location": "L321",
+      "source_location": "L359",
       "_origin": "ast",
       "id": "agent_backend_server_harnessregistry",
       "community": 3,
@@ -5053,7 +4983,7 @@
       "label": "wss",
       "file_type": "code",
       "source_file": "agent-backend/server.js",
-      "source_location": "L322",
+      "source_location": "L360",
       "_origin": "ast",
       "id": "agent_backend_server_wss",
       "community": 3,
@@ -5063,7 +4993,7 @@
       "label": "notifyBus",
       "file_type": "code",
       "source_file": "agent-backend/server.js",
-      "source_location": "L328",
+      "source_location": "L366",
       "_origin": "ast",
       "id": "agent_backend_server_notifybus",
       "community": 3,
@@ -5073,7 +5003,7 @@
       "label": "authMiddleware",
       "file_type": "code",
       "source_file": "agent-backend/server.js",
-      "source_location": "L344",
+      "source_location": "L382",
       "_origin": "ast",
       "id": "agent_backend_server_authmiddleware",
       "community": 3,
@@ -5083,7 +5013,7 @@
       "label": "{ connectionsRouter, oauthRouter }",
       "file_type": "code",
       "source_file": "agent-backend/server.js",
-      "source_location": "L369",
+      "source_location": "L449",
       "_origin": "ast",
       "id": "agent_backend_server_connectionsrouter_oauthrouter",
       "community": 3,
@@ -5093,7 +5023,7 @@
       "label": "channelOrigin()",
       "file_type": "code",
       "source_file": "agent-backend/server.js",
-      "source_location": "L378",
+      "source_location": "L458",
       "_origin": "ast",
       "id": "agent_backend_server_channelorigin",
       "community": 3,
@@ -5103,7 +5033,7 @@
       "label": "channelsRouter",
       "file_type": "code",
       "source_file": "agent-backend/server.js",
-      "source_location": "L379",
+      "source_location": "L459",
       "_origin": "ast",
       "id": "agent_backend_server_channelsrouter",
       "community": 3,
@@ -5113,7 +5043,7 @@
       "label": "createFleet",
       "file_type": "code",
       "source_file": "agent-backend/server.js",
-      "source_location": "L390",
+      "source_location": "L470",
       "_origin": "ast",
       "id": "agent_backend_server_createfleet",
       "community": 3,
@@ -5123,7 +5053,7 @@
       "label": "createFleetRouter",
       "file_type": "code",
       "source_file": "agent-backend/server.js",
-      "source_location": "L391",
+      "source_location": "L471",
       "_origin": "ast",
       "id": "agent_backend_server_createfleetrouter",
       "community": 3,
@@ -5133,7 +5063,7 @@
       "label": "fleet",
       "file_type": "code",
       "source_file": "agent-backend/server.js",
-      "source_location": "L392",
+      "source_location": "L472",
       "_origin": "ast",
       "id": "agent_backend_server_fleet",
       "community": 3,
@@ -5143,7 +5073,7 @@
       "label": "createTelegramBridge",
       "file_type": "code",
       "source_file": "agent-backend/server.js",
-      "source_location": "L452",
+      "source_location": "L532",
       "_origin": "ast",
       "id": "agent_backend_server_createtelegrambridge",
       "community": 3,
@@ -5153,7 +5083,7 @@
       "label": "telegramBridge",
       "file_type": "code",
       "source_file": "agent-backend/server.js",
-      "source_location": "L453",
+      "source_location": "L533",
       "_origin": "ast",
       "id": "agent_backend_server_telegrambridge",
       "community": 3,
@@ -5163,7 +5093,7 @@
       "label": "{ buildCapabilities }",
       "file_type": "code",
       "source_file": "agent-backend/server.js",
-      "source_location": "L462",
+      "source_location": "L542",
       "_origin": "ast",
       "id": "agent_backend_server_buildcapabilities",
       "community": 3,
@@ -5173,7 +5103,7 @@
       "label": "getCapabilities()",
       "file_type": "code",
       "source_file": "agent-backend/server.js",
-      "source_location": "L463",
+      "source_location": "L543",
       "_origin": "ast",
       "id": "agent_backend_server_getcapabilities",
       "community": 4,
@@ -5183,7 +5113,7 @@
       "label": "handleStartTask()",
       "file_type": "code",
       "source_file": "agent-backend/server.js",
-      "source_location": "L833",
+      "source_location": "L913",
       "_origin": "ast",
       "id": "agent_backend_server_handlestarttask",
       "community": 4,
@@ -5193,7 +5123,7 @@
       "label": "runProfileHeadless()",
       "file_type": "code",
       "source_file": "agent-backend/server.js",
-      "source_location": "L1059",
+      "source_location": "L1139",
       "_origin": "ast",
       "id": "agent_backend_server_runprofileheadless",
       "community": 4,
@@ -5203,7 +5133,7 @@
       "label": "broadcastNotification()",
       "file_type": "code",
       "source_file": "agent-backend/server.js",
-      "source_location": "L1098",
+      "source_location": "L1178",
       "_origin": "ast",
       "id": "agent_backend_server_broadcastnotification",
       "community": 4,
@@ -5213,7 +5143,7 @@
       "label": "isFleetDispatchTool()",
       "file_type": "code",
       "source_file": "agent-backend/server.js",
-      "source_location": "L1105",
+      "source_location": "L1185",
       "_origin": "ast",
       "id": "agent_backend_server_isfleetdispatchtool",
       "community": 4,
@@ -5223,27 +5153,27 @@
       "label": "ACTIVE_SA",
       "file_type": "code",
       "source_file": "agent-backend/server.js",
-      "source_location": "L1113",
+      "source_location": "L1193",
       "_origin": "ast",
       "id": "agent_backend_server_active_sa",
-      "community": 85,
+      "community": 3,
       "norm_label": "active_sa"
     },
     {
       "label": "subagentFields()",
       "file_type": "code",
       "source_file": "agent-backend/server.js",
-      "source_location": "L1114",
+      "source_location": "L1194",
       "_origin": "ast",
       "id": "agent_backend_server_subagentfields",
-      "community": 85,
+      "community": 3,
       "norm_label": "subagentfields()"
     },
     {
       "label": "createHarnessEventEmitter()",
       "file_type": "code",
       "source_file": "agent-backend/server.js",
-      "source_location": "L1120",
+      "source_location": "L1200",
       "_origin": "ast",
       "id": "agent_backend_server_createharnesseventemitter",
       "community": 4,
@@ -5253,7 +5183,7 @@
       "label": "shutdown()",
       "file_type": "code",
       "source_file": "agent-backend/server.js",
-      "source_location": "L1634",
+      "source_location": "L1734",
       "_origin": "ast",
       "id": "agent_backend_server_shutdown",
       "community": 3,
@@ -5263,7 +5193,7 @@
       "label": "ensureOrbitMcpServersRegistered()",
       "file_type": "code",
       "source_file": "agent-backend/server.js",
-      "source_location": "L1683",
+      "source_location": "L1783",
       "_origin": "ast",
       "id": "agent_backend_server_ensureorbitmcpserversregistered",
       "community": 3,
@@ -5273,9 +5203,9 @@
       "label": "NOTE: the old keyword-based \"chat mode pre-check\" was removed. It guessed",
       "file_type": "rationale",
       "source_file": "agent-backend/server.js",
-      "source_location": "L839",
+      "source_location": "L919",
       "_origin": "ast",
-      "id": "agent_backend_server_rationale_839",
+      "id": "agent_backend_server_rationale_919",
       "community": 3,
       "norm_label": "note: the old keyword-based \"chat mode pre-check\" was removed. it guessed"
     },
@@ -5286,7 +5216,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "agent_backend_services_plan_generator",
-      "community": 83,
+      "community": 67,
       "norm_label": "plan-generator.js"
     },
     {
@@ -5296,7 +5226,7 @@
       "source_location": "L4",
       "_origin": "ast",
       "id": "agent_backend_services_plan_generator_openai",
-      "community": 83,
+      "community": 67,
       "norm_label": "{ openai }"
     },
     {
@@ -5306,7 +5236,7 @@
       "source_location": "L5",
       "_origin": "ast",
       "id": "agent_backend_services_plan_generator_striptuichars",
-      "community": 83,
+      "community": 67,
       "norm_label": "{ striptuichars }"
     },
     {
@@ -5316,7 +5246,7 @@
       "source_location": "L15",
       "_origin": "ast",
       "id": "agent_backend_services_plan_generator_generateplan",
-      "community": 83,
+      "community": 67,
       "norm_label": "generateplan()"
     },
     {
@@ -5326,7 +5256,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "agent_backend_services_tts",
-      "community": 85,
+      "community": 3,
       "norm_label": "tts.js"
     },
     {
@@ -5336,7 +5266,7 @@
       "source_location": "L4",
       "_origin": "ast",
       "id": "agent_backend_services_tts_generateintelligentspeech",
-      "community": 85,
+      "community": 3,
       "norm_label": "generateintelligentspeech()"
     },
     {
@@ -5436,7 +5366,7 @@
       "source_location": "L124",
       "_origin": "ast",
       "id": "agent_backend_subagent_tracker_subagenttracker_getagent",
-      "community": 35,
+      "community": 4,
       "norm_label": ".getagent()"
     },
     {
@@ -5556,7 +5486,7 @@
       "source_location": "L320",
       "_origin": "ast",
       "id": "agent_backend_subagent_tracker_subagenttracker_depthof",
-      "community": 35,
+      "community": 4,
       "norm_label": ".depthof()"
     },
     {
@@ -5596,7 +5526,7 @@
       "source_location": "L379",
       "_origin": "ast",
       "id": "agent_backend_subagent_tracker_subagenttracker_fromjson",
-      "community": 35,
+      "community": 4,
       "norm_label": ".fromjson()"
     },
     {
@@ -6496,7 +6426,7 @@
       "source_location": "L13",
       "_origin": "ast",
       "id": "dashboard_package_dependencies_base_ui_react",
-      "community": 10,
+      "community": 97,
       "norm_label": "@base-ui/react"
     },
     {
@@ -6506,7 +6436,7 @@
       "source_location": "L13",
       "_origin": "ast",
       "id": "base_ui_react",
-      "community": 10,
+      "community": 97,
       "norm_label": "@base-ui/react"
     },
     {
@@ -6516,7 +6446,7 @@
       "source_location": "L14",
       "_origin": "ast",
       "id": "dashboard_package_dependencies_class_variance_authority",
-      "community": 97,
+      "community": 10,
       "norm_label": "class-variance-authority"
     },
     {
@@ -6526,7 +6456,7 @@
       "source_location": "L14",
       "_origin": "ast",
       "id": "class_variance_authority",
-      "community": 97,
+      "community": 10,
       "norm_label": "class-variance-authority"
     },
     {
@@ -7076,7 +7006,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "dashboard_src_app_page",
-      "community": 57,
+      "community": 1,
       "norm_label": "page.tsx"
     },
     {
@@ -7086,7 +7016,7 @@
       "source_location": "L46",
       "_origin": "ast",
       "id": "dashboard_src_app_page_dashboard",
-      "community": 57,
+      "community": 1,
       "norm_label": "dashboard()"
     },
     {
@@ -7166,7 +7096,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "dashboard_src_components_chatmessage",
-      "community": 11,
+      "community": 98,
       "norm_label": "chatmessage.tsx"
     },
     {
@@ -7176,7 +7106,7 @@
       "source_location": "L11",
       "_origin": "ast",
       "id": "dashboard_src_components_chatmessage_tool_icons",
-      "community": 11,
+      "community": 98,
       "norm_label": "tool_icons"
     },
     {
@@ -7186,7 +7116,7 @@
       "source_location": "L20",
       "_origin": "ast",
       "id": "dashboard_src_components_chatmessage_toolicon",
-      "community": 11,
+      "community": 98,
       "norm_label": "toolicon()"
     },
     {
@@ -7196,7 +7126,7 @@
       "source_location": "L29",
       "_origin": "ast",
       "id": "dashboard_src_components_chatmessage_chatmessagebase",
-      "community": 11,
+      "community": 98,
       "norm_label": "chatmessagebase()"
     },
     {
@@ -7206,7 +7136,7 @@
       "source_location": "L134",
       "_origin": "ast",
       "id": "dashboard_src_components_chatmessage_chatmessagepropsequal",
-      "community": 11,
+      "community": 98,
       "norm_label": "chatmessagepropsequal()"
     },
     {
@@ -7216,7 +7146,7 @@
       "source_location": "L145",
       "_origin": "ast",
       "id": "dashboard_src_components_chatmessage_chatmessage",
-      "community": 11,
+      "community": 98,
       "norm_label": "chatmessage"
     },
     {
@@ -7226,7 +7156,7 @@
       "source_location": "L150",
       "_origin": "ast",
       "id": "dashboard_src_components_chatmessage_toolgroup",
-      "community": 11,
+      "community": 98,
       "norm_label": "toolgroup()"
     },
     {
@@ -7236,7 +7166,7 @@
       "source_location": "L203",
       "_origin": "ast",
       "id": "dashboard_src_components_chatmessage_toolrow",
-      "community": 11,
+      "community": 98,
       "norm_label": "toolrow()"
     },
     {
@@ -7246,7 +7176,7 @@
       "source_location": "L254",
       "_origin": "ast",
       "id": "dashboard_src_components_chatmessage_modesuggestioncard",
-      "community": 11,
+      "community": 98,
       "norm_label": "modesuggestioncard()"
     },
     {
@@ -7256,7 +7186,7 @@
       "source_location": "L299",
       "_origin": "ast",
       "id": "dashboard_src_components_chatmessage_chatemptystate",
-      "community": 11,
+      "community": 98,
       "norm_label": "chatemptystate()"
     },
     {
@@ -7266,7 +7196,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "dashboard_src_components_errorboundary",
-      "community": 0,
+      "community": 62,
       "norm_label": "errorboundary.tsx"
     },
     {
@@ -7276,7 +7206,7 @@
       "source_location": "L9",
       "_origin": "ast",
       "id": "dashboard_src_components_errorboundary_errorboundarystate",
-      "community": 0,
+      "community": 62,
       "norm_label": "errorboundarystate"
     },
     {
@@ -7286,7 +7216,7 @@
       "source_location": "L14",
       "_origin": "ast",
       "id": "dashboard_src_components_errorboundary_errorboundary",
-      "community": 0,
+      "community": 62,
       "norm_label": "errorboundary"
     },
     {
@@ -7296,7 +7226,7 @@
       "source_location": "L15",
       "_origin": "ast",
       "id": "dashboard_src_components_errorboundary_errorboundary_constructor",
-      "community": 0,
+      "community": 62,
       "norm_label": ".constructor()"
     },
     {
@@ -7306,7 +7236,7 @@
       "source_location": "L20",
       "_origin": "ast",
       "id": "dashboard_src_components_errorboundary_errorboundary_getderivedstatefromerror",
-      "community": 0,
+      "community": 62,
       "norm_label": ".getderivedstatefromerror()"
     },
     {
@@ -7316,7 +7246,7 @@
       "source_location": "L24",
       "_origin": "ast",
       "id": "dashboard_src_components_errorboundary_errorboundary_componentdidcatch",
-      "community": 0,
+      "community": 62,
       "norm_label": ".componentdidcatch()"
     },
     {
@@ -7326,7 +7256,7 @@
       "source_location": "L28",
       "_origin": "ast",
       "id": "dashboard_src_components_errorboundary_errorboundary_render",
-      "community": 0,
+      "community": 62,
       "norm_label": ".render()"
     },
     {
@@ -7336,7 +7266,7 @@
       "source_location": "L60",
       "_origin": "ast",
       "id": "dashboard_src_components_errorboundary_componenterrorboundary",
-      "community": 0,
+      "community": 62,
       "norm_label": "componenterrorboundary"
     },
     {
@@ -7346,7 +7276,7 @@
       "source_location": "L64",
       "_origin": "ast",
       "id": "dashboard_src_components_errorboundary_componenterrorboundary_constructor",
-      "community": 0,
+      "community": 62,
       "norm_label": ".constructor()"
     },
     {
@@ -7356,7 +7286,7 @@
       "source_location": "L69",
       "_origin": "ast",
       "id": "dashboard_src_components_errorboundary_componenterrorboundary_getderivedstatefromerror",
-      "community": 0,
+      "community": 62,
       "norm_label": ".getderivedstatefromerror()"
     },
     {
@@ -7366,7 +7296,7 @@
       "source_location": "L73",
       "_origin": "ast",
       "id": "dashboard_src_components_errorboundary_componenterrorboundary_componentdidcatch",
-      "community": 0,
+      "community": 62,
       "norm_label": ".componentdidcatch()"
     },
     {
@@ -7376,7 +7306,7 @@
       "source_location": "L77",
       "_origin": "ast",
       "id": "dashboard_src_components_errorboundary_componenterrorboundary_render",
-      "community": 0,
+      "community": 62,
       "norm_label": ".render()"
     },
     {
@@ -7386,7 +7316,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "dashboard_src_components_logviewer",
-      "community": 57,
+      "community": 158,
       "norm_label": "logviewer.tsx"
     },
     {
@@ -7396,7 +7326,7 @@
       "source_location": "L6",
       "_origin": "ast",
       "id": "dashboard_src_components_logviewer_logviewer",
-      "community": 57,
+      "community": 158,
       "norm_label": "logviewer()"
     },
     {
@@ -7406,7 +7336,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "dashboard_src_components_pairdevice",
-      "community": 0,
+      "community": 157,
       "norm_label": "pairdevice.tsx"
     },
     {
@@ -7416,7 +7346,7 @@
       "source_location": "L15",
       "_origin": "ast",
       "id": "dashboard_src_components_pairdevice_pairdevice",
-      "community": 0,
+      "community": 157,
       "norm_label": "pairdevice()"
     },
     {
@@ -7426,7 +7356,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "dashboard_src_components_screenshotviewer",
-      "community": 0,
+      "community": 102,
       "norm_label": "screenshotviewer.tsx"
     },
     {
@@ -7436,7 +7366,7 @@
       "source_location": "L7",
       "_origin": "ast",
       "id": "dashboard_src_components_screenshotviewer_screenshotviewer",
-      "community": 0,
+      "community": 102,
       "norm_label": "screenshotviewer()"
     },
     {
@@ -7466,7 +7396,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "dashboard_src_components_settingspanel",
-      "community": 0,
+      "community": 75,
       "norm_label": "settingspanel.tsx"
     },
     {
@@ -7476,7 +7406,7 @@
       "source_location": "L12",
       "_origin": "ast",
       "id": "dashboard_src_components_settingspanel_agent_modes",
-      "community": 0,
+      "community": 75,
       "norm_label": "agent_modes"
     },
     {
@@ -7486,7 +7416,7 @@
       "source_location": "L18",
       "_origin": "ast",
       "id": "dashboard_src_components_settingspanel_fieldlabel",
-      "community": 0,
+      "community": 75,
       "norm_label": "fieldlabel()"
     },
     {
@@ -7496,7 +7426,7 @@
       "source_location": "L22",
       "_origin": "ast",
       "id": "dashboard_src_components_settingspanel_togglerow",
-      "community": 0,
+      "community": 75,
       "norm_label": "togglerow()"
     },
     {
@@ -7506,7 +7436,7 @@
       "source_location": "L31",
       "_origin": "ast",
       "id": "dashboard_src_components_settingspanel_taglist",
-      "community": 0,
+      "community": 75,
       "norm_label": "taglist()"
     },
     {
@@ -7516,7 +7446,7 @@
       "source_location": "L45",
       "_origin": "ast",
       "id": "dashboard_src_components_settingspanel_pathlist",
-      "community": 0,
+      "community": 75,
       "norm_label": "pathlist()"
     },
     {
@@ -7526,7 +7456,7 @@
       "source_location": "L63",
       "_origin": "ast",
       "id": "dashboard_src_components_settingspanel_addrow",
-      "community": 0,
+      "community": 75,
       "norm_label": "addrow()"
     },
     {
@@ -8126,7 +8056,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "dashboard_src_components_panels_consoletab",
-      "community": 25,
+      "community": 155,
       "norm_label": "consoletab.tsx"
     },
     {
@@ -8136,7 +8066,7 @@
       "source_location": "L7",
       "_origin": "ast",
       "id": "dashboard_src_components_panels_consoletab_entry",
-      "community": 25,
+      "community": 155,
       "norm_label": "entry"
     },
     {
@@ -8146,7 +8076,7 @@
       "source_location": "L15",
       "_origin": "ast",
       "id": "dashboard_src_components_panels_consoletab_consoletab",
-      "community": 25,
+      "community": 155,
       "norm_label": "consoletab()"
     },
     {
@@ -8206,7 +8136,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "dashboard_src_components_panels_explorersidebar",
-      "community": 25,
+      "community": 155,
       "norm_label": "explorersidebar.tsx"
     },
     {
@@ -8216,7 +8146,7 @@
       "source_location": "L7",
       "_origin": "ast",
       "id": "dashboard_src_components_panels_explorersidebar_filenode",
-      "community": 25,
+      "community": 155,
       "norm_label": "filenode"
     },
     {
@@ -8226,7 +8156,7 @@
       "source_location": "L15",
       "_origin": "ast",
       "id": "dashboard_src_components_panels_explorersidebar_explorersidebarprops",
-      "community": 25,
+      "community": 155,
       "norm_label": "explorersidebarprops"
     },
     {
@@ -8236,7 +8166,7 @@
       "source_location": "L19",
       "_origin": "ast",
       "id": "dashboard_src_components_panels_explorersidebar_explorersidebar",
-      "community": 25,
+      "community": 155,
       "norm_label": "explorersidebar()"
     },
     {
@@ -8466,7 +8396,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "dashboard_src_components_panels_workspacetab",
-      "community": 25,
+      "community": 155,
       "norm_label": "workspacetab.tsx"
     },
     {
@@ -8476,7 +8406,7 @@
       "source_location": "L11",
       "_origin": "ast",
       "id": "dashboard_src_components_panels_workspacetab_workspacetab",
-      "community": 25,
+      "community": 155,
       "norm_label": "workspacetab()"
     },
     {
@@ -8516,7 +8446,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "dashboard_src_components_ui_button",
-      "community": 0,
+      "community": 62,
       "norm_label": "button.tsx"
     },
     {
@@ -8526,7 +8456,7 @@
       "source_location": "L7",
       "_origin": "ast",
       "id": "dashboard_src_components_ui_button_buttonvariants",
-      "community": 0,
+      "community": 62,
       "norm_label": "buttonvariants"
     },
     {
@@ -8536,7 +8466,7 @@
       "source_location": "L44",
       "_origin": "ast",
       "id": "dashboard_src_components_ui_button_button",
-      "community": 0,
+      "community": 62,
       "norm_label": "button()"
     },
     {
@@ -8546,7 +8476,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "dashboard_src_components_ui_card",
-      "community": 0,
+      "community": 102,
       "norm_label": "card.tsx"
     },
     {
@@ -8556,7 +8486,7 @@
       "source_location": "L6",
       "_origin": "ast",
       "id": "dashboard_src_components_ui_card_card",
-      "community": 0,
+      "community": 102,
       "norm_label": "card()"
     },
     {
@@ -8566,7 +8496,7 @@
       "source_location": "L23",
       "_origin": "ast",
       "id": "dashboard_src_components_ui_card_cardheader",
-      "community": 0,
+      "community": 102,
       "norm_label": "cardheader()"
     },
     {
@@ -8576,7 +8506,7 @@
       "source_location": "L38",
       "_origin": "ast",
       "id": "dashboard_src_components_ui_card_cardtitle",
-      "community": 0,
+      "community": 102,
       "norm_label": "cardtitle()"
     },
     {
@@ -8586,7 +8516,7 @@
       "source_location": "L53",
       "_origin": "ast",
       "id": "dashboard_src_components_ui_card_carddescription",
-      "community": 0,
+      "community": 102,
       "norm_label": "carddescription()"
     },
     {
@@ -8596,7 +8526,7 @@
       "source_location": "L65",
       "_origin": "ast",
       "id": "dashboard_src_components_ui_card_cardaction",
-      "community": 0,
+      "community": 102,
       "norm_label": "cardaction()"
     },
     {
@@ -8606,7 +8536,7 @@
       "source_location": "L80",
       "_origin": "ast",
       "id": "dashboard_src_components_ui_card_cardcontent",
-      "community": 0,
+      "community": 102,
       "norm_label": "cardcontent()"
     },
     {
@@ -8616,7 +8546,7 @@
       "source_location": "L92",
       "_origin": "ast",
       "id": "dashboard_src_components_ui_card_cardfooter",
-      "community": 0,
+      "community": 102,
       "norm_label": "cardfooter()"
     },
     {
@@ -8626,7 +8556,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "dashboard_src_components_ui_input",
-      "community": 0,
+      "community": 157,
       "norm_label": "input.tsx"
     },
     {
@@ -8636,7 +8566,7 @@
       "source_location": "L7",
       "_origin": "ast",
       "id": "dashboard_src_components_ui_input_input",
-      "community": 0,
+      "community": 157,
       "norm_label": "input()"
     },
     {
@@ -8646,7 +8576,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "dashboard_src_components_ui_kbd",
-      "community": 0,
+      "community": 156,
       "norm_label": "kbd.tsx"
     },
     {
@@ -8656,7 +8586,7 @@
       "source_location": "L5",
       "_origin": "ast",
       "id": "dashboard_src_components_ui_kbd_kbd",
-      "community": 0,
+      "community": 156,
       "norm_label": "kbd()"
     },
     {
@@ -8786,7 +8716,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "dashboard_src_components_ui_switch",
-      "community": 0,
+      "community": 75,
       "norm_label": "switch.tsx"
     },
     {
@@ -8796,7 +8726,7 @@
       "source_location": "L8",
       "_origin": "ast",
       "id": "dashboard_src_components_ui_switch_switch",
-      "community": 0,
+      "community": 75,
       "norm_label": "switch()"
     },
     {
@@ -8906,7 +8836,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "dashboard_src_components_views_fleetview",
-      "community": 75,
+      "community": 57,
       "norm_label": "fleetview.tsx"
     },
     {
@@ -8916,7 +8846,7 @@
       "source_location": "L8",
       "_origin": "ast",
       "id": "dashboard_src_components_views_fleetview_sectionhead",
-      "community": 75,
+      "community": 57,
       "norm_label": "sectionhead()"
     },
     {
@@ -8926,7 +8856,7 @@
       "source_location": "L16",
       "_origin": "ast",
       "id": "dashboard_src_components_views_fleetview_deviceicon",
-      "community": 75,
+      "community": 57,
       "norm_label": "deviceicon()"
     },
     {
@@ -8936,7 +8866,7 @@
       "source_location": "L26",
       "_origin": "ast",
       "id": "dashboard_src_components_views_fleetview_scopes",
-      "community": 75,
+      "community": 57,
       "norm_label": "scopes"
     },
     {
@@ -8946,7 +8876,7 @@
       "source_location": "L32",
       "_origin": "ast",
       "id": "dashboard_src_components_views_fleetview_fleetview",
-      "community": 75,
+      "community": 57,
       "norm_label": "fleetview()"
     },
     {
@@ -9206,7 +9136,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "dashboard_src_components_widgets_commandpalette",
-      "community": 0,
+      "community": 156,
       "norm_label": "commandpalette.tsx"
     },
     {
@@ -9216,7 +9146,7 @@
       "source_location": "L11",
       "_origin": "ast",
       "id": "dashboard_src_components_widgets_commandpalette_commands",
-      "community": 0,
+      "community": 156,
       "norm_label": "commands"
     },
     {
@@ -9226,7 +9156,7 @@
       "source_location": "L22",
       "_origin": "ast",
       "id": "dashboard_src_components_widgets_commandpalette_theme_commands",
-      "community": 0,
+      "community": 156,
       "norm_label": "theme_commands"
     },
     {
@@ -9236,7 +9166,7 @@
       "source_location": "L27",
       "_origin": "ast",
       "id": "dashboard_src_components_widgets_commandpalette_commandpalette",
-      "community": 0,
+      "community": 156,
       "norm_label": "commandpalette()"
     },
     {
@@ -9246,7 +9176,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "dashboard_src_components_widgets_notificationcenter",
-      "community": 57,
+      "community": 159,
       "norm_label": "notificationcenter.tsx"
     },
     {
@@ -9256,7 +9186,7 @@
       "source_location": "L10",
       "_origin": "ast",
       "id": "dashboard_src_components_widgets_notificationcenter_notificationcenter",
-      "community": 57,
+      "community": 159,
       "norm_label": "notificationcenter()"
     },
     {
@@ -9546,7 +9476,7 @@
       "source_location": "L15",
       "_origin": "ast",
       "id": "dashboard_src_lib_device_auth_setdevicetoken",
-      "community": 0,
+      "community": 157,
       "norm_label": "setdevicetoken()"
     },
     {
@@ -9596,7 +9526,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "dashboard_src_providers_orbitprovider",
-      "community": 25,
+      "community": 155,
       "norm_label": "orbitprovider.tsx"
     },
     {
@@ -9606,7 +9536,7 @@
       "source_location": "L11",
       "_origin": "ast",
       "id": "dashboard_src_providers_orbitprovider_initialstate",
-      "community": 25,
+      "community": 155,
       "norm_label": "initialstate"
     },
     {
@@ -9616,7 +9546,7 @@
       "source_location": "L87",
       "_origin": "ast",
       "id": "dashboard_src_providers_orbitprovider_orbitreducer",
-      "community": 25,
+      "community": 155,
       "norm_label": "orbitreducer()"
     },
     {
@@ -9626,7 +9556,7 @@
       "source_location": "L298",
       "_origin": "ast",
       "id": "dashboard_src_providers_orbitprovider_orbitstatecontext",
-      "community": 25,
+      "community": 155,
       "norm_label": "orbitstatecontext"
     },
     {
@@ -9636,7 +9566,7 @@
       "source_location": "L299",
       "_origin": "ast",
       "id": "dashboard_src_providers_orbitprovider_orbitdispatchcontext",
-      "community": 25,
+      "community": 155,
       "norm_label": "orbitdispatchcontext"
     },
     {
@@ -9646,7 +9576,7 @@
       "source_location": "L301",
       "_origin": "ast",
       "id": "dashboard_src_providers_orbitprovider_orbitprovider",
-      "community": 25,
+      "community": 155,
       "norm_label": "orbitprovider()"
     },
     {
@@ -9656,7 +9586,7 @@
       "source_location": "L332",
       "_origin": "ast",
       "id": "dashboard_src_providers_orbitprovider_useorbitstate",
-      "community": 25,
+      "community": 155,
       "norm_label": "useorbitstate()"
     },
     {
@@ -9676,7 +9606,7 @@
       "source_location": "L344",
       "_origin": "ast",
       "id": "dashboard_src_providers_orbitprovider_useorbit",
-      "community": 1,
+      "community": 155,
       "norm_label": "useorbit()"
     },
     {
@@ -10012,6 +9942,66 @@
     {
       "label": "index.js",
       "file_type": "code",
+      "source_file": "mcp-server-fleet/index.js",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "mcp_server_fleet_index",
+      "community": 83,
+      "norm_label": "index.js"
+    },
+    {
+      "label": "{ Server }",
+      "file_type": "code",
+      "source_file": "mcp-server-fleet/index.js",
+      "source_location": "L9",
+      "_origin": "ast",
+      "id": "mcp_server_fleet_index_server",
+      "community": 83,
+      "norm_label": "{ server }"
+    },
+    {
+      "label": "{ StdioServerTransport }",
+      "file_type": "code",
+      "source_file": "mcp-server-fleet/index.js",
+      "source_location": "L10",
+      "_origin": "ast",
+      "id": "mcp_server_fleet_index_stdioservertransport",
+      "community": 83,
+      "norm_label": "{ stdioservertransport }"
+    },
+    {
+      "label": "{\n  CallToolRequestSchema,\n  ListToolsRequestSchema,\n}",
+      "file_type": "code",
+      "source_file": "mcp-server-fleet/index.js",
+      "source_location": "L11",
+      "_origin": "ast",
+      "id": "mcp_server_fleet_index_calltoolrequestschema_listtoolsrequestschema",
+      "community": 83,
+      "norm_label": "{\n  calltoolrequestschema,\n  listtoolsrequestschema,\n}"
+    },
+    {
+      "label": "api()",
+      "file_type": "code",
+      "source_file": "mcp-server-fleet/index.js",
+      "source_location": "L19",
+      "_origin": "ast",
+      "id": "mcp_server_fleet_index_api",
+      "community": 83,
+      "norm_label": "api()"
+    },
+    {
+      "label": "run()",
+      "file_type": "code",
+      "source_file": "mcp-server-fleet/index.js",
+      "source_location": "L116",
+      "_origin": "ast",
+      "id": "mcp_server_fleet_index_run",
+      "community": 83,
+      "norm_label": "run()"
+    },
+    {
+      "label": "index.js",
+      "file_type": "code",
       "source_file": "mcp-server-lightpanda/index.js",
       "source_location": "L1",
       "_origin": "ast",
@@ -10257,6 +10247,76 @@
       "_origin": "ast",
       "id": "mcp_server_notify_index_run",
       "community": 84,
+      "norm_label": "run()"
+    },
+    {
+      "label": "index.js",
+      "file_type": "code",
+      "source_file": "mcp-server-plan/index.js",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "mcp_server_plan_index",
+      "community": 85,
+      "norm_label": "index.js"
+    },
+    {
+      "label": "{ Server }",
+      "file_type": "code",
+      "source_file": "mcp-server-plan/index.js",
+      "source_location": "L13",
+      "_origin": "ast",
+      "id": "mcp_server_plan_index_server",
+      "community": 85,
+      "norm_label": "{ server }"
+    },
+    {
+      "label": "{ StdioServerTransport }",
+      "file_type": "code",
+      "source_file": "mcp-server-plan/index.js",
+      "source_location": "L14",
+      "_origin": "ast",
+      "id": "mcp_server_plan_index_stdioservertransport",
+      "community": 85,
+      "norm_label": "{ stdioservertransport }"
+    },
+    {
+      "label": "{\n  CallToolRequestSchema,\n  ListToolsRequestSchema,\n}",
+      "file_type": "code",
+      "source_file": "mcp-server-plan/index.js",
+      "source_location": "L15",
+      "_origin": "ast",
+      "id": "mcp_server_plan_index_calltoolrequestschema_listtoolsrequestschema",
+      "community": 85,
+      "norm_label": "{\n  calltoolrequestschema,\n  listtoolsrequestschema,\n}"
+    },
+    {
+      "label": "STATUSES",
+      "file_type": "code",
+      "source_file": "mcp-server-plan/index.js",
+      "source_location": "L20",
+      "_origin": "ast",
+      "id": "mcp_server_plan_index_statuses",
+      "community": 85,
+      "norm_label": "statuses"
+    },
+    {
+      "label": "postPlanUpdate()",
+      "file_type": "code",
+      "source_file": "mcp-server-plan/index.js",
+      "source_location": "L26",
+      "_origin": "ast",
+      "id": "mcp_server_plan_index_postplanupdate",
+      "community": 85,
+      "norm_label": "postplanupdate()"
+    },
+    {
+      "label": "run()",
+      "file_type": "code",
+      "source_file": "mcp-server-plan/index.js",
+      "source_location": "L140",
+      "_origin": "ast",
+      "id": "mcp_server_plan_index_run",
+      "community": 85,
       "norm_label": "run()"
     },
     {
@@ -10836,34 +10896,6 @@
       "id": "restart_orbit_sh__entry",
       "community": 107,
       "norm_label": "restart-orbit.sh script"
-    },
-    {
-      "label": "setup.sh",
-      "file_type": "code",
-      "source_file": "setup.sh",
-      "source_location": "L1",
-      "metadata": {
-        "language": "bash",
-        "kind": "file"
-      },
-      "_origin": "ast",
-      "id": "setup",
-      "community": 98,
-      "norm_label": "setup.sh"
-    },
-    {
-      "label": "setup.sh script",
-      "file_type": "code",
-      "source_file": "setup.sh",
-      "source_location": "L1",
-      "metadata": {
-        "language": "bash",
-        "kind": "bash_entrypoint"
-      },
-      "_origin": "ast",
-      "id": "setup_sh__entry",
-      "community": 98,
-      "norm_label": "setup.sh script"
     },
     {
       "label": "test_lightpanda.js",
@@ -13401,7 +13433,7 @@
       "context": "import",
       "confidence": "EXTRACTED",
       "source_file": "agent-backend/server.js",
-      "source_location": "L462",
+      "source_location": "L542",
       "weight": 1.0,
       "source": "agent_backend_server",
       "target": "agent_backend_capabilities",
@@ -13445,7 +13477,7 @@
       "context": "import",
       "confidence": "EXTRACTED",
       "source_file": "agent-backend/server.js",
-      "source_location": "L462",
+      "source_location": "L542",
       "weight": 1.0,
       "source": "agent_backend_server",
       "target": "agent_backend_capabilities_buildcapabilities",
@@ -13457,7 +13489,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "agent-backend/server.js",
-      "source_location": "L463",
+      "source_location": "L543",
       "weight": 1.0,
       "source": "agent_backend_server_getcapabilities",
       "target": "agent_backend_capabilities_buildcapabilities"
@@ -13724,7 +13756,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "agent-backend/server.js",
-      "source_location": "L301",
+      "source_location": "L339",
       "weight": 1.0,
       "source": "agent_backend_server_getconfig",
       "target": "agent_backend_config_loadconfig"
@@ -15244,56 +15276,6 @@
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
-      "source_file": "agent-backend/fleet-mcp.js",
-      "source_location": "L19",
-      "weight": 1.0,
-      "source": "agent_backend_fleet_mcp",
-      "target": "agent_backend_fleet_mcp_api",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "agent-backend/fleet-mcp.js",
-      "source_location": "L11",
-      "weight": 1.0,
-      "source": "agent_backend_fleet_mcp",
-      "target": "agent_backend_fleet_mcp_calltoolrequestschema_listtoolsrequestschema",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "agent-backend/fleet-mcp.js",
-      "source_location": "L116",
-      "weight": 1.0,
-      "source": "agent_backend_fleet_mcp",
-      "target": "agent_backend_fleet_mcp_run",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "agent-backend/fleet-mcp.js",
-      "source_location": "L32",
-      "weight": 1.0,
-      "source": "agent_backend_fleet_mcp",
-      "target": "agent_backend_fleet_mcp_server",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "agent-backend/fleet-mcp.js",
-      "source_location": "L10",
-      "weight": 1.0,
-      "source": "agent_backend_fleet_mcp",
-      "target": "agent_backend_fleet_mcp_stdioservertransport",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
       "source_file": "agent-backend/fleet.js",
       "source_location": "L24",
       "weight": 1.0,
@@ -15357,7 +15339,7 @@
       "context": "import",
       "confidence": "EXTRACTED",
       "source_file": "agent-backend/server.js",
-      "source_location": "L390",
+      "source_location": "L470",
       "weight": 1.0,
       "source": "agent_backend_server",
       "target": "agent_backend_fleet",
@@ -15566,7 +15548,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "agent-backend/server.js",
-      "source_location": "L1005",
+      "source_location": "L1085",
       "weight": 1.0,
       "source": "agent_backend_server_handlestarttask",
       "target": "agent_backend_harnesses_index_loadharness"
@@ -16544,7 +16526,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "agent-backend/server.js",
-      "source_location": "L1293",
+      "source_location": "L1393",
       "weight": 1.0,
       "source": "agent_backend_server_createharnesseventemitter",
       "target": "agent_backend_harnesses_picode_parser_ismutatingtool"
@@ -16577,7 +16559,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "agent-backend/server.js",
-      "source_location": "L870",
+      "source_location": "L950",
       "weight": 1.0,
       "source": "agent_backend_server_handlestarttask",
       "target": "agent_backend_harnesses_picode_parser_isconversationalprompt"
@@ -16607,7 +16589,7 @@
       "context": "import",
       "confidence": "EXTRACTED",
       "source_file": "agent-backend/server.js",
-      "source_location": "L534",
+      "source_location": "L614",
       "weight": 1.0,
       "source": "agent_backend_server",
       "target": "agent_backend_harnesses_remote_index",
@@ -17578,7 +17560,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "agent-backend/server.js",
-      "source_location": "L1151",
+      "source_location": "L1231",
       "weight": 1.0,
       "source": "agent_backend_server_createharnesseventemitter",
       "target": "agent_backend_metrics_estimatetokens"
@@ -18955,30 +18937,10 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "agent-backend/routes/devices.js",
-      "source_location": "L14",
-      "weight": 1.0,
-      "source": "agent_backend_routes_devices",
-      "target": "agent_backend_routes_devices_createdevicesrouter",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "agent-backend/routes/devices.js",
-      "source_location": "L11",
-      "weight": 1.0,
-      "source": "agent_backend_routes_devices",
-      "target": "agent_backend_routes_devices_fs",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "agent-backend/routes/devices.js",
       "source_location": "L12",
       "weight": 1.0,
       "source": "agent_backend_routes_devices",
-      "target": "agent_backend_routes_devices_path",
+      "target": "agent_backend_routes_devices_createdevicesrouter",
       "confidence_score": 1.0
     },
     {
@@ -19027,7 +18989,7 @@
       "context": "import",
       "confidence": "EXTRACTED",
       "source_file": "agent-backend/server.js",
-      "source_location": "L391",
+      "source_location": "L471",
       "weight": 1.0,
       "source": "agent_backend_server",
       "target": "agent_backend_routes_fleet",
@@ -20101,7 +20063,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "agent-backend/server.js",
-      "source_location": "L1113",
+      "source_location": "L1193",
       "weight": 1.0,
       "source": "agent_backend_server",
       "target": "agent_backend_server_active_sa",
@@ -20121,7 +20083,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "agent-backend/server.js",
-      "source_location": "L305",
+      "source_location": "L343",
       "weight": 1.0,
       "source": "agent_backend_server",
       "target": "agent_backend_server_app",
@@ -20131,7 +20093,17 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "agent-backend/server.js",
-      "source_location": "L344",
+      "source_location": "L287",
+      "weight": 1.0,
+      "source": "agent_backend_server",
+      "target": "agent_backend_server_applyplantool",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "agent-backend/server.js",
+      "source_location": "L382",
       "weight": 1.0,
       "source": "agent_backend_server",
       "target": "agent_backend_server_authmiddleware",
@@ -20141,7 +20113,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "agent-backend/server.js",
-      "source_location": "L1098",
+      "source_location": "L1178",
       "weight": 1.0,
       "source": "agent_backend_server",
       "target": "agent_backend_server_broadcastnotification",
@@ -20161,7 +20133,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "agent-backend/server.js",
-      "source_location": "L462",
+      "source_location": "L542",
       "weight": 1.0,
       "source": "agent_backend_server",
       "target": "agent_backend_server_buildcapabilities",
@@ -20171,7 +20143,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "agent-backend/server.js",
-      "source_location": "L379",
+      "source_location": "L459",
       "weight": 1.0,
       "context": "collection",
       "source": "agent_backend_server",
@@ -20182,7 +20154,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "agent-backend/server.js",
-      "source_location": "L379",
+      "source_location": "L459",
       "weight": 1.0,
       "source": "agent_backend_server",
       "target": "agent_backend_server_channelsrouter",
@@ -20192,7 +20164,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "agent-backend/server.js",
-      "source_location": "L369",
+      "source_location": "L449",
       "weight": 1.0,
       "source": "agent_backend_server",
       "target": "agent_backend_server_connectionsrouter_oauthrouter",
@@ -20282,7 +20254,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "agent-backend/server.js",
-      "source_location": "L390",
+      "source_location": "L470",
       "weight": 1.0,
       "source": "agent_backend_server",
       "target": "agent_backend_server_createfleet",
@@ -20292,7 +20264,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "agent-backend/server.js",
-      "source_location": "L391",
+      "source_location": "L471",
       "weight": 1.0,
       "source": "agent_backend_server",
       "target": "agent_backend_server_createfleetrouter",
@@ -20302,7 +20274,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "agent-backend/server.js",
-      "source_location": "L1120",
+      "source_location": "L1200",
       "weight": 1.0,
       "source": "agent_backend_server",
       "target": "agent_backend_server_createharnesseventemitter",
@@ -20402,7 +20374,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "agent-backend/server.js",
-      "source_location": "L452",
+      "source_location": "L532",
       "weight": 1.0,
       "source": "agent_backend_server",
       "target": "agent_backend_server_createtelegrambridge",
@@ -20452,7 +20424,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "agent-backend/server.js",
-      "source_location": "L1683",
+      "source_location": "L1783",
       "weight": 1.0,
       "source": "agent_backend_server",
       "target": "agent_backend_server_ensureorbitmcpserversregistered",
@@ -20502,7 +20474,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "agent-backend/server.js",
-      "source_location": "L392",
+      "source_location": "L472",
       "weight": 1.0,
       "source": "agent_backend_server",
       "target": "agent_backend_server_fleet",
@@ -20532,7 +20504,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "agent-backend/server.js",
-      "source_location": "L463",
+      "source_location": "L543",
       "weight": 1.0,
       "source": "agent_backend_server",
       "target": "agent_backend_server_getcapabilities",
@@ -20542,7 +20514,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "agent-backend/server.js",
-      "source_location": "L355",
+      "source_location": "L435",
       "weight": 1.0,
       "context": "argument",
       "source": "agent_backend_server",
@@ -20553,7 +20525,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "agent-backend/server.js",
-      "source_location": "L393",
+      "source_location": "L473",
       "weight": 1.0,
       "context": "collection",
       "source": "agent_backend_server",
@@ -20564,7 +20536,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "agent-backend/server.js",
-      "source_location": "L321",
+      "source_location": "L359",
       "weight": 1.0,
       "source": "agent_backend_server",
       "target": "agent_backend_server_harnessregistry",
@@ -20594,7 +20566,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "agent-backend/server.js",
-      "source_location": "L1105",
+      "source_location": "L1185",
       "weight": 1.0,
       "source": "agent_backend_server",
       "target": "agent_backend_server_isfleetdispatchtool",
@@ -20614,7 +20586,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "agent-backend/server.js",
-      "source_location": "L288",
+      "source_location": "L326",
       "weight": 1.0,
       "source": "agent_backend_server",
       "target": "agent_backend_server_isunproductiveresult",
@@ -20654,7 +20626,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "agent-backend/server.js",
-      "source_location": "L316",
+      "source_location": "L354",
       "weight": 1.0,
       "source": "agent_backend_server",
       "target": "agent_backend_server_mcpregistry",
@@ -20674,7 +20646,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "agent-backend/server.js",
-      "source_location": "L302",
+      "source_location": "L340",
       "weight": 1.0,
       "source": "agent_backend_server",
       "target": "agent_backend_server_nodepath_pipath",
@@ -20694,7 +20666,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "agent-backend/server.js",
-      "source_location": "L328",
+      "source_location": "L366",
       "weight": 1.0,
       "source": "agent_backend_server",
       "target": "agent_backend_server_notifybus",
@@ -20794,7 +20766,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "agent-backend/server.js",
-      "source_location": "L379",
+      "source_location": "L459",
       "weight": 1.0,
       "context": "collection",
       "source": "agent_backend_server",
@@ -20835,7 +20807,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "agent-backend/server.js",
-      "source_location": "L320",
+      "source_location": "L358",
       "weight": 1.0,
       "source": "agent_backend_server",
       "target": "agent_backend_server_server",
@@ -20845,7 +20817,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "agent-backend/server.js",
-      "source_location": "L294",
+      "source_location": "L332",
       "weight": 1.0,
       "source": "agent_backend_server",
       "target": "agent_backend_server_sessionallowedpaths",
@@ -20865,7 +20837,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "agent-backend/server.js",
-      "source_location": "L1634",
+      "source_location": "L1734",
       "weight": 1.0,
       "source": "agent_backend_server",
       "target": "agent_backend_server_shutdown",
@@ -20885,7 +20857,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "agent-backend/server.js",
-      "source_location": "L1114",
+      "source_location": "L1194",
       "weight": 1.0,
       "source": "agent_backend_server",
       "target": "agent_backend_server_subagentfields",
@@ -20915,7 +20887,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "agent-backend/server.js",
-      "source_location": "L453",
+      "source_location": "L533",
       "weight": 1.0,
       "source": "agent_backend_server",
       "target": "agent_backend_server_telegrambridge",
@@ -20965,7 +20937,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "agent-backend/server.js",
-      "source_location": "L322",
+      "source_location": "L360",
       "weight": 1.0,
       "source": "agent_backend_server",
       "target": "agent_backend_server_wss",
@@ -21053,7 +21025,7 @@
       "context": "import",
       "confidence": "EXTRACTED",
       "source_file": "agent-backend/server.js",
-      "source_location": "L452",
+      "source_location": "L532",
       "weight": 1.0,
       "source": "agent_backend_server",
       "target": "agent_backend_telegram_bridge",
@@ -21228,11 +21200,22 @@
       "relation": "rationale_for",
       "confidence": "EXTRACTED",
       "source_file": "agent-backend/server.js",
-      "source_location": "L839",
+      "source_location": "L919",
       "weight": 1.0,
-      "source": "agent_backend_server_rationale_839",
+      "source": "agent_backend_server_rationale_919",
       "target": "agent_backend_server",
       "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "agent-backend/server.js",
+      "source_location": "L310",
+      "weight": 1.0,
+      "source": "agent_backend_server_applyplantool",
+      "target": "agent_backend_server_plan_statuses"
     },
     {
       "relation": "references",
@@ -21250,10 +21233,32 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "agent-backend/server.js",
+      "source_location": "L296",
+      "weight": 1.0,
+      "source": "agent_backend_server_applyplantool",
+      "target": "agent_backend_server_normalizeplansteps",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "agent-backend/server.js",
       "source_location": "L124",
       "weight": 1.0,
       "source": "agent_backend_server_loadplanbucket",
       "target": "agent_backend_server_normalizeplansteps",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "agent-backend/server.js",
+      "source_location": "L296",
+      "weight": 1.0,
+      "source": "agent_backend_server_applyplantool",
+      "target": "agent_backend_server_sanitizeplandeps",
       "confidence_score": 1.0
     },
     {
@@ -21283,7 +21288,18 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "agent-backend/server.js",
-      "source_location": "L934",
+      "source_location": "L292",
+      "weight": 1.0,
+      "source": "agent_backend_server_applyplantool",
+      "target": "agent_backend_server_loadplanbucket",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "agent-backend/server.js",
+      "source_location": "L1014",
       "weight": 1.0,
       "source": "agent_backend_server_handlestarttask",
       "target": "agent_backend_server_loadplanbucket",
@@ -21305,7 +21321,18 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "agent-backend/server.js",
-      "source_location": "L936",
+      "source_location": "L317",
+      "weight": 1.0,
+      "source": "agent_backend_server_applyplantool",
+      "target": "agent_backend_server_persistplanfiles",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "agent-backend/server.js",
+      "source_location": "L1016",
       "weight": 1.0,
       "source": "agent_backend_server_handlestarttask",
       "target": "agent_backend_server_persistplanfiles",
@@ -21338,7 +21365,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "agent-backend/server.js",
-      "source_location": "L1411",
+      "source_location": "L1511",
       "weight": 1.0,
       "source": "agent_backend_server_createharnesseventemitter",
       "target": "agent_backend_server_syncplansfromworkspace",
@@ -21349,7 +21376,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "agent-backend/server.js",
-      "source_location": "L940",
+      "source_location": "L1020",
       "weight": 1.0,
       "source": "agent_backend_server_handlestarttask",
       "target": "agent_backend_server_syncplansfromworkspace",
@@ -21371,7 +21398,29 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "agent-backend/server.js",
-      "source_location": "L1429",
+      "source_location": "L318",
+      "weight": 1.0,
+      "source": "agent_backend_server_applyplantool",
+      "target": "agent_backend_server_buckettopayload",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "agent-backend/server.js",
+      "source_location": "L1296",
+      "weight": 1.0,
+      "source": "agent_backend_server_createharnesseventemitter",
+      "target": "agent_backend_server_applyplantool",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "agent-backend/server.js",
+      "source_location": "L1529",
       "weight": 1.0,
       "source": "agent_backend_server_createharnesseventemitter",
       "target": "agent_backend_server_isunproductiveresult",
@@ -21382,7 +21431,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "agent-backend/server.js",
-      "source_location": "L1224",
+      "source_location": "L1324",
       "weight": 1.0,
       "source": "agent_backend_server_createharnesseventemitter",
       "target": "agent_backend_server_getconfig",
@@ -21393,7 +21442,7 @@
       "context": "collection",
       "confidence": "INFERRED",
       "source_file": "agent-backend/server.js",
-      "source_location": "L463",
+      "source_location": "L543",
       "weight": 1.0,
       "source": "agent_backend_server_getcapabilities",
       "target": "agent_backend_server_getconfig",
@@ -21404,7 +21453,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "agent-backend/server.js",
-      "source_location": "L854",
+      "source_location": "L934",
       "weight": 1.0,
       "source": "agent_backend_server_handlestarttask",
       "target": "agent_backend_server_getconfig",
@@ -21415,7 +21464,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "agent-backend/server.js",
-      "source_location": "L995",
+      "source_location": "L1075",
       "weight": 1.0,
       "source": "agent_backend_server_handlestarttask",
       "target": "agent_backend_server_getcapabilities",
@@ -21426,7 +21475,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "agent-backend/server.js",
-      "source_location": "L986",
+      "source_location": "L1066",
       "weight": 1.0,
       "source": "agent_backend_server_handlestarttask",
       "target": "agent_backend_server_createharnesseventemitter",
@@ -21438,7 +21487,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "agent-backend/server.js",
-      "source_location": "L872",
+      "source_location": "L952",
       "weight": 1.0,
       "source": "agent_backend_server_handlestarttask",
       "target": "agent_backend_services_plan_generator_generateplan"
@@ -21449,7 +21498,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "agent-backend/server.js",
-      "source_location": "L919",
+      "source_location": "L999",
       "weight": 1.0,
       "source": "agent_backend_server_handlestarttask",
       "target": "agent_backend_subagent_tracker_subagenttracker_fromjson"
@@ -21460,7 +21509,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "agent-backend/server.js",
-      "source_location": "L1031",
+      "source_location": "L1111",
       "weight": 1.0,
       "source": "agent_backend_server_handlestarttask",
       "target": "agent_backend_subagent_tracker_subagenttracker_tofrontendsummary"
@@ -21471,7 +21520,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "agent-backend/server.js",
-      "source_location": "L1034",
+      "source_location": "L1114",
       "weight": 1.0,
       "source": "agent_backend_server_handlestarttask",
       "target": "agent_backend_subagent_tracker_subagenttracker_tojson"
@@ -21482,7 +21531,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "agent-backend/server.js",
-      "source_location": "L848",
+      "source_location": "L928",
       "weight": 1.0,
       "source": "agent_backend_server_handlestarttask",
       "target": "agent_backend_ws_session_helpers_sendlog"
@@ -21493,7 +21542,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "agent-backend/server.js",
-      "source_location": "L847",
+      "source_location": "L927",
       "weight": 1.0,
       "source": "agent_backend_server_handlestarttask",
       "target": "agent_backend_ws_session_helpers_sendstatus"
@@ -21504,7 +21553,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "agent-backend/server.js",
-      "source_location": "L875",
+      "source_location": "L955",
       "weight": 1.0,
       "source": "agent_backend_server_handlestarttask",
       "target": "agent_backend_ws_session_helpers_sendwithsession"
@@ -21514,7 +21563,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "agent-backend/server.js",
-      "source_location": "L1084",
+      "source_location": "L1164",
       "weight": 1.0,
       "source": "agent_backend_server_runprofileheadless",
       "target": "agent_backend_server_handlestarttask",
@@ -21525,7 +21574,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "agent-backend/server.js",
-      "source_location": "L1079",
+      "source_location": "L1159",
       "weight": 1.0,
       "source": "agent_backend_server_runprofileheadless",
       "target": "agent_backend_server_broadcastnotification",
@@ -21536,7 +21585,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "agent-backend/server.js",
-      "source_location": "L1448",
+      "source_location": "L1548",
       "weight": 1.0,
       "source": "agent_backend_server_createharnesseventemitter",
       "target": "agent_backend_server_broadcastnotification",
@@ -21547,7 +21596,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "agent-backend/server.js",
-      "source_location": "L1250",
+      "source_location": "L1350",
       "weight": 1.0,
       "source": "agent_backend_server_createharnesseventemitter",
       "target": "agent_backend_server_isfleetdispatchtool",
@@ -21559,7 +21608,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "agent-backend/server.js",
-      "source_location": "L1116",
+      "source_location": "L1196",
       "weight": 1.0,
       "source": "agent_backend_server_subagentfields",
       "target": "agent_backend_server_active_sa"
@@ -21569,7 +21618,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "agent-backend/server.js",
-      "source_location": "L1171",
+      "source_location": "L1251",
       "weight": 1.0,
       "source": "agent_backend_server_createharnesseventemitter",
       "target": "agent_backend_server_subagentfields",
@@ -21581,7 +21630,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "agent-backend/server.js",
-      "source_location": "L1545",
+      "source_location": "L1645",
       "weight": 1.0,
       "source": "agent_backend_server_createharnesseventemitter",
       "target": "agent_backend_services_tts_generateintelligentspeech"
@@ -21592,7 +21641,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "agent-backend/server.js",
-      "source_location": "L1497",
+      "source_location": "L1597",
       "weight": 1.0,
       "source": "agent_backend_server_createharnesseventemitter",
       "target": "agent_backend_subagent_tracker_subagenttracker_addreasoning"
@@ -21603,7 +21652,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "agent-backend/server.js",
-      "source_location": "L1225",
+      "source_location": "L1325",
       "weight": 1.0,
       "source": "agent_backend_server_createharnesseventemitter",
       "target": "agent_backend_subagent_tracker_subagenttracker_depthof"
@@ -21614,7 +21663,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "agent-backend/server.js",
-      "source_location": "L1457",
+      "source_location": "L1557",
       "weight": 1.0,
       "source": "agent_backend_server_createharnesseventemitter",
       "target": "agent_backend_subagent_tracker_subagenttracker_endtoolcall"
@@ -21625,7 +21674,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "agent-backend/server.js",
-      "source_location": "L1159",
+      "source_location": "L1239",
       "weight": 1.0,
       "source": "agent_backend_server_createharnesseventemitter",
       "target": "agent_backend_subagent_tracker_subagenttracker_getagent"
@@ -21636,7 +21685,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "agent-backend/server.js",
-      "source_location": "L1465",
+      "source_location": "L1565",
       "weight": 1.0,
       "source": "agent_backend_server_createharnesseventemitter",
       "target": "agent_backend_subagent_tracker_subagenttracker_markcompleted"
@@ -21647,7 +21696,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "agent-backend/server.js",
-      "source_location": "L1241",
+      "source_location": "L1341",
       "weight": 1.0,
       "source": "agent_backend_server_createharnesseventemitter",
       "target": "agent_backend_subagent_tracker_subagenttracker_setstatus"
@@ -21658,7 +21707,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "agent-backend/server.js",
-      "source_location": "L1240",
+      "source_location": "L1340",
       "weight": 1.0,
       "source": "agent_backend_server_createharnesseventemitter",
       "target": "agent_backend_subagent_tracker_subagenttracker_spawnagent"
@@ -21669,7 +21718,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "agent-backend/server.js",
-      "source_location": "L1248",
+      "source_location": "L1348",
       "weight": 1.0,
       "source": "agent_backend_server_createharnesseventemitter",
       "target": "agent_backend_subagent_tracker_subagenttracker_starttoolcall"
@@ -21680,7 +21729,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "agent-backend/server.js",
-      "source_location": "L1606",
+      "source_location": "L1706",
       "weight": 1.0,
       "source": "agent_backend_server_createharnesseventemitter",
       "target": "agent_backend_subagent_tracker_subagenttracker_tofrontendsummary"
@@ -21691,7 +21740,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "agent-backend/server.js",
-      "source_location": "L1568",
+      "source_location": "L1668",
       "weight": 1.0,
       "source": "agent_backend_server_createharnesseventemitter",
       "target": "agent_backend_subagent_tracker_subagenttracker_tojson"
@@ -21702,7 +21751,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "agent-backend/server.js",
-      "source_location": "L1206",
+      "source_location": "L1286",
       "weight": 1.0,
       "source": "agent_backend_server_createharnesseventemitter",
       "target": "agent_backend_tool_catalog_recordobserved"
@@ -21713,7 +21762,7 @@
       "confidence": "INFERRED",
       "confidence_score": 0.8,
       "source_file": "agent-backend/server.js",
-      "source_location": "L1283",
+      "source_location": "L1383",
       "weight": 1.0,
       "source": "agent_backend_server_createharnesseventemitter",
       "target": "agent_backend_workspace_paths_sessionroot"
@@ -21724,7 +21773,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "agent-backend/server.js",
-      "source_location": "L1276",
+      "source_location": "L1376",
       "weight": 1.0,
       "source": "agent_backend_server_createharnesseventemitter",
       "target": "agent_backend_ws_session_helpers_extractpathsfromargs"
@@ -21735,7 +21784,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "agent-backend/server.js",
-      "source_location": "L1294",
+      "source_location": "L1394",
       "weight": 1.0,
       "source": "agent_backend_server_createharnesseventemitter",
       "target": "agent_backend_ws_session_helpers_ispathblocked"
@@ -21746,7 +21795,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "agent-backend/server.js",
-      "source_location": "L1330",
+      "source_location": "L1430",
       "weight": 1.0,
       "source": "agent_backend_server_createharnesseventemitter",
       "target": "agent_backend_ws_session_helpers_ispathinzones"
@@ -21757,7 +21806,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "agent-backend/server.js",
-      "source_location": "L1330",
+      "source_location": "L1430",
       "weight": 1.0,
       "source": "agent_backend_server_createharnesseventemitter",
       "target": "agent_backend_ws_session_helpers_resolvetargetpath"
@@ -21768,7 +21817,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "agent-backend/server.js",
-      "source_location": "L1203",
+      "source_location": "L1283",
       "weight": 1.0,
       "source": "agent_backend_server_createharnesseventemitter",
       "target": "agent_backend_ws_session_helpers_sendlog"
@@ -21779,7 +21828,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "agent-backend/server.js",
-      "source_location": "L1236",
+      "source_location": "L1336",
       "weight": 1.0,
       "source": "agent_backend_server_createharnesseventemitter",
       "target": "agent_backend_ws_session_helpers_sendstatus"
@@ -21790,7 +21839,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "agent-backend/server.js",
-      "source_location": "L1125",
+      "source_location": "L1205",
       "weight": 1.0,
       "source": "agent_backend_server_createharnesseventemitter",
       "target": "agent_backend_ws_session_helpers_sendwithsession"
@@ -28625,6 +28674,56 @@
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
+      "source_file": "mcp-server-fleet/index.js",
+      "source_location": "L19",
+      "weight": 1.0,
+      "source": "mcp_server_fleet_index",
+      "target": "mcp_server_fleet_index_api",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "mcp-server-fleet/index.js",
+      "source_location": "L11",
+      "weight": 1.0,
+      "source": "mcp_server_fleet_index",
+      "target": "mcp_server_fleet_index_calltoolrequestschema_listtoolsrequestschema",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "mcp-server-fleet/index.js",
+      "source_location": "L116",
+      "weight": 1.0,
+      "source": "mcp_server_fleet_index",
+      "target": "mcp_server_fleet_index_run",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "mcp-server-fleet/index.js",
+      "source_location": "L32",
+      "weight": 1.0,
+      "source": "mcp_server_fleet_index",
+      "target": "mcp_server_fleet_index_server",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "mcp-server-fleet/index.js",
+      "source_location": "L10",
+      "weight": 1.0,
+      "source": "mcp_server_fleet_index",
+      "target": "mcp_server_fleet_index_stdioservertransport",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
       "source_file": "mcp-server-lightpanda/index.js",
       "source_location": "L3",
       "weight": 1.0,
@@ -28842,6 +28941,66 @@
       "weight": 1.0,
       "source": "mcp_server_notify_index",
       "target": "mcp_server_notify_index_stdioservertransport",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "mcp-server-plan/index.js",
+      "source_location": "L15",
+      "weight": 1.0,
+      "source": "mcp_server_plan_index",
+      "target": "mcp_server_plan_index_calltoolrequestschema_listtoolsrequestschema",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "mcp-server-plan/index.js",
+      "source_location": "L26",
+      "weight": 1.0,
+      "source": "mcp_server_plan_index",
+      "target": "mcp_server_plan_index_postplanupdate",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "mcp-server-plan/index.js",
+      "source_location": "L140",
+      "weight": 1.0,
+      "source": "mcp_server_plan_index",
+      "target": "mcp_server_plan_index_run",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "mcp-server-plan/index.js",
+      "source_location": "L51",
+      "weight": 1.0,
+      "source": "mcp_server_plan_index",
+      "target": "mcp_server_plan_index_server",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "mcp-server-plan/index.js",
+      "source_location": "L20",
+      "weight": 1.0,
+      "source": "mcp_server_plan_index",
+      "target": "mcp_server_plan_index_statuses",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "mcp-server-plan/index.js",
+      "source_location": "L14",
+      "weight": 1.0,
+      "source": "mcp_server_plan_index",
+      "target": "mcp_server_plan_index_stdioservertransport",
       "confidence_score": 1.0
     },
     {
@@ -29446,16 +29605,6 @@
       "weight": 1.0,
       "source": "restart_orbit",
       "target": "restart_orbit_sh__entry",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "setup.sh",
-      "source_location": "L1",
-      "weight": 1.0,
-      "source": "setup",
-      "target": "setup_sh__entry",
       "confidence_score": 1.0
     },
     {
@@ -30758,5 +30907,5 @@
       "source_file": "dashboard/public/next.svg"
     }
   ],
-  "built_at_commit": "be086c91090d1e08e74cc7b25d47cb1295c299d9"
+  "built_at_commit": "05fe6ab9849444b9998a78cd1357285c45e53363"
 }

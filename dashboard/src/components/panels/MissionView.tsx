@@ -149,7 +149,7 @@ function PlanGraph({ steps }: { steps: PlanStep[] }) {
 
 /**
  * MissionView — the session's PLAN(s), as a structured checklist the agent
- * drives via the orbit-plan tool, plus a dependency GRAPH view, overlaid with
+ * drives via workspace plans/plan.md, plus a dependency GRAPH view, overlaid with
  * the live sub-agent tree. A session may hold several named plans (a selector
  * appears when it does). This is deliberately NOT the agent's free-form
  * reasoning — that lives in the Trace/chat accordions.

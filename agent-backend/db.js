@@ -196,7 +196,7 @@ if (currentSchemaVersion < 10) {
 }
 
 if (currentSchemaVersion < 11) {
-  // Structured plan/checklist steps for the live Mission board (orbit-plan tool).
+  // Structured plan/checklist steps for the live Mission board (plans/plan.md file).
   try { db.exec("ALTER TABLE sessions ADD COLUMN plan_steps TEXT NOT NULL DEFAULT '[]'"); } catch (e) {}
   db.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)").run(
     "schema_version",

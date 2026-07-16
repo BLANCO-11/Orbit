@@ -42,7 +42,7 @@
   "40": "Error Handler Middleware",
   "41": "ESLint Config",
   "42": "Next.js Config",
-  "43": "index.js",
+  "43": "Next Env Types",
   "44": "PostCSS Config",
   "45": "Pair Route Page",
   "46": "File Icon Asset",
@@ -66,7 +66,7 @@
   "64": "MissionView.tsx",
   "65": "index.js",
   "66": "crypto-store.js",
-  "67": "fleet-mcp.js",
+  "67": "index.js",
   "68": "policy-engine.js",
   "69": "skills.js",
   "70": "index.js",
@@ -101,6 +101,7 @@
   "99": "telegram-bridge.js",
   "100": "graphify.md",
   "101": "graphify.md",
+  "102": "card.tsx",
   "103": "AGENTS.md",
   "104": "next",
   "105": "tailwind-merge",
@@ -151,5 +152,10 @@
   "150": "MCP (Model Context Protocol)",
   "151": "mcp-server-lightpanda",
   "152": "Dynamic Security Guard (HITL)",
-  "153": "Voice I/O (STT + TTS)"
+  "153": "Voice I/O (STT + TTS)",
+  "155": "OrbitProvider.tsx",
+  "156": "CommandPalette.tsx",
+  "157": "PairDevice.tsx",
+  "158": "LogViewer.tsx",
+  "159": "NotificationCenter.tsx"
 }
