@@ -1,7 +1,7 @@
 {
   ".pi/mcp.json": {
-    "mtime": 1784117968.5043273,
-    "ast_hash": "5877bff5c69b793170a575cba9c4e55e",
+    "mtime": 1784184635.3145952,
+    "ast_hash": "b29f6667a95d1f8fcdb42d269c60c7cb",
     "semantic_hash": ""
   },
   "agent-backend/config.js": {
@@ -110,8 +110,8 @@
     "semantic_hash": ""
   },
   "agent-backend/server.js": {
-    "mtime": 1784184072.697149,
-    "ast_hash": "529a8756a0a06b778b7f1b088b498cce",
+    "mtime": 1784184696.4575565,
+    "ast_hash": "2238d83bc21aa3b1e3c454a4b0123ca4",
     "semantic_hash": ""
   },
   "agent-backend/services/plan-generator.js": {

@@ -313,6 +313,7 @@ app.use(requestIdMiddleware);
 // ── MCP Connector Registry ──────────────────────────────────────────
 // Owns .pi/mcp.json (the servers the agent reaches) and keeps a backend-side
 // client to each for live status + tool listing.
+ensureOrbitMcpServersRegistered();
 const mcpRegistry = new McpRegistry();
 mcpRegistry.connectAll().catch(err => console.error("MCP registry connect failed:", err.message));
 
@@ -1727,7 +1728,6 @@ function ensureOrbitMcpServersRegistered() {
 
 server.listen(PORT, '127.0.0.1', () => {
   console.log(`Orbit Backend Server listening on 127.0.0.1:${PORT} (internal only)`);
-  ensureOrbitMcpServersRegistered();
   // Essential service: the Lightpanda browser is the mandatory default browser
   // for every agent. Ensure its container is up with an auto-restart policy so
   // a crash never leaves agents web-blind (falling back to code_search/nonsense).

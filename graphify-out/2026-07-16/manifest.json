@@ -85,8 +85,8 @@
     "semantic_hash": ""
   },
   "agent-backend/routes/models.js": {
-    "mtime": 1784184422.4143395,
-    "ast_hash": "41677cba83bf4c451629f5feae9cbc26",
+    "mtime": 1784184595.6012776,
+    "ast_hash": "600e629377d113fae999789bb2523acc",
     "semantic_hash": ""
   },
   "agent-backend/routes/notifications.js": {
