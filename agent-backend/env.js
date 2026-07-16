@@ -7,6 +7,20 @@ const os = require("os");
 const REQUIRED_VARS = ["LITELLM_KEY"];
 const RECOMMENDED_VARS = ["LOCAL_TTS_KEY", "LIGHTPANDA_WS"];
 
+function resolveFromPath(binName) {
+  const pathEnv = process.env.PATH || "";
+  const dirs = pathEnv.split(path.delimiter);
+  for (const dir of dirs) {
+    const full = path.join(dir, binName);
+    try {
+      if (fs.existsSync(full)) {
+        return fs.realpathSync(full);
+      }
+    } catch (e) {}
+  }
+  return null;
+}
+
 function discoverPiBinaries() {
   const nodePath = process.env.PI_NODE_PATH || process.env.NODE_PATH;
   const piPath = process.env.PI_CLI_PATH;
@@ -17,9 +31,20 @@ function discoverPiBinaries() {
       `${homeDir}/.local/share/pi-node/node-v22.22.3-linux-x64/bin/node`,
       `${homeDir}/.local/share/pi-node/node-v22.22.3-linux-x64/bin/pi`,
     ];
+
+    let resolvedNode = nodePath || (fs.existsSync(candidates[0]) ? candidates[0] : null);
+    if (!resolvedNode) {
+      resolvedNode = resolveFromPath("node") || "node";
+    }
+
+    let resolvedPi = piPath || (fs.existsSync(candidates[1]) ? candidates[1] : null);
+    if (!resolvedPi) {
+      resolvedPi = resolveFromPath("pi") || "pi";
+    }
+
     return {
-      nodePath: nodePath || (fs.existsSync(candidates[0]) ? candidates[0] : "node"),
-      piPath: piPath || (fs.existsSync(candidates[1]) ? candidates[1] : "pi"),
+      nodePath: resolvedNode,
+      piPath: resolvedPi,
     };
   }
   

@@ -31,6 +31,45 @@ db.exec(`
   )
 `);
 
+// ── Initialize tables ────────────────────────────────────────────────
+db.exec(`
+  CREATE TABLE IF NOT EXISTS sessions (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    messages TEXT NOT NULL,
+    logs TEXT NOT NULL,
+    execution_plan TEXT NOT NULL,
+    metrics TEXT NOT NULL,
+    mode TEXT NOT NULL DEFAULT '',
+    subagent_tree TEXT NOT NULL DEFAULT '{}',
+    timestamp INTEGER NOT NULL
+  )
+`);
+
+// Self-healing check: Ensure all columns from later migrations exist on the sessions table.
+// This repairs cases where a fresh DB boot bypasses Alter Table statements.
+try {
+  const columns = db.prepare("PRAGMA table_info(sessions)").all().map((c) => c.name);
+  const columnSet = new Set(columns);
+  if (!columnSet.has("schema_version")) {
+    try { db.exec("ALTER TABLE sessions ADD COLUMN schema_version INTEGER DEFAULT 0"); } catch (e) {}
+  }
+  if (!columnSet.has("run_state")) {
+    try { db.exec("ALTER TABLE sessions ADD COLUMN run_state TEXT NOT NULL DEFAULT '{}'"); } catch (e) {}
+  }
+  if (!columnSet.has("plan_steps")) {
+    try { db.exec("ALTER TABLE sessions ADD COLUMN plan_steps TEXT NOT NULL DEFAULT '[]'"); } catch (e) {}
+  }
+  if (!columnSet.has("plans")) {
+    try { db.exec("ALTER TABLE sessions ADD COLUMN plans TEXT NOT NULL DEFAULT '[]'"); } catch (e) {}
+  }
+  if (!columnSet.has("active_plan_id")) {
+    try { db.exec("ALTER TABLE sessions ADD COLUMN active_plan_id TEXT NOT NULL DEFAULT ''"); } catch (e) {}
+  }
+} catch (e) {
+  console.error("[DB] Self-healing check failed:", e.message);
+}
+
 // Read current schema version from meta table
 let currentSchemaVersion = 0;
 try {
@@ -218,20 +257,7 @@ if (currentSchemaVersion < 12) {
   console.log(`[DB] Migrated sessions schema to version ${CURRENT_SCHEMA_VERSION}`);
 }
 
-// ── Initialize tables ────────────────────────────────────────────────
-db.exec(`
-  CREATE TABLE IF NOT EXISTS sessions (
-    id TEXT PRIMARY KEY,
-    title TEXT NOT NULL,
-    messages TEXT NOT NULL,
-    logs TEXT NOT NULL,
-    execution_plan TEXT NOT NULL,
-    metrics TEXT NOT NULL,
-    mode TEXT NOT NULL DEFAULT '',
-    subagent_tree TEXT NOT NULL DEFAULT '{}',
-    timestamp INTEGER NOT NULL
-  )
-`);
+
 
 // ── Backup ───────────────────────────────────────────────────────────
 const MAX_BACKUPS = 20;

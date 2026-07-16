@@ -1,7 +1,7 @@
 {
   ".pi/mcp.json": {
-    "mtime": 1784117968.5043273,
-    "ast_hash": "5877bff5c69b793170a575cba9c4e55e",
+    "mtime": 1784184635.3145952,
+    "ast_hash": "b29f6667a95d1f8fcdb42d269c60c7cb",
     "semantic_hash": ""
   },
   "agent-backend/config.js": {
@@ -110,8 +110,8 @@
     "semantic_hash": ""
   },
   "agent-backend/server.js": {
-    "mtime": 1784184072.697149,
-    "ast_hash": "529a8756a0a06b778b7f1b088b498cce",
+    "mtime": 1784184696.4575565,
+    "ast_hash": "2238d83bc21aa3b1e3c454a4b0123ca4",
     "semantic_hash": ""
   },
   "agent-backend/services/plan-generator.js": {
@@ -425,8 +425,8 @@
     "semantic_hash": "7284a1f04ad7781777757563e71a291e"
   },
   "package.json": {
-    "mtime": 1783798940.2491984,
-    "ast_hash": "8d3ed216f619fe4b472bce95861deee7",
+    "mtime": 1784185984.8712745,
+    "ast_hash": "5d38199d4cd29e05c08dcd0ee6dcc473",
     "semantic_hash": ""
   },
   "tests/test_lightpanda.js": {
@@ -845,8 +845,8 @@
     "semantic_hash": ""
   },
   "setup.sh": {
-    "mtime": 1784184096.6506462,
-    "ast_hash": "248043fe686b72e6951232e284f3865b",
+    "mtime": 1784185722.554282,
+    "ast_hash": "dd2da0d3a8fb6a6687ba91a7fa27bd61",
     "semantic_hash": ""
   }
 }

@@ -298,7 +298,20 @@ const sessionAllowedPaths = new Map(); // sessionId → Set<allowedPaths>
 // Previously this returned a single startup snapshot, so POST /api/config
 // wrote the file but nothing in-process ever saw the new values.
 loadConfig(); // fail fast at boot if the config file is missing/corrupt
-const getConfig = () => loadConfig();
+const getConfig = () => {
+  const config = loadConfig();
+  if (!config.litellm) config.litellm = {};
+  if (!config.litellm.baseURL) {
+    config.litellm.baseURL = process.env.LITELLM_BASE_URL || "http://127.0.0.1:5000/v1";
+  }
+  if (!config.litellm.apiKey) {
+    config.litellm.apiKey = process.env.LITELLM_KEY || process.env.OPENAI_API_KEY || "";
+  }
+  if (!config.litellm.selectedNormalModel) {
+    config.litellm.selectedNormalModel = process.env.LITELLM_MODEL || "";
+  }
+  return config;
+};
 const { nodePath, piPath } = discoverPiBinaries();
 
 // ── Express App ─────────────────────────────────────────────────────
