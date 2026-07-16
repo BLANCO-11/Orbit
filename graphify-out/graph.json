@@ -1146,7 +1146,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "agent_backend_env",
-      "community": 102,
+      "community": 28,
       "norm_label": "env.js"
     },
     {
@@ -1156,7 +1156,7 @@
       "source_location": "L4",
       "_origin": "ast",
       "id": "agent_backend_env_fs",
-      "community": 102,
+      "community": 28,
       "norm_label": "fs"
     },
     {
@@ -1166,7 +1166,7 @@
       "source_location": "L5",
       "_origin": "ast",
       "id": "agent_backend_env_os",
-      "community": 102,
+      "community": 28,
       "norm_label": "os"
     },
     {
@@ -1176,7 +1176,7 @@
       "source_location": "L7",
       "_origin": "ast",
       "id": "agent_backend_env_required_vars",
-      "community": 102,
+      "community": 28,
       "norm_label": "required_vars"
     },
     {
@@ -1186,7 +1186,7 @@
       "source_location": "L8",
       "_origin": "ast",
       "id": "agent_backend_env_recommended_vars",
-      "community": 102,
+      "community": 28,
       "norm_label": "recommended_vars"
     },
     {
@@ -1206,7 +1206,7 @@
       "source_location": "L29",
       "_origin": "ast",
       "id": "agent_backend_env_validateenv",
-      "community": 102,
+      "community": 28,
       "norm_label": "validateenv()"
     },
     {
@@ -1626,7 +1626,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "agent_backend_harnesses_opencode_index",
-      "community": 95,
+      "community": 55,
       "norm_label": "index.js"
     },
     {
@@ -1636,7 +1636,7 @@
       "source_location": "L22",
       "_origin": "ast",
       "id": "agent_backend_harnesses_opencode_index_spawn",
-      "community": 95,
+      "community": 55,
       "norm_label": "{ spawn }"
     },
     {
@@ -1646,7 +1646,7 @@
       "source_location": "L23",
       "_origin": "ast",
       "id": "agent_backend_harnesses_opencode_index_fs",
-      "community": 95,
+      "community": 55,
       "norm_label": "fs"
     },
     {
@@ -1656,7 +1656,7 @@
       "source_location": "L24",
       "_origin": "ast",
       "id": "agent_backend_harnesses_opencode_index_path",
-      "community": 95,
+      "community": 55,
       "norm_label": "path"
     },
     {
@@ -1666,7 +1666,7 @@
       "source_location": "L25",
       "_origin": "ast",
       "id": "agent_backend_harnesses_opencode_index_harnessinterface",
-      "community": 95,
+      "community": 55,
       "norm_label": "harnessinterface"
     },
     {
@@ -1676,7 +1676,7 @@
       "source_location": "L26",
       "_origin": "ast",
       "id": "agent_backend_harnesses_opencode_index_workspacepaths",
-      "community": 95,
+      "community": 55,
       "norm_label": "workspacepaths"
     },
     {
@@ -1686,7 +1686,7 @@
       "source_location": "L30",
       "_origin": "ast",
       "id": "agent_backend_harnesses_opencode_index_opencode_tools",
-      "community": 95,
+      "community": 55,
       "norm_label": "opencode_tools"
     },
     {
@@ -1696,7 +1696,7 @@
       "source_location": "L32",
       "_origin": "ast",
       "id": "agent_backend_harnesses_opencode_index_opencodeharness",
-      "community": 95,
+      "community": 55,
       "norm_label": "opencodeharness"
     },
     {
@@ -1706,7 +1706,7 @@
       "source_location": "L33",
       "_origin": "ast",
       "id": "agent_backend_harnesses_opencode_index_opencodeharness_constructor",
-      "community": 95,
+      "community": 55,
       "norm_label": ".constructor()"
     },
     {
@@ -1716,7 +1716,7 @@
       "source_location": "L43",
       "_origin": "ast",
       "id": "agent_backend_harnesses_opencode_index_opencodeharness_getmetadata",
-      "community": 95,
+      "community": 55,
       "norm_label": ".getmetadata()"
     },
     {
@@ -1726,7 +1726,7 @@
       "source_location": "L47",
       "_origin": "ast",
       "id": "agent_backend_harnesses_opencode_index_opencodeharness_listtools",
-      "community": 95,
+      "community": 55,
       "norm_label": ".listtools()"
     },
     {
@@ -1736,7 +1736,7 @@
       "source_location": "L59",
       "_origin": "ast",
       "id": "agent_backend_harnesses_opencode_index_opencodeharness_connect",
-      "community": 95,
+      "community": 55,
       "norm_label": ".connect()"
     },
     {
@@ -1746,7 +1746,7 @@
       "source_location": "L72",
       "_origin": "ast",
       "id": "agent_backend_harnesses_opencode_index_opencodeharness_writeproviderconfig",
-      "community": 95,
+      "community": 55,
       "norm_label": "._writeproviderconfig()"
     },
     {
@@ -1756,7 +1756,7 @@
       "source_location": "L93",
       "_origin": "ast",
       "id": "agent_backend_harnesses_opencode_index_opencodeharness_orbitmcpforopencode",
-      "community": 95,
+      "community": 55,
       "norm_label": "._orbitmcpforopencode()"
     },
     {
@@ -1766,7 +1766,7 @@
       "source_location": "L107",
       "_origin": "ast",
       "id": "agent_backend_harnesses_opencode_index_opencodeharness_sendprompt",
-      "community": 95,
+      "community": 55,
       "norm_label": ".sendprompt()"
     },
     {
@@ -1776,7 +1776,7 @@
       "source_location": "L146",
       "_origin": "ast",
       "id": "agent_backend_harnesses_opencode_index_opencodeharness_onstdout",
-      "community": 95,
+      "community": 55,
       "norm_label": "._onstdout()"
     },
     {
@@ -1786,7 +1786,7 @@
       "source_location": "L157",
       "_origin": "ast",
       "id": "agent_backend_harnesses_opencode_index_opencodeharness_handleevent",
-      "community": 95,
+      "community": 55,
       "norm_label": "._handleevent()"
     },
     {
@@ -1796,7 +1796,7 @@
       "source_location": "L209",
       "_origin": "ast",
       "id": "agent_backend_harnesses_opencode_index_opencodeharness_cancel",
-      "community": 95,
+      "community": 55,
       "norm_label": ".cancel()"
     },
     {
@@ -1806,7 +1806,7 @@
       "source_location": "L220",
       "_origin": "ast",
       "id": "agent_backend_harnesses_opencode_index_opencodeharness_disconnect",
-      "community": 95,
+      "community": 55,
       "norm_label": ".disconnect()"
     },
     {
@@ -3820,20 +3820,10 @@
       "norm_label": "resolvettsurl()"
     },
     {
-      "label": "DEFAULT_MODELS",
-      "file_type": "code",
-      "source_file": "agent-backend/routes/models.js",
-      "source_location": "L25",
-      "_origin": "ast",
-      "id": "agent_backend_routes_models_default_models",
-      "community": 29,
-      "norm_label": "default_models"
-    },
-    {
       "label": "createModelsRouter()",
       "file_type": "code",
       "source_file": "agent-backend/routes/models.js",
-      "source_location": "L43",
+      "source_location": "L25",
       "_origin": "ast",
       "id": "agent_backend_routes_models_createmodelsrouter",
       "community": 29,
@@ -3843,7 +3833,7 @@
       "label": "createTtsRouter()",
       "file_type": "code",
       "source_file": "agent-backend/routes/models.js",
-      "source_location": "L95",
+      "source_location": "L53",
       "_origin": "ast",
       "id": "agent_backend_routes_models_createttsrouter",
       "community": 29,
@@ -3853,7 +3843,7 @@
       "label": "createVoicesRouter()",
       "file_type": "code",
       "source_file": "agent-backend/routes/models.js",
-      "source_location": "L152",
+      "source_location": "L110",
       "_origin": "ast",
       "id": "agent_backend_routes_models_createvoicesrouter",
       "community": 29,
@@ -4946,7 +4936,7 @@
       "source_location": "L133",
       "_origin": "ast",
       "id": "agent_backend_server_persistplanfiles",
-      "community": 4,
+      "community": 3,
       "norm_label": "persistplanfiles()"
     },
     {
@@ -4956,7 +4946,7 @@
       "source_location": "L148",
       "_origin": "ast",
       "id": "agent_backend_server_serializeplantomarkdown",
-      "community": 4,
+      "community": 3,
       "norm_label": "serializeplantomarkdown()"
     },
     {
@@ -4996,7 +4986,7 @@
       "source_location": "L288",
       "_origin": "ast",
       "id": "agent_backend_server_isunproductiveresult",
-      "community": 35,
+      "community": 4,
       "norm_label": "isunproductiveresult()"
     },
     {
@@ -5226,7 +5216,7 @@
       "source_location": "L1105",
       "_origin": "ast",
       "id": "agent_backend_server_isfleetdispatchtool",
-      "community": 35,
+      "community": 4,
       "norm_label": "isfleetdispatchtool()"
     },
     {
@@ -5236,7 +5226,7 @@
       "source_location": "L1113",
       "_origin": "ast",
       "id": "agent_backend_server_active_sa",
-      "community": 3,
+      "community": 85,
       "norm_label": "active_sa"
     },
     {
@@ -5246,7 +5236,7 @@
       "source_location": "L1114",
       "_origin": "ast",
       "id": "agent_backend_server_subagentfields",
-      "community": 3,
+      "community": 85,
       "norm_label": "subagentfields()"
     },
     {
@@ -5256,7 +5246,7 @@
       "source_location": "L1120",
       "_origin": "ast",
       "id": "agent_backend_server_createharnesseventemitter",
-      "community": 35,
+      "community": 4,
       "norm_label": "createharnesseventemitter()"
     },
     {
@@ -5336,7 +5326,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "agent_backend_services_tts",
-      "community": 3,
+      "community": 85,
       "norm_label": "tts.js"
     },
     {
@@ -5346,7 +5336,7 @@
       "source_location": "L4",
       "_origin": "ast",
       "id": "agent_backend_services_tts_generateintelligentspeech",
-      "community": 3,
+      "community": 85,
       "norm_label": "generateintelligentspeech()"
     },
     {
@@ -5606,7 +5596,7 @@
       "source_location": "L379",
       "_origin": "ast",
       "id": "agent_backend_subagent_tracker_subagenttracker_fromjson",
-      "community": 4,
+      "community": 35,
       "norm_label": ".fromjson()"
     },
     {
@@ -5736,7 +5726,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "agent_backend_workspace_paths",
-      "community": 18,
+      "community": 55,
       "norm_label": "workspace-paths.js"
     },
     {
@@ -5746,7 +5736,7 @@
       "source_location": "L17",
       "_origin": "ast",
       "id": "agent_backend_workspace_paths_fs",
-      "community": 18,
+      "community": 55,
       "norm_label": "fs"
     },
     {
@@ -5756,7 +5746,7 @@
       "source_location": "L18",
       "_origin": "ast",
       "id": "agent_backend_workspace_paths_path",
-      "community": 18,
+      "community": 55,
       "norm_label": "path"
     },
     {
@@ -5766,7 +5756,7 @@
       "source_location": "L19",
       "_origin": "ast",
       "id": "agent_backend_workspace_paths_os",
-      "community": 18,
+      "community": 55,
       "norm_label": "os"
     },
     {
@@ -5776,7 +5766,7 @@
       "source_location": "L22",
       "_origin": "ast",
       "id": "agent_backend_workspace_paths_sessions_dir",
-      "community": 18,
+      "community": 55,
       "norm_label": "sessions_dir"
     },
     {
@@ -5786,7 +5776,7 @@
       "source_location": "L25",
       "_origin": "ast",
       "id": "agent_backend_workspace_paths_safeid",
-      "community": 18,
+      "community": 55,
       "norm_label": "safeid()"
     },
     {
@@ -5796,7 +5786,7 @@
       "source_location": "L31",
       "_origin": "ast",
       "id": "agent_backend_workspace_paths_sessionroot",
-      "community": 18,
+      "community": 55,
       "norm_label": "sessionroot()"
     },
     {
@@ -5806,7 +5796,7 @@
       "source_location": "L36",
       "_origin": "ast",
       "id": "agent_backend_workspace_paths_sessiondirs",
-      "community": 18,
+      "community": 55,
       "norm_label": "sessiondirs()"
     },
     {
@@ -5816,7 +5806,7 @@
       "source_location": "L47",
       "_origin": "ast",
       "id": "agent_backend_workspace_paths_ensuresessiondirs",
-      "community": 18,
+      "community": 55,
       "norm_label": "ensuresessiondirs()"
     },
     {
@@ -5826,7 +5816,7 @@
       "source_location": "L56",
       "_origin": "ast",
       "id": "agent_backend_workspace_paths_removesessiondirs",
-      "community": 18,
+      "community": 55,
       "norm_label": "removesessiondirs()"
     },
     {
@@ -5996,7 +5986,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "agent_backend_ws_session_helpers",
-      "community": 85,
+      "community": 4,
       "norm_label": "session-helpers.js"
     },
     {
@@ -6006,7 +5996,7 @@
       "source_location": "L4",
       "_origin": "ast",
       "id": "agent_backend_ws_session_helpers_path",
-      "community": 85,
+      "community": 4,
       "norm_label": "path"
     },
     {
@@ -6016,7 +6006,7 @@
       "source_location": "L5",
       "_origin": "ast",
       "id": "agent_backend_ws_session_helpers_os",
-      "community": 85,
+      "community": 4,
       "norm_label": "os"
     },
     {
@@ -6066,7 +6056,7 @@
       "source_location": "L32",
       "_origin": "ast",
       "id": "agent_backend_ws_session_helpers_project_root",
-      "community": 85,
+      "community": 4,
       "norm_label": "project_root"
     },
     {
@@ -6076,7 +6066,7 @@
       "source_location": "L34",
       "_origin": "ast",
       "id": "agent_backend_ws_session_helpers_resolvetargetpath",
-      "community": 85,
+      "community": 4,
       "norm_label": "resolvetargetpath()"
     },
     {
@@ -6086,7 +6076,7 @@
       "source_location": "L41",
       "_origin": "ast",
       "id": "agent_backend_ws_session_helpers_ispathallowed",
-      "community": 85,
+      "community": 4,
       "norm_label": "ispathallowed()"
     },
     {
@@ -6096,7 +6086,7 @@
       "source_location": "L54",
       "_origin": "ast",
       "id": "agent_backend_ws_session_helpers_isunder",
-      "community": 85,
+      "community": 4,
       "norm_label": "isunder()"
     },
     {
@@ -6106,7 +6096,7 @@
       "source_location": "L64",
       "_origin": "ast",
       "id": "agent_backend_ws_session_helpers_ispathinzones",
-      "community": 85,
+      "community": 4,
       "norm_label": "ispathinzones()"
     },
     {
@@ -6116,7 +6106,7 @@
       "source_location": "L73",
       "_origin": "ast",
       "id": "agent_backend_ws_session_helpers_ispathblocked",
-      "community": 85,
+      "community": 4,
       "norm_label": "ispathblocked()"
     },
     {
@@ -6126,7 +6116,7 @@
       "source_location": "L77",
       "_origin": "ast",
       "id": "agent_backend_ws_session_helpers_extractpathsfromargs",
-      "community": 85,
+      "community": 4,
       "norm_label": "extractpathsfromargs()"
     },
     {
@@ -19088,7 +19078,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "agent-backend/routes/models.js",
-      "source_location": "L177",
+      "source_location": "L135",
       "weight": 1.0,
       "context": "collection",
       "source": "agent_backend_routes_models",
@@ -19099,7 +19089,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "agent-backend/routes/models.js",
-      "source_location": "L177",
+      "source_location": "L135",
       "weight": 1.0,
       "context": "collection",
       "source": "agent_backend_routes_models",
@@ -19110,22 +19100,12 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "agent-backend/routes/models.js",
-      "source_location": "L177",
+      "source_location": "L135",
       "weight": 1.0,
       "context": "collection",
       "source": "agent_backend_routes_models",
       "target": "agent_backend_routes_models_createvoicesrouter",
       "confidence_score": 0.5
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "agent-backend/routes/models.js",
-      "source_location": "L25",
-      "weight": 1.0,
-      "source": "agent_backend_routes_models",
-      "target": "agent_backend_routes_models_default_models",
-      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -19194,7 +19174,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "agent-backend/routes/models.js",
-      "source_location": "L139",
+      "source_location": "L97",
       "weight": 1.0,
       "source": "agent_backend_routes_models_createttsrouter",
       "target": "agent_backend_routes_models_readable"
@@ -19204,7 +19184,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "agent-backend/routes/models.js",
-      "source_location": "L100",
+      "source_location": "L58",
       "weight": 1.0,
       "source": "agent_backend_routes_models_createttsrouter",
       "target": "agent_backend_routes_models_resolvettskey",
@@ -19215,7 +19195,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "agent-backend/routes/models.js",
-      "source_location": "L156",
+      "source_location": "L114",
       "weight": 1.0,
       "source": "agent_backend_routes_models_createvoicesrouter",
       "target": "agent_backend_routes_models_resolvettskey",
@@ -30778,5 +30758,5 @@
       "source_file": "dashboard/public/next.svg"
     }
   ],
-  "built_at_commit": "cb6e4d45ccf2296160d7507603f45f8bbf45b267"
+  "built_at_commit": "7ad3c6c0267961feecbc1329f0d95d2a36a2db44"
 }
