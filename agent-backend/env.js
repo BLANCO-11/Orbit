@@ -3,6 +3,7 @@
 
 const fs = require("fs");
 const os = require("os");
+const path = require("path");
 
 const REQUIRED_VARS = ["LITELLM_KEY"];
 const RECOMMENDED_VARS = ["LOCAL_TTS_KEY", "LIGHTPANDA_WS"];
