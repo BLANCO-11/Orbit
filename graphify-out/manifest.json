@@ -85,8 +85,8 @@
     "semantic_hash": ""
   },
   "agent-backend/routes/models.js": {
-    "mtime": 1783917461.5220833,
-    "ast_hash": "1038c0dd649cd99bcd4427e930f797ee",
+    "mtime": 1784184422.4143395,
+    "ast_hash": "41677cba83bf4c451629f5feae9cbc26",
     "semantic_hash": ""
   },
   "agent-backend/routes/notifications.js": {
@@ -190,8 +190,8 @@
     "semantic_hash": ""
   },
   "dashboard/src/app/page.tsx": {
-    "mtime": 1784113417.0782523,
-    "ast_hash": "839575f884ebf2e6b568582b54de3379",
+    "mtime": 1784184432.1741629,
+    "ast_hash": "6006aa6163666d3e9fe1661f77662e79",
     "semantic_hash": ""
   },
   "dashboard/src/app/pair/page.tsx": {
@@ -235,8 +235,8 @@
     "semantic_hash": ""
   },
   "dashboard/src/components/SettingsPanel.tsx": {
-    "mtime": 1783931110.535024,
-    "ast_hash": "2ade43caa3d98430deadaa53a943b297",
+    "mtime": 1784184425.3792858,
+    "ast_hash": "e7da5b84c9c953135b1c21a75e5355e2",
     "semantic_hash": ""
   },
   "dashboard/src/components/chat/ChatArea.tsx": {

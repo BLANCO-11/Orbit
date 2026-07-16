@@ -197,7 +197,7 @@ function DashboardInner() {
     const steps = [
       { text: "Initializing SQLite database...", delay: 200 },
       { text: "Configuring security environment and policies...", delay: 500 },
-      { text: "Connecting to LiteLLM orchestrator...", delay: 850 },
+      { text: "Connecting to LLM orchestrator...", delay: 850 },
       { text: "Detecting active harnesses (pi, OpenCode)...", delay: 1100 },
       { text: "Loading custom UI preferences...", delay: 1300 },
       { text: "Workspace fully hydrated. Booting Orbit OS...", delay: 1550 }

@@ -10,8 +10,8 @@
     "semantic_hash": ""
   },
   "agent-backend/db.js": {
-    "mtime": 1784117928.3708498,
-    "ast_hash": "3e57217d6c1dc00f315a919fbb6125e0",
+    "mtime": 1784184077.2220535,
+    "ast_hash": "139f3b34c3704b93ece6b2656abe8718",
     "semantic_hash": ""
   },
   "agent-backend/env.js": {
@@ -110,8 +110,8 @@
     "semantic_hash": ""
   },
   "agent-backend/server.js": {
-    "mtime": 1784135463.6406403,
-    "ast_hash": "7c7c2cff786980efd563a5adb62c25c1",
+    "mtime": 1784184072.697149,
+    "ast_hash": "529a8756a0a06b778b7f1b088b498cce",
     "semantic_hash": ""
   },
   "agent-backend/services/plan-generator.js": {
@@ -605,8 +605,8 @@
     "semantic_hash": ""
   },
   "agent-backend/routes/fleet.js": {
-    "mtime": 1783896852.1614006,
-    "ast_hash": "ae407045b65c0cc5bd2f2fc228ccab9b",
+    "mtime": 1784184084.2739053,
+    "ast_hash": "c0f91b6af1619c3d043b9be6a2b4f962",
     "semantic_hash": ""
   },
   "agent-backend/routes/profiles.js": {
@@ -715,8 +715,8 @@
     "semantic_hash": ""
   },
   "dashboard/src/components/panels/MissionView.tsx": {
-    "mtime": 1784111692.6451545,
-    "ast_hash": "e34e6a7ca62651b8063ed70ffadf141b",
+    "mtime": 1784184087.808831,
+    "ast_hash": "5eac417f8d6bdba9e950cea228e473bd",
     "semantic_hash": ""
   },
   "dashboard/src/components/panels/PreviewTab.tsx": {
@@ -774,19 +774,9 @@
     "ast_hash": "96bef142f2dd779e05ed0b5a39f883db",
     "semantic_hash": ""
   },
-  "mcp-server-fleet/index.js": {
-    "mtime": 1783931110.5400238,
-    "ast_hash": "eeb45c582c67f0fdc61004953a0a1c69",
-    "semantic_hash": ""
-  },
   "mcp-server-notify/index.js": {
     "mtime": 1783863810.9196148,
     "ast_hash": "867f6b552605a6526d359aa40a9df38a",
-    "semantic_hash": ""
-  },
-  "mcp-server-plan/index.js": {
-    "mtime": 1784111663.5455227,
-    "ast_hash": "51df8bb1f1215557cd9b9e73d06d0583",
     "semantic_hash": ""
   },
   "mcp-server-search/index.js": {
@@ -847,6 +837,16 @@
   "skills/workspace-snapshot/SKILL.md": {
     "mtime": 1783717734.555223,
     "ast_hash": "9005a88701085d0ebced33f574e13df4",
+    "semantic_hash": ""
+  },
+  "agent-backend/fleet-mcp.js": {
+    "mtime": 1784184067.747254,
+    "ast_hash": "da3b8ebd887a2046c9b9e918edc191c9",
+    "semantic_hash": ""
+  },
+  "setup.sh": {
+    "mtime": 1784184096.6506462,
+    "ast_hash": "248043fe686b72e6951232e284f3865b",
     "semantic_hash": ""
   }
 }

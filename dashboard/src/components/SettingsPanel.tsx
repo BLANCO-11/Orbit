@@ -274,12 +274,12 @@ export default function SettingsPanel({
               <h3 className="text-sm font-bold text-foreground border-b border-border-soft pb-1.5">API &amp; Credentials Store</h3>
               
               <div>
-                <FieldLabel>LiteLLM Base Endpoint</FieldLabel>
+                <FieldLabel>LLM Base Endpoint (OpenAI-compatible / LiteLLM)</FieldLabel>
                 <Input value={settings.baseURL} onChange={(e) => onSettingsChange({ baseURL: e.target.value })} className="h-9 text-sm font-mono" placeholder="http://localhost:4000/v1" />
               </div>
               
               <div>
-                <FieldLabel>LiteLLM API Key</FieldLabel>
+                <FieldLabel>LLM API Key</FieldLabel>
                 <Input type="password" value={settings.apiKey} onChange={(e) => onSettingsChange({ apiKey: e.target.value })} className="h-9 text-sm font-mono" placeholder="sk-..." />
               </div>
 

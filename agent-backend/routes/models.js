@@ -22,20 +22,70 @@ function resolveTtsUrl(getConfig) {
   catch { return TTS_BASE_URL; }
 }
 
+const DEFAULT_MODELS = [
+  // OpenAI
+  { id: "gpt-4o" },
+  { id: "gpt-4o-mini" },
+  { id: "o1-mini" },
+  { id: "o1-preview" },
+  // Anthropic / Claude
+  { id: "claude-3-5-sonnet" },
+  { id: "claude-3-5-haiku" },
+  // DeepSeek
+  { id: "deepseek-chat" },
+  { id: "deepseek-reasoner" },
+  // Google Gemini
+  { id: "gemini-1.5-flash" },
+  { id: "gemini-1.5-pro" },
+  { id: "gemini-2.0-flash" }
+];
+
 function createModelsRouter(getConfig) {
   const router = Router();
   
   router.get("/", async (req, res, next) => {
     try {
       const config = getConfig();
-      const openai = new OpenAI({
-        baseURL: config.litellm.baseURL,
-        apiKey: config.litellm.apiKey,
-      });
-      const modelsResponse = await openai.models.list();
-      res.json(modelsResponse.data || []);
+      const baseURL = config?.litellm?.baseURL || process.env.LITELLM_BASE_URL || "";
+      const apiKey = config?.litellm?.apiKey || process.env.LITELLM_KEY || process.env.OPENAI_API_KEY || "";
+
+      let fetchedModels = [];
+      if (baseURL) {
+        try {
+          const openai = new OpenAI({
+            baseURL,
+            apiKey: apiKey || "none", // openai package requires a non-empty key
+          });
+          const modelsResponse = await openai.models.list();
+          if (modelsResponse && modelsResponse.data) {
+            fetchedModels = modelsResponse.data;
+          }
+        } catch (err) {
+          console.warn("[Models API] Could not fetch models from endpoint:", err.message);
+        }
+      }
+
+      // Merge fetched models with default models, avoiding duplicates
+      const seen = new Set();
+      const merged = [];
+
+      for (const m of fetchedModels) {
+        if (m && m.id && !seen.has(m.id)) {
+          seen.add(m.id);
+          merged.push({ id: m.id });
+        }
+      }
+
+      for (const m of DEFAULT_MODELS) {
+        if (!seen.has(m.id)) {
+          seen.add(m.id);
+          merged.push(m);
+        }
+      }
+
+      res.json(merged);
     } catch (error) {
-      next(error);
+      res.json(DEFAULT_MODELS);
     }
   });
   
