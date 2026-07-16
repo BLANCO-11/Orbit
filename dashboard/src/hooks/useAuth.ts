@@ -10,6 +10,7 @@ export interface AuthIdentity {
   tenantId: string | null;
   tenantName: string | null;
   email: string | null;
+  username: string | null;
   devMode: boolean;
   isSuperadmin: boolean;
   isAdmin: boolean;

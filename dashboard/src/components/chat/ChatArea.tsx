@@ -128,7 +128,8 @@ export default function ChatArea({
   return (
     <>
       {/* ── Scrolling conversation ── */}
-      <div ref={containerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-6 pb-40 pt-7">
+      {/* pt clears the frosted header floating above this scroll container */}
+      <div ref={containerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-6 pb-40 pt-[72px]">
         <div className="mx-auto flex w-full max-w-[720px] flex-col gap-6">
           {(llmUnconfigured || llmFailed) && (
             <Banner tone={llmUnconfigured ? 'info' : 'danger'} className="flex items-center gap-3">
@@ -224,13 +225,13 @@ export default function ChatArea({
               floating box over the composer. Reads as the agent's turn taking
               shape at the bottom of the thread. */}
           {isProcessing && (
-            <div className="flex items-center gap-2.5 text-[13px] text-muted-foreground">
+            <div className="animate-fade-in flex items-center gap-2.5 text-[13px]">
               <span className="flex gap-1">
                 <span className="size-1.5 animate-bounce rounded-full bg-primary [animation-delay:-0.3s]" />
                 <span className="size-1.5 animate-bounce rounded-full bg-primary [animation-delay:-0.15s]" />
                 <span className="size-1.5 animate-bounce rounded-full bg-primary" />
               </span>
-              <span className="overflow-hidden text-ellipsis whitespace-nowrap">
+              <span className="text-shimmer overflow-hidden text-ellipsis whitespace-nowrap">
                 {status === 'thinking' ? 'Thinking through the task…' : 'Working on it…'}
                 {lastAction ? ` (${lastAction})` : ''}
               </span>

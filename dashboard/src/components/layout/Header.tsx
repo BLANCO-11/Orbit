@@ -19,7 +19,7 @@ function IconBtn({ label, onClick, children }) {
       onClick={onClick}
       aria-label={label}
       title={label}
-      className="grid size-8 place-items-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+      className="grid size-8 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
     >
       {children}
     </button>
@@ -27,7 +27,8 @@ function IconBtn({ label, onClick, children }) {
 }
 
 /**
- * Header — console top bar: brand · status pill · theme / notifications / settings / panel.
+ * Header — frosted bar floating over the conversation. Brand lives in the
+ * icon rail on desktop; here it only appears on mobile (no rail there).
  */
 export default function Header({
   status: statusKey,
@@ -60,9 +61,9 @@ export default function Header({
   const showDot = meta !== STATUS_META.idle;
 
   return (
-    <header className="flex h-[52px] shrink-0 items-center justify-between border-b border-border-soft bg-sidebar px-4">
-      {/* ── Brand ── */}
-      <div className="flex items-center gap-2.5">
+    <header className="glass flex h-[52px] items-center justify-between border-b border-border-soft px-3">
+      {/* ── Left: nav toggles (+ brand on mobile — the rail owns it on desktop) ── */}
+      <div className="flex items-center gap-2">
         {!isDesktop && (
           <IconBtn label="Toggle sidebar" onClick={onToggleSidebar}>
             <Menu size={16} />
@@ -76,13 +77,14 @@ export default function Header({
             {sidebarCollapsed ? <PanelLeftOpen size={15} /> : <PanelLeftClose size={15} />}
           </IconBtn>
         )}
-        <div className="relative size-[18px] rounded-md bg-gradient-to-br from-primary/80 to-primary shadow-[0_0_0_3px_var(--accent)]">
-          <div className="absolute inset-[5px] rounded-[2px] bg-white/90" />
-        </div>
-        <span className="text-[15px] font-semibold tracking-tight">Orbit</span>
-        <span className="ml-1 rounded-[5px] border border-border px-1.5 py-px text-[10px] font-semibold uppercase tracking-wider text-faint">
-          Console
-        </span>
+        {isMobile && (
+          <>
+            <div className="relative size-[18px] rounded-md bg-gradient-to-br from-primary/80 to-primary shadow-[0_0_0_3px_var(--accent)]">
+              <div className="absolute inset-[5px] rounded-[2px] bg-white/90" />
+            </div>
+            <span className="text-[15px] font-semibold tracking-tight">Orbit</span>
+          </>
+        )}
         {/* Which agent runtime / device this console is currently driving. */}
         {activeDevice && (
           <span

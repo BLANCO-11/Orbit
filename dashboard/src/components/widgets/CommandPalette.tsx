@@ -80,9 +80,9 @@ export default function CommandPalette({ isOpen, onClose, handlers }) {
 
   return (
     <div className="fixed inset-0 z-[100] flex items-start justify-center pt-[15vh]">
-      <div onClick={onClose} className="absolute inset-0 bg-black/50" />
+      <div onClick={onClose} className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" />
 
-      <div className="relative w-[560px] max-w-[90vw] animate-in zoom-in-95 overflow-hidden rounded-xl border border-border bg-popover shadow-2xl backdrop-blur-2xl">
+      <div className="glass-overlay relative w-[560px] max-w-[90vw] animate-in zoom-in-95 overflow-hidden rounded-xl border border-border">
         <div className="flex items-center gap-2.5 border-b border-border px-4 py-3.5">
           <Search size={16} className="shrink-0 text-muted-foreground" />
           <input

@@ -85,6 +85,7 @@ function resolveIdentity(req, db) {
         tenantId: sso.user.tenantId || null,
         userId: sso.user.id,
         email: sso.user.email,
+        username: sso.user.username || null,
       };
     }
   }

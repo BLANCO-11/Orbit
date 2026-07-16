@@ -63,7 +63,7 @@ function ChatMessageBase({
   // ── User: right-aligned bubble ──
   if (isUser) {
     return (
-      <div className="flex flex-col items-end">
+      <div className="animate-msg-in flex flex-col items-end">
         <div className="mb-1.5 flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-faint">
           You {time && <span className="font-medium normal-case tracking-normal">{time}</span>}
         </div>
@@ -76,7 +76,7 @@ function ChatMessageBase({
 
   // ── Assistant: avatar + prose + tools ──
   return (
-    <div className="flex gap-3">
+    <div className="animate-msg-in flex gap-3">
       <div className="grid size-7 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-primary/80 to-primary text-white">
         <Shield size={15} />
       </div>

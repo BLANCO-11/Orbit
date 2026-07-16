@@ -1,8 +1,14 @@
 /* ============================================================
-   Orbit — Design System v2
-   Cool violet-biased neutrals, layered surfaces, real depth.
-   Palette is deliberate, not defaulted: every neutral carries a
-   slight hue bias toward the accent so greys read as chosen.
+   Orbit — Design System v3 "Earthen"
+   Earthy neutrals, layered surfaces, real depth, switchable
+   palettes. Light themes ground on warm linen; dark themes on
+   espresso-charcoal (never blue-black).
+
+   Palettes: the base :root/.dark pair IS the default palette
+   (Moss). Other palettes override a small set of variables via
+   :root[data-palette="…"] blocks below — set by ThemeScript
+   pre-hydration and by useTheme at runtime. Components must only
+   ever reference semantic tokens, never raw colors.
 
    Surface model (both themes):
      background  → page ground
@@ -20,70 +26,76 @@
 :root {
   color-scheme: light;
 
-  --background: #faf9f6;
-  --foreground: #1c1b18;
+  --background: #f6f4ee;
+  --foreground: #211e18;
 
-  --card: #ffffff;
-  --card-foreground: #1c1b18;
+  --card: #fdfcf8;
+  --card-foreground: #211e18;
 
-  --popover: #ffffff;
-  --popover-foreground: #1c1b18;
+  --popover: #fdfcf8;
+  --popover-foreground: #211e18;
 
-  --primary: #6355e0;
+  --primary: #5f7a4e;
   --primary-foreground: #ffffff;
 
-  --secondary: #f0ede4;
-  --secondary-foreground: #1c1b18;
+  --secondary: #ece8dd;
+  --secondary-foreground: #211e18;
 
-  --muted: #f0ede4;
-  --muted-foreground: #66635a;
+  --muted: #ece8dd;
+  --muted-foreground: #6b675c;
 
-  --faint: #9c998e; /* text-3 in the mock: timestamps, sublabels */
+  --faint: #a09b8d; /* text-3: timestamps, sublabels */
 
-  --accent: rgba(99, 85, 224, 0.10);
-  --accent-foreground: #6355e0;
+  --accent: rgba(95, 122, 78, 0.12);
+  --accent-foreground: #4c6340;
 
-  --destructive: #d63d43;
+  --destructive: #b5493f;
   --destructive-foreground: #ffffff;
 
-  --success: #12a26b;
+  --success: #2e7d6b;
   --success-foreground: #ffffff;
 
-  --warning: #c07600;
+  --warning: #b07d2e;
   --warning-foreground: #ffffff;
 
-  --info: #0a84c4;
+  --info: #3d7ea6;
 
-  --border: #e6e4dc;
-  --border-soft: #f0ede4;
-  --input: #e6e4dc;
-  --ring: #6355e0;
+  --border: #e3ded1;
+  --border-soft: #ece8dd;
+  --input: #e3ded1;
+  --ring: #5f7a4e;
 
-  --chart-1: #6355e0;
-  --chart-2: #12a26b;
-  --chart-3: #c07600;
-  --chart-4: #9333ea;
-  --chart-5: #d63d43;
+  --chart-1: #5f7a4e;
+  --chart-2: #2e7d6b;
+  --chart-3: #b07d2e;
+  --chart-4: #7a6a9e;
+  --chart-5: #b5493f;
 
-  /* Chart series (mock: tokens in/out) + sub-agent lineage lanes */
-  --series-in: #6355e0;
-  --series-out: #12a26b;
-  --lane-1: #12a26b;
-  --lane-2: #c07600;
-  --lane-3: #0a84c4;
+  /* Chart series (tokens in/out) + sub-agent lineage lanes */
+  --series-in: #5f7a4e;
+  --series-out: #b07d2e;
+  --lane-1: #2e7d6b;
+  --lane-2: #b07d2e;
+  --lane-3: #3d7ea6;
 
-  --sidebar: #f4f3ee;
-  --sidebar-foreground: #1c1b18;
-  --sidebar-primary: #6355e0;
+  --sidebar: #f1eee6;
+  --sidebar-foreground: #211e18;
+  --sidebar-primary: #5f7a4e;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #e6e4dc;
-  --sidebar-accent-foreground: #1c1b18;
-  --sidebar-border: #e6e4dc;
-  --sidebar-ring: #6355e0;
+  --sidebar-accent: #e3ded1;
+  --sidebar-accent-foreground: #211e18;
+  --sidebar-border: #e3ded1;
+  --sidebar-ring: #5f7a4e;
 
-  --shadow-card: 0 1px 2px rgba(40, 30, 20, 0.03), 0 2px 8px rgba(40, 30, 20, 0.04);
-  --shadow-float: 0 8px 40px -8px rgba(40, 30, 20, 0.12);
-  --dock: rgba(255, 255, 255, 0.72);
+  --shadow-card: 0 1px 2px rgba(58, 48, 32, 0.04), 0 2px 8px rgba(58, 48, 32, 0.05);
+  --shadow-float: 0 8px 40px -8px rgba(58, 48, 32, 0.14);
+  --dock: rgba(253, 252, 248, 0.72);
+
+  /* Emboss grammar: raised elements catch light on their top edge,
+     wells and pressed states recess with an inset shadow. */
+  --edge-highlight: rgba(255, 255, 255, 0.5);
+  --well-shadow: inset 0 1px 2px rgba(58, 48, 32, 0.06);
+  --press-shadow: inset 0 1.5px 3px rgba(58, 48, 32, 0.12);
 
   --radius: 0.625rem;
 
@@ -101,70 +113,77 @@
 .dark {
   color-scheme: dark;
 
-  --background: #0a0a0e;
-  --foreground: #ededf2;
+  /* Graphite, not espresso: near-neutral charcoal with only a whisper of
+     warmth. Warm text on neutral ground keeps the earthy voice without
+     the brown-black cast. */
+  --background: #131312;
+  --foreground: #ebeae5;
 
-  --card: #16161d;
-  --card-foreground: #ededf2;
+  --card: #1c1c1a;
+  --card-foreground: #ebeae5;
 
-  --popover: #16161d;
-  --popover-foreground: #ededf2;
+  --popover: #1c1c1a;
+  --popover-foreground: #ebeae5;
 
-  --primary: #8b7cff;
-  --primary-foreground: #ffffff;
+  --primary: #93ac80;
+  --primary-foreground: #131312;
 
-  --secondary: #1f1f28;
-  --secondary-foreground: #ededf2;
+  --secondary: #262624;
+  --secondary-foreground: #ebeae5;
 
-  --muted: #1f1f28;
-  --muted-foreground: #9a9aa7;
+  --muted: #262624;
+  --muted-foreground: #a3a29b;
 
-  --faint: #63636e;
+  --faint: #6a6963;
 
-  --accent: rgba(139, 124, 255, 0.14);
-  --accent-foreground: #a99dff;
+  --accent: rgba(147, 172, 128, 0.14);
+  --accent-foreground: #aec49c;
 
-  --destructive: #f2555a;
-  --destructive-foreground: #0a0a0e;
+  --destructive: #e06a60;
+  --destructive-foreground: #131312;
 
-  --success: #3ecf8e;
-  --success-foreground: #0a0a0e;
+  --success: #4cc2a0;
+  --success-foreground: #131312;
 
-  --warning: #f5a623;
-  --warning-foreground: #0a0a0e;
+  --warning: #d9a04a;
+  --warning-foreground: #131312;
 
-  --info: #5ac8fa;
+  --info: #6fb3d8;
 
-  --border: #282831;
-  --border-soft: #1d1d25;
-  --input: #282831;
-  --ring: #8b7cff;
+  --border: #2e2e2b;
+  --border-soft: #222220;
+  --input: #2e2e2b;
+  --ring: #93ac80;
 
-  --chart-1: #8b7cff;
-  --chart-2: #3ecf8e;
-  --chart-3: #f5a623;
-  --chart-4: #c084fc;
-  --chart-5: #f2555a;
+  --chart-1: #93ac80;
+  --chart-2: #4cc2a0;
+  --chart-3: #d9a04a;
+  --chart-4: #a091c9;
+  --chart-5: #e06a60;
 
   /* Chart series + lanes — dark steps (validated for CVD on dark surface) */
-  --series-in: #8781ec;
-  --series-out: #1baf7a;
-  --lane-1: #1baf7a;
-  --lane-2: #d98f4a;
-  --lane-3: #5ac8fa;
+  --series-in: #93ac80;
+  --series-out: #d9a04a;
+  --lane-1: #4cc2a0;
+  --lane-2: #d9a04a;
+  --lane-3: #6fb3d8;
 
-  --sidebar: #101015;
-  --sidebar-foreground: #ededf2;
-  --sidebar-primary: #8b7cff;
-  --sidebar-primary-foreground: #0a0a0e;
-  --sidebar-accent: #1f1f28;
-  --sidebar-accent-foreground: #ededf2;
-  --sidebar-border: #1d1d25;
-  --sidebar-ring: #8b7cff;
+  --sidebar: #171716;
+  --sidebar-foreground: #ebeae5;
+  --sidebar-primary: #93ac80;
+  --sidebar-primary-foreground: #131312;
+  --sidebar-accent: #262624;
+  --sidebar-accent-foreground: #ebeae5;
+  --sidebar-border: #222220;
+  --sidebar-ring: #93ac80;
 
-  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3), 0 2px 10px rgba(0, 0, 0, 0.25);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.35), 0 2px 10px rgba(0, 0, 0, 0.28);
   --shadow-float: 0 12px 48px -8px rgba(0, 0, 0, 0.6);
-  --dock: rgba(22, 22, 29, 0.72);
+  --dock: rgba(28, 28, 26, 0.72);
+
+  --edge-highlight: rgba(255, 255, 255, 0.06);
+  --well-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
+  --press-shadow: inset 0 1.5px 3px rgba(0, 0, 0, 0.45);
 
   /* Spacing Scale (same in dark) */
   --space-xs: 0.25rem;
@@ -173,6 +192,223 @@
   --space-lg: 1rem;
   --space-xl: 1.5rem;
   --space-2xl: 2rem;
+}
+
+/* ============================================================
+   PALETTE PRESETS
+   Base :root/.dark above IS "moss". Each preset below overrides
+   only what differs. Every variable set in a light block must
+   also be set in the matching .dark block — the light block
+   out-specifies .dark, so an unmirrored variable would leak
+   light values into dark mode.
+   ============================================================ */
+
+/* ── Terracotta — baked clay on warm linen ── */
+:root[data-palette="terracotta"] {
+  --primary: #b45a38;
+  --primary-foreground: #ffffff;
+  --accent: rgba(180, 90, 56, 0.11);
+  --accent-foreground: #96482a;
+  --ring: #b45a38;
+  --chart-1: #b45a38;
+  --series-in: #b45a38;
+  --series-out: #2e7d6b;
+  --sidebar-primary: #b45a38;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-ring: #b45a38;
+}
+:root.dark[data-palette="terracotta"] {
+  --primary: #d79070;
+  --primary-foreground: #131312;
+  --accent: rgba(215, 144, 112, 0.14);
+  --accent-foreground: #e2a98e;
+  --ring: #d79070;
+  --chart-1: #d79070;
+  --series-in: #d79070;
+  --series-out: #4cc2a0;
+  --sidebar-primary: #d79070;
+  --sidebar-primary-foreground: #131312;
+  --sidebar-ring: #d79070;
+}
+
+/* ── Dusk — muted indigo, ink on paper ── */
+:root[data-palette="dusk"] {
+  --primary: #57539e;
+  --primary-foreground: #ffffff;
+  --accent: rgba(87, 83, 158, 0.11);
+  --accent-foreground: #4a4691;
+  --ring: #57539e;
+  --chart-1: #57539e;
+  --series-in: #57539e;
+  --series-out: #2e7d6b;
+  --sidebar-primary: #57539e;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-ring: #57539e;
+}
+:root.dark[data-palette="dusk"] {
+  --primary: #a29ddb;
+  --primary-foreground: #131312;
+  --accent: rgba(162, 157, 219, 0.14);
+  --accent-foreground: #b5b1e6;
+  --ring: #a29ddb;
+  --chart-1: #a29ddb;
+  --series-in: #a29ddb;
+  --series-out: #4cc2a0;
+  --sidebar-primary: #a29ddb;
+  --sidebar-primary-foreground: #131312;
+  --sidebar-ring: #a29ddb;
+}
+
+/* ── Sand — bronze on dune, the warmest room ── */
+:root[data-palette="sand"] {
+  --background: #f6f1e4;
+  --card: #fdf9ee;
+  --popover: #fdf9ee;
+  --secondary: #ece4d0;
+  --muted: #ece4d0;
+  --border: #e4dcc5;
+  --border-soft: #ece4d0;
+  --input: #e4dcc5;
+  --sidebar: #f1ebdb;
+  --sidebar-accent: #e4dcc5;
+  --sidebar-border: #e4dcc5;
+  --dock: rgba(253, 249, 238, 0.72);
+  --primary: #8d6e33;
+  --primary-foreground: #ffffff;
+  --accent: rgba(141, 110, 51, 0.11);
+  --accent-foreground: #755a26;
+  --ring: #8d6e33;
+  --chart-1: #8d6e33;
+  --series-in: #8d6e33;
+  --series-out: #2e7d6b;
+  --sidebar-primary: #8d6e33;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-ring: #8d6e33;
+}
+:root.dark[data-palette="sand"] {
+  --background: #161511;
+  --card: #201f18;
+  --popover: #201f18;
+  --secondary: #2a2920;
+  --muted: #2a2920;
+  --border: #343329;
+  --border-soft: #262520;
+  --input: #343329;
+  --sidebar: #191813;
+  --sidebar-accent: #2a2920;
+  --sidebar-border: #262520;
+  --dock: rgba(32, 31, 26, 0.72);
+  --primary: #c7a565;
+  --primary-foreground: #161511;
+  --accent: rgba(199, 165, 101, 0.14);
+  --accent-foreground: #d6bb84;
+  --ring: #c7a565;
+  --chart-1: #c7a565;
+  --series-in: #c7a565;
+  --series-out: #4cc2a0;
+  --sidebar-primary: #c7a565;
+  --sidebar-primary-foreground: #161511;
+  --sidebar-ring: #c7a565;
+}
+
+/* ── Slate — cool stone & steel blue, zero warmth ── */
+:root[data-palette="slate"] {
+  --background: #f3f4f6;
+  --foreground: #1b1d21;
+  --card: #ffffff;
+  --card-foreground: #1b1d21;
+  --popover: #ffffff;
+  --popover-foreground: #1b1d21;
+  --secondary: #e9ebee;
+  --secondary-foreground: #1b1d21;
+  --muted: #e9ebee;
+  --muted-foreground: #62666e;
+  --faint: #989da6;
+  --border: #e0e3e8;
+  --border-soft: #e9ebee;
+  --input: #e0e3e8;
+  --sidebar: #eef0f3;
+  --sidebar-foreground: #1b1d21;
+  --sidebar-accent: #e0e3e8;
+  --sidebar-accent-foreground: #1b1d21;
+  --sidebar-border: #e0e3e8;
+  --dock: rgba(255, 255, 255, 0.72);
+  --shadow-card: 0 1px 2px rgba(22, 30, 46, 0.04), 0 2px 8px rgba(22, 30, 46, 0.05);
+  --shadow-float: 0 8px 40px -8px rgba(22, 30, 46, 0.14);
+  --primary: #46698c;
+  --primary-foreground: #ffffff;
+  --accent: rgba(70, 105, 140, 0.11);
+  --accent-foreground: #3a5875;
+  --ring: #46698c;
+  --chart-1: #46698c;
+  --series-in: #46698c;
+  --series-out: #b07d2e;
+  --sidebar-primary: #46698c;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-ring: #46698c;
+}
+:root.dark[data-palette="slate"] {
+  --background: #101214;
+  --foreground: #e8eaed;
+  --card: #191c20;
+  --card-foreground: #e8eaed;
+  --popover: #191c20;
+  --popover-foreground: #e8eaed;
+  --secondary: #23262b;
+  --secondary-foreground: #e8eaed;
+  --muted: #23262b;
+  --muted-foreground: #9aa0a8;
+  --faint: #61666e;
+  --border: #2a2e34;
+  --border-soft: #1e2126;
+  --input: #2a2e34;
+  --sidebar: #14161a;
+  --sidebar-foreground: #e8eaed;
+  --sidebar-accent: #23262b;
+  --sidebar-accent-foreground: #e8eaed;
+  --sidebar-border: #1e2126;
+  --dock: rgba(25, 28, 32, 0.72);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.35), 0 2px 10px rgba(0, 0, 0, 0.28);
+  --shadow-float: 0 12px 48px -8px rgba(0, 0, 0, 0.6);
+  --primary: #8fb3d1;
+  --primary-foreground: #101214;
+  --accent: rgba(143, 179, 209, 0.14);
+  --accent-foreground: #a9c6de;
+  --ring: #8fb3d1;
+  --chart-1: #8fb3d1;
+  --series-in: #8fb3d1;
+  --series-out: #d9a04a;
+  --sidebar-primary: #8fb3d1;
+  --sidebar-primary-foreground: #101214;
+  --sidebar-ring: #8fb3d1;
+}
+
+/* ── Ink — monochrome on linen, the most minimal ── */
+:root[data-palette="ink"] {
+  --primary: #26241f;
+  --primary-foreground: #ffffff;
+  --accent: rgba(38, 36, 31, 0.07);
+  --accent-foreground: #26241f;
+  --ring: #26241f;
+  --chart-1: #26241f;
+  --series-in: #26241f;
+  --series-out: #b07d2e;
+  --sidebar-primary: #26241f;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-ring: #26241f;
+}
+:root.dark[data-palette="ink"] {
+  --primary: #e6e2d9;
+  --primary-foreground: #161615;
+  --accent: rgba(230, 226, 217, 0.10);
+  --accent-foreground: #f0ece4;
+  --ring: #e6e2d9;
+  --chart-1: #e6e2d9;
+  --series-in: #e6e2d9;
+  --series-out: #d9a04a;
+  --sidebar-primary: #e6e2d9;
+  --sidebar-primary-foreground: #161615;
+  --sidebar-ring: #e6e2d9;
 }
 
 /* ============================================================
@@ -348,6 +584,34 @@
 }
 
 /* ============================================================
+   DEPTH TIERS
+   ground (opaque page) → raised (opaque cards) → glass (frost,
+   ONLY for chrome floating over scrolling content) → glass-overlay
+   (modals, palettes). Frost on static surfaces is forbidden — it
+   only reads as glass when content moves underneath it.
+   ============================================================ */
+@layer components {
+  .glass {
+    background: var(--dock);
+    -webkit-backdrop-filter: blur(12px) saturate(140%);
+    backdrop-filter: blur(12px) saturate(140%);
+    box-shadow: inset 0 1px 0 var(--edge-highlight), var(--shadow-float);
+  }
+
+  .glass-overlay {
+    background: color-mix(in srgb, var(--popover) 86%, transparent);
+    -webkit-backdrop-filter: blur(20px) saturate(150%);
+    backdrop-filter: blur(20px) saturate(150%);
+    box-shadow: inset 0 1px 0 var(--edge-highlight), var(--shadow-float);
+  }
+
+  /* Raised opaque surface — cards, panels, grouped tools. */
+  .raised {
+    box-shadow: inset 0 1px 0 var(--edge-highlight), var(--shadow-card);
+  }
+}
+
+/* ============================================================
    Orbit Premium Animations & Custom Transitions
    ============================================================ */
 
@@ -367,6 +631,51 @@
 
 .animate-fade-in {
   animation: fadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Message entrance — user sends pop up, assistant replies settle in. */
+@keyframes msg-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.985); }
+  to { opacity: 1; transform: none; }
+}
+.animate-msg-in {
+  animation: msg-in 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* View/section switch — the incoming view settles into place. */
+@keyframes view-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.995); }
+  to { opacity: 1; transform: none; }
+}
+.animate-view-in {
+  animation: view-in 0.24s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Bottom sheets rise from the bar. */
+@keyframes sheet-up {
+  from { opacity: 0; transform: translateY(14px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+.animate-sheet-up {
+  animation: sheet-up 0.26s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Thinking shimmer — a light sweep across the status text while the
+   agent works. Colors ride the theme tokens. */
+@keyframes text-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+.text-shimmer {
+  background: linear-gradient(90deg,
+    var(--muted-foreground) 0%,
+    var(--foreground) 45%,
+    var(--muted-foreground) 90%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: text-shimmer 2s linear infinite;
 }
 
 /* Micro-interaction systems */

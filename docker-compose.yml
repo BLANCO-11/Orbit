@@ -1,0 +1,48 @@
+# Orbit — bring the whole system up with `docker compose up -d --build`.
+#
+#   orbit      backend + dashboard (only 6801 is exposed)
+#   lightpanda the agent browser, reached internally at ws://lightpanda:9222
+#
+# The `pi` CLI is bind-mounted from the host (see the `volumes` note). Copy
+# .env.example → .env first and set your LLM creds + ORBIT_SUPERADMIN_* there.
+
+services:
+  orbit:
+    build: .
+    image: orbit:latest
+    restart: unless-stopped
+    ports:
+      - "6801:6801"            # dashboard (public). Backend 6800 stays internal.
+    env_file:
+      - .env
+    environment:
+      # Reach the sibling browser service (overrides the .env / default).
+      LIGHTPANDA_WS: "ws://lightpanda:9222"
+      # Persist the SQLite DB + session workspaces on the named volume below.
+      ORBIT_DB_PATH: "/data/orbit.db"
+      ORBIT_HOME: "/data/orbit-home"
+      # Point Orbit at the bind-mounted host `pi` (see volumes). Adjust if your
+      # pi layout differs.
+      PI_NODE_PATH: "/opt/pi/bin/node"
+      PI_CLI_PATH: "/opt/pi/bin/pi"
+      # Do NOT set PORT/HOST here: backend (6800) and dashboard (6801) both read
+      # PORT and would collide; backend defaults to internal 127.0.0.1.
+    volumes:
+      - orbit-data:/data
+      # ── Host `pi` install (read-only) ──
+      # Point PI_HOST_DIR at the directory that contains bin/pi and bin/node.
+      # Default matches the pi-node layout Orbit auto-discovers on Linux.
+      - "${PI_HOST_DIR:-${HOME}/.local/share/pi-node/node-v22.22.3-linux-x64}:/opt/pi:ro"
+      # pi's own config + extensions (pi-mcp-extension, pi-provider-litellm).
+      - "${PI_CONFIG_DIR:-${HOME}/.pi}:/root/.pi"
+    depends_on:
+      - lightpanda
+
+  lightpanda:
+    image: lightpanda/browser:nightly
+    restart: unless-stopped
+    expose:
+      - "9222"                 # internal only; orbit connects via LIGHTPANDA_WS
+
+volumes:
+  orbit-data:

@@ -16,7 +16,6 @@
 const { Router } = require("express");
 const crypto = require("crypto");
 const { loadConfig } = require("../config");
-const { getSuperadminKey } = require("../middleware/auth");
 const { oidcEnv, oidcConfigured } = require("./admin");
 
 const b64url = (buf) => buf.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -92,22 +91,21 @@ function createAuthSsoRouter({ db, getOrigin, authMiddleware }) {
   });
 
   // ── POST /local (public) ────────────────────────────────────────
-  // Local superadmin sign-in: prove knowledge of ORBIT_SUPERADMIN_KEY. On
-  // success the client stores that same value as its request credential (it
-  // resolves to the superadmin identity in middleware/auth.js). Disabled in
-  // dev-mode, where no key is set and the app is already unauthenticated-open.
+  // Local account sign-in with username + password (a real account, seeded at
+  // boot — see server.js — NOT the ORBIT_SUPERADMIN_KEY, which stays a bearer
+  // credential for programmatic API access). On success we mint a session token
+  // and return it; the client stores THAT (never the password) as its request
+  // credential, resolved via getSsoSessionByToken in middleware/auth.js.
   router.post("/local", (req, res) => {
-    const key = getSuperadminKey();
-    if (!key) {
-      return res.status(400).json({ success: false, message: "Local login is disabled — no ORBIT_SUPERADMIN_KEY is set (dev-mode)." });
-    }
+    const username = (req.body && req.body.username) || "";
     const password = (req.body && req.body.password) || "";
-    // Length-independent compare to blunt trivial timing oracles.
-    const a = Buffer.from(String(password));
-    const b = Buffer.from(String(key));
-    const ok = a.length === b.length && crypto.timingSafeEqual(a, b);
-    if (!ok) return res.status(401).json({ success: false, message: "Invalid superadmin key." });
-    res.json({ success: true });
+    if (!username || !password) {
+      return res.status(400).json({ success: false, message: "Username and password are required." });
+    }
+    const user = db.verifyLocalLogin(username, password);
+    if (!user) return res.status(401).json({ success: false, message: "Invalid username or password." });
+    const { token, expiresAt } = db.createSsoSession(user.id);
+    res.json({ success: true, token, expiresAt, role: user.role });
   });
 
   // ── GET /sso/login ──────────────────────────────────────────────
@@ -216,6 +214,7 @@ function createAuthSsoRouter({ db, getOrigin, authMiddleware }) {
       tenantId: a.tenantId || null,
       tenantName,
       email: a.email || null,
+      username: a.username || null,
       devMode: !!a.devMode,
       isSuperadmin: a.role === "superadmin",
       isAdmin: a.role === "superadmin" || a.role === "admin",

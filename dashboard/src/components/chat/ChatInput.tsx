@@ -103,10 +103,7 @@ export default function ChatInput({
   const isProcessing = status === 'thinking' || status === 'executing';
 
   return (
-    <div
-      className="pointer-events-auto rounded-2xl border border-border shadow-float backdrop-blur-xl backdrop-saturate-150 transition-colors focus-within:border-ring/50"
-      style={{ background: 'var(--dock)' }}
-    >
+    <div className="glass pointer-events-auto rounded-2xl border border-border transition-colors focus-within:border-ring/50">
       <div className="px-3.5 pt-3">
         <textarea
           ref={textareaRef}
@@ -210,7 +207,7 @@ export default function ChatInput({
           {isProcessing ? (
             <button
               onClick={onStop}
-              className="ml-1 flex items-center gap-1.5 rounded-[9px] bg-destructive px-3.5 py-[7px] text-[13px] font-semibold text-destructive-foreground hover:opacity-90"
+              className="ml-1 flex items-center gap-1.5 rounded-[9px] bg-destructive px-3.5 py-[7px] text-[13px] font-semibold text-destructive-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_1px_2px_rgba(0,0,0,0.12)] transition-all duration-150 hover:opacity-90 active:scale-95"
             >
               <Square size={12} fill="currentColor" /> Stop
             </button>
@@ -219,7 +216,7 @@ export default function ChatInput({
               onClick={submit}
               disabled={!llmReady}
               title={llmReady ? 'Send' : 'Add an LLM provider in Settings first'}
-              className="ml-1 flex items-center gap-1.5 rounded-[9px] bg-primary px-3.5 py-[7px] text-[13px] font-semibold text-primary-foreground hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+              className="ml-1 flex items-center gap-1.5 rounded-[9px] bg-primary px-3.5 py-[7px] text-[13px] font-semibold text-primary-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_1px_2px_rgba(0,0,0,0.12)] transition-all duration-150 hover:opacity-90 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
             >
               <Send size={13} /> Send
             </button>

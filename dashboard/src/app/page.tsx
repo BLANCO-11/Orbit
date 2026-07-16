@@ -3,7 +3,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
-import { MessageSquare, List, BarChart3, Cog } from 'lucide-react';
+import { MessageSquare, List, BarChart3, Cog, Bot, Server, Plug, Library as LibraryIcon, Shield, ShieldUser } from 'lucide-react';
+import BottomNav from '@/components/layout/BottomNav';
 import { ErrorBoundary, ComponentErrorBoundary } from '@/components/ErrorBoundary';
 import CommandPalette from '@/components/widgets/CommandPalette';
 import NotificationCenter from '@/components/widgets/NotificationCenter';
@@ -478,7 +479,7 @@ function DashboardInner({ auth, onLogout }: { auth: AuthIdentity; onLogout: () =
     return () => window.removeEventListener('keydown', handler);
   }, [state.status, cmdPaletteOpen, handleStopAgent]);
 
-  // ── Mobile nav ──
+  // ── Mobile nav (app-level: every view keeps navigation on phones) ──
   const bottomNavItems = [
     { id: 'chat', label: 'Chat', icon: <MessageSquare size={18} /> },
     { id: 'logs', label: 'Logs', icon: <List size={18} /> },
@@ -486,12 +487,30 @@ function DashboardInner({ auth, onLogout }: { auth: AuthIdentity; onLogout: () =
     { id: 'settings', label: 'Settings', icon: <Cog size={18} /> },
   ];
 
+  const RAIL_NAV_IDS = ['agents', 'fleet', 'connectors', 'library', 'policies', 'admin'];
+  const moreNavItems = [
+    { id: 'agents', label: 'Agents', icon: <Bot size={18} /> },
+    { id: 'fleet', label: 'Fleet', icon: <Server size={18} /> },
+    { id: 'connectors', label: 'Connectors', icon: <Plug size={18} /> },
+    { id: 'library', label: 'Library', icon: <LibraryIcon size={18} /> },
+    { id: 'policies', label: 'Policies', icon: <Shield size={18} /> },
+    ...(auth?.isAdmin ? [{ id: 'admin', label: 'Admin', icon: <ShieldUser size={18} /> }] : []),
+  ].filter((v) => v.id === 'admin' || !isVisible || isVisible('rail', v.id));
+
+  // Which tab lights up: console sub-tabs while in the console, else the view itself.
+  const navActiveTab = activeView === 'console' ? activeNavTab : activeView;
+
   const handleNavTabChange = useCallback((tabId) => {
-    setActiveNavTab(tabId);
     if (tabId === 'settings') {
+      setActiveNavTab(tabId);
       setActiveView('settings');
       return;
     }
+    if (RAIL_NAV_IDS.includes(tabId)) {
+      setActiveView(tabId);
+      return;
+    }
+    setActiveNavTab(tabId);
     setActiveView('console');
     if (tabId === 'logs' || tabId === 'metrics') {
       setShowThinking(true);
@@ -545,7 +564,7 @@ function DashboardInner({ auth, onLogout }: { auth: AuthIdentity; onLogout: () =
   // ── JSX ──
   if (!bootComplete) {
     return (
-      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#faf9f6] dark:bg-[#0a0a0e] px-6 select-none font-sans transition-colors duration-300">
+      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-background px-6 select-none font-sans transition-colors duration-300">
         <div className="flex flex-col items-center max-w-md w-full text-center">
           {/* Glowing Animated Orbit Logo */}
           <div className="relative mb-8 grid size-16 place-items-center rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 animate-pulse">
@@ -570,7 +589,7 @@ function DashboardInner({ auth, onLogout }: { auth: AuthIdentity; onLogout: () =
           <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-faint mb-6">Initializing Secure Agent Runtime</p>
 
           {/* Progress Bar */}
-          <div className="w-full h-1 bg-border-soft dark:bg-border rounded-full overflow-hidden mb-6">
+          <div className="w-full h-1 bg-border-soft rounded-full overflow-hidden mb-6">
             <div
               className="h-full bg-primary transition-all duration-75 ease-out rounded-full"
               style={{ width: `${bootProgress}%` }}
@@ -578,7 +597,7 @@ function DashboardInner({ auth, onLogout }: { auth: AuthIdentity; onLogout: () =
           </div>
 
           {/* Boot Logs console */}
-          <div className="w-full bg-[#f4f3ee] dark:bg-[#101015] border border-border-soft dark:border-border rounded-lg p-3.5 h-[130px] overflow-hidden text-left font-mono text-[10px] leading-relaxed text-muted-foreground flex flex-col justify-end gap-1.5 shadow-inner">
+          <div className="w-full bg-sidebar border border-border-soft rounded-lg p-3.5 h-[130px] overflow-hidden text-left font-mono text-[10px] leading-relaxed text-muted-foreground flex flex-col justify-end gap-1.5 shadow-inner">
             {bootLogs.map((log, i) => (
               <div key={i} className="animate-fade-in truncate">
                 <span className="text-primary font-bold">{log.slice(0, 6)}</span>
@@ -593,7 +612,8 @@ function DashboardInner({ auth, onLogout }: { auth: AuthIdentity; onLogout: () =
 
   return (
     <ErrorBoundary>
-    <div className="flex h-dvh overflow-hidden bg-background text-foreground">
+    <div className="flex h-dvh flex-col overflow-hidden bg-background text-foreground">
+    <div className="flex min-h-0 flex-1">
     {!isMobile && (
       <IconRail
         activeView={activeView}
@@ -611,6 +631,8 @@ function DashboardInner({ auth, onLogout }: { auth: AuthIdentity; onLogout: () =
       />
     )}
     <div className="relative min-w-0 flex-1">
+    {/* key remounts the wrapper on view change so the incoming view animates in */}
+    <div key={activeView} className="animate-view-in h-full min-h-0">
     {activeView === 'agents' && isVisible('rail', 'agents') && <ComponentErrorBoundary label="Agents"><AgentsView /></ComponentErrorBoundary>}
     {activeView === 'fleet' && isVisible('rail', 'fleet') && <ComponentErrorBoundary label="Fleet"><FleetView /></ComponentErrorBoundary>}
     {activeView === 'connectors' && isVisible('rail', 'connectors') && <ComponentErrorBoundary label="Connectors"><ConnectorsView /></ComponentErrorBoundary>}
@@ -722,9 +744,6 @@ function DashboardInner({ auth, onLogout }: { auth: AuthIdentity; onLogout: () =
         notificationCenter: <NotificationCenter logs={state.logs} />,
         isVisible,
       }}
-      bottomNavItems={bottomNavItems}
-      activeNavTab={activeNavTab}
-      onNavTabChange={handleNavTabChange}
     >
       {centerView === 'mission' ? (
         <ComponentErrorBoundary label="Mission">
@@ -842,6 +861,16 @@ function DashboardInner({ auth, onLogout }: { auth: AuthIdentity; onLogout: () =
     )}
     </div>
     </div>
+    </div>
+    {isMobile && (
+      <BottomNav
+        items={bottomNavItems}
+        moreItems={moreNavItems}
+        activeTab={navActiveTab}
+        onTabChange={handleNavTabChange}
+      />
+    )}
+    </div>
       <CommandPalette
         isOpen={cmdPaletteOpen}
         onClose={() => setCmdPaletteOpen(false)}
@@ -864,11 +893,13 @@ function DashboardInner({ auth, onLogout }: { auth: AuthIdentity; onLogout: () =
 // ── Login page ──
 // The sign-in boundary, shown before the boot splash whenever the backend
 // requires auth (ORBIT_SUPERADMIN_KEY set). Two ways in:
-//   • Local — prove the superadmin key (POST /api/auth/local); on success the
-//     key is stored as the request credential and resolves to superadmin.
+//   • Local — username + password against the local superadmin account
+//     (POST /api/auth/local). On success the server returns a session TOKEN,
+//     which we store as the request credential (never the password itself).
 //   • SSO   — enterprise OIDC sign-in (shown when SSO is enabled).
 // On success it calls onAuthed() so AuthGate re-checks whoami and proceeds.
 function LoginPage({ ssoAvailable, onAuthed }: { ssoAvailable: boolean; onAuthed: () => void }) {
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -879,29 +910,29 @@ function LoginPage({ ssoAvailable, onAuthed }: { ssoAvailable: boolean; onAuthed
 
   const submitLocal = useCallback(async (e?: React.FormEvent) => {
     e?.preventDefault();
-    if (!password || submitting) return;
+    if (!username || !password || submitting) return;
     setSubmitting(true);
     setError(null);
     try {
       const r = await fetch('/api/auth/local', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password }),
+        body: JSON.stringify({ username, password }),
       });
       const d = await r.json().catch(() => ({}));
-      if (!r.ok || d.success === false) {
-        setError(d.message || 'Invalid superadmin key.');
+      if (!r.ok || d.success === false || !d.token) {
+        setError(d.message || 'Invalid username or password.');
         setSubmitting(false);
         return;
       }
-      // Store the proven key as the request credential; AuthGate re-checks.
-      setDeviceToken(password);
+      // Store the issued session token as the request credential; AuthGate re-checks.
+      setDeviceToken(d.token);
       onAuthed();
     } catch {
       setError('Could not reach the server. Try again.');
       setSubmitting(false);
     }
-  }, [password, submitting, onAuthed]);
+  }, [username, password, submitting, onAuthed]);
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#faf9f6] px-6 dark:bg-[#0a0a0e]">
@@ -922,23 +953,33 @@ function LoginPage({ ssoAvailable, onAuthed }: { ssoAvailable: boolean; onAuthed
           </div>
         )}
 
-        {/* Local superadmin */}
+        {/* Local account */}
         <form onSubmit={submitLocal} className="w-full">
-          <label className="mb-1 block text-[11px] font-medium text-muted-foreground">Superadmin key</label>
+          <label className="mb-1 block text-[11px] font-medium text-muted-foreground">Username</label>
+          <input
+            type="text"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            autoFocus
+            autoComplete="username"
+            placeholder="admin"
+            className="mb-2 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring"
+          />
+          <label className="mb-1 block text-[11px] font-medium text-muted-foreground">Password</label>
           <input
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            autoFocus
-            placeholder="Enter the superadmin key"
+            autoComplete="current-password"
+            placeholder="Enter your password"
             className="mb-2 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring"
           />
           <button
             type="submit"
-            disabled={submitting || !password}
+            disabled={submitting || !username || !password}
             className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/80 disabled:opacity-50"
           >
-            {submitting ? 'Signing in…' : 'Sign in as superadmin'}
+            {submitting ? 'Signing in…' : 'Sign in'}
           </button>
         </form>
 

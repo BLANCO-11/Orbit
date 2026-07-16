@@ -26,7 +26,7 @@ Any of these credentials authenticates a request; each resolves to a **role** an
 |---|---|---|
 | `ORBIT_SUPERADMIN_KEY` | `superadmin` | env — the single operator |
 | Tenant **API key** (`orb_live_…`) | `admin` / `member` / `viewer` | minted in Admin › API Keys |
-| **SSO session** token | user's role | issued after OIDC sign-in |
+| **Session** token | user's role | issued after local (username+password) or OIDC sign-in |
 | Paired **device token** | derived from device scope | Fleet pairing |
 
 `GET /api/auth/whoami` returns the caller's `{ role, tenantId, email, ssoEnabled, ssoConfigured, devMode }`.
@@ -75,7 +75,8 @@ Authorization-Code + PKCE against any OIDC IdP (Entra/Azure AD, Okta, Google, Au
 - **`GET /api/auth/sso/status`** *(public)* — `{ enabled, configured }` for the login screen.
 - **`GET /api/auth/sso/login`** *(public)* — redirects to the IdP.
 - **`GET /api/auth/sso/callback`** *(public)* — verifies the `id_token`, provisions the user, mints an SSO session, and redirects to `<DASHBOARD_ORIGIN>/?ssoToken=…` (the SPA stores it as the request credential).
-- **`POST /api/auth/logout`** *(public)* — revokes the presented SSO session token.
+- **`POST /api/auth/local`** *(public)* — local account sign-in: `{ username, password }` → `{ token }` (a session token; the client stores it as its credential). The superadmin account is seeded at boot from `ORBIT_SUPERADMIN_USERNAME`/`ORBIT_SUPERADMIN_PASSWORD` (or a generated password printed to the log). This is separate from `ORBIT_SUPERADMIN_KEY`, which is the bearer credential for programmatic API access.
+- **`POST /api/auth/logout`** *(public)* — revokes the presented session token.
 - **`GET /api/auth/whoami`** *(authed)* — the caller's identity (see §1).
 
 ### Sessions Management

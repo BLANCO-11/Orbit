@@ -3,7 +3,11 @@ const path = require("path");
 const fs = require("fs");
 const crypto = require("crypto");
 
-const dbPath = path.join(__dirname, "orbit.db");
+// ORBIT_DB_PATH lets deployments (e.g. Docker) point the SQLite file at a
+// mounted volume for persistence; defaults to the in-repo file. Ensure the
+// parent dir exists so a fresh volume path works on first boot.
+const dbPath = process.env.ORBIT_DB_PATH || path.join(__dirname, "orbit.db");
+try { fs.mkdirSync(path.dirname(dbPath), { recursive: true }); } catch {}
 // Rebrand migration: carry the pre-rebrand database over so no data is lost.
 const legacyDbPath = path.join(__dirname, "aegis.db");
 if (!fs.existsSync(dbPath) && fs.existsSync(legacyDbPath)) {
@@ -19,7 +23,7 @@ if (!fs.existsSync(dbPath) && fs.existsSync(legacyDbPath)) {
 const db = new DatabaseSync(dbPath);
 
 // ── Schema Versioning ───────────────────────────────────────────────
-const CURRENT_SCHEMA_VERSION = 13;
+const CURRENT_SCHEMA_VERSION = 14;
 const BACKUP_INTERVAL = 10; // auto-backup every N saves
 let saveCount = 0;
 
@@ -310,11 +314,26 @@ db.exec(`
     tenant_id TEXT,
     email TEXT NOT NULL,
     sub TEXT,
+    username TEXT,
+    password_hash TEXT,
     role TEXT NOT NULL DEFAULT 'member',
     created_at INTEGER NOT NULL,
     last_login INTEGER
   )
 `);
+// Local accounts (username + password) live in the same table as SSO users;
+// SSO users have username/password_hash NULL. Add the columns for DBs created
+// before v14, then a partial-unique index so usernames don't collide.
+if (currentSchemaVersion < 14) {
+  try { db.exec("ALTER TABLE users ADD COLUMN username TEXT"); } catch (e) {}
+  try { db.exec("ALTER TABLE users ADD COLUMN password_hash TEXT"); } catch (e) {}
+  db.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)").run(
+    "schema_version",
+    String(CURRENT_SCHEMA_VERSION)
+  );
+  console.log(`[DB] Migrated sessions schema to version ${CURRENT_SCHEMA_VERSION}`);
+}
+try { db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username) WHERE username IS NOT NULL"); } catch (e) {}
 db.exec(`
   CREATE TABLE IF NOT EXISTS sso_sessions (
     token_hash TEXT PRIMARY KEY,
@@ -552,6 +571,24 @@ const normalizeScope = (s) => (VALID_SCOPES.has(s) ? s : "full");
 
 function hashToken(token) {
   return crypto.createHash("sha256").update(token).digest("hex");
+}
+
+// Password hashing for local accounts: scrypt with a per-password random salt.
+// Stored as "scrypt:<saltHex>:<hashHex>"; verified in constant time.
+function hashPassword(password) {
+  const salt = crypto.randomBytes(16);
+  const hash = crypto.scryptSync(String(password), salt, 64);
+  return `scrypt:${salt.toString("hex")}:${hash.toString("hex")}`;
+}
+function verifyPassword(password, stored) {
+  if (!stored || typeof stored !== "string") return false;
+  const [scheme, saltHex, hashHex] = stored.split(":");
+  if (scheme !== "scrypt" || !saltHex || !hashHex) return false;
+  const expected = Buffer.from(hashHex, "hex");
+  let actual;
+  try { actual = crypto.scryptSync(String(password), Buffer.from(saltHex, "hex"), expected.length); }
+  catch { return false; }
+  return actual.length === expected.length && crypto.timingSafeEqual(actual, expected);
 }
 
 function generatePairingCode(length = 6) {
@@ -929,10 +966,65 @@ function mapUserRow(row) {
     tenantId: row.tenant_id || null,
     email: row.email,
     sub: row.sub || null,
+    username: row.username || null,
+    hasPassword: !!row.password_hash,
     role: row.role || "member",
     createdAt: row.created_at,
     lastLogin: row.last_login,
   };
+}
+
+// ── Local accounts (username + password) ──
+function getUserByUsername(username) {
+  if (!username) return null;
+  const row = db.prepare("SELECT * FROM users WHERE username = ?").get(String(username));
+  return row ? mapUserRow(row) : null;
+}
+
+/** Create a local (password) account. Returns the mapped user (no hash). */
+function createLocalUser({ username, password, role, tenantId = null } = {}) {
+  const id = crypto.randomUUID();
+  const uname = String(username);
+  db.prepare(`
+    INSERT INTO users (id, tenant_id, email, sub, username, password_hash, role, created_at, last_login)
+    VALUES (?, ?, ?, NULL, ?, ?, ?, ?, NULL)
+  `).run(id, tenantId, `${uname}@local`, uname, hashPassword(password), normalizeRole(role), Date.now());
+  return getUser(id);
+}
+
+function setUserPassword(id, password) {
+  db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(hashPassword(password), id);
+}
+
+/** Verify a username+password; on success bumps last_login and returns the user. */
+function verifyLocalLogin(username, password) {
+  const row = db.prepare("SELECT * FROM users WHERE username = ?").get(String(username || ""));
+  if (!row || !row.password_hash) return null;
+  if (!verifyPassword(password, row.password_hash)) return null;
+  db.prepare("UPDATE users SET last_login = ? WHERE id = ?").run(Date.now(), row.id);
+  return mapUserRow(row);
+}
+
+/**
+ * Idempotently ensure the local superadmin account exists (called at boot).
+ * Creates it (password required) if absent; otherwise keeps role=superadmin and
+ * refreshes the password only when one is explicitly provided (env-managed).
+ */
+function ensureSuperadminAccount({ username, password } = {}) {
+  const uname = String(username || "admin");
+  const existing = db.prepare("SELECT * FROM users WHERE username = ?").get(uname);
+  if (existing) {
+    if (existing.role !== "superadmin") db.prepare("UPDATE users SET role='superadmin' WHERE id=?").run(existing.id);
+    if (password) db.prepare("UPDATE users SET password_hash=? WHERE id=?").run(hashPassword(password), existing.id);
+    return { id: existing.id, username: uname, created: false, passwordUpdated: !!password };
+  }
+  if (!password) throw new Error("ensureSuperadminAccount: a password is required to create the account");
+  const id = crypto.randomUUID();
+  db.prepare(`
+    INSERT INTO users (id, tenant_id, email, sub, username, password_hash, role, created_at, last_login)
+    VALUES (?, NULL, ?, NULL, ?, ?, 'superadmin', ?, NULL)
+  `).run(id, `${uname}@local`, uname, hashPassword(password), Date.now());
+  return { id, username: uname, created: true };
 }
 
 // ── SSO browser sessions ── (issued after OIDC callback; presented as x-api-key)
@@ -1012,6 +1104,11 @@ module.exports = {
   listUsers,
   setUserRole,
   countUsers,
+  getUserByUsername,
+  createLocalUser,
+  setUserPassword,
+  verifyLocalLogin,
+  ensureSuperadminAccount,
   createSsoSession,
   getSsoSessionByToken,
   revokeSsoSession,

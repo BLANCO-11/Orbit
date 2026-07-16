@@ -16,7 +16,7 @@ class LightpandaMcpClient {
     try {
       console.log("Initializing Lightpanda MCP client connection...");
       
-      const serverPath = path.join(__dirname, "../mcp-server-lightpanda/index.js");
+      const serverPath = path.join(__dirname, "../mcp-servers/lightpanda/index.js");
       
       this.transport = new StdioClientTransport({
         command: "node",

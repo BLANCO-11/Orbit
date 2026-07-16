@@ -373,9 +373,34 @@ notifyBus.registerSink("desktop", ({ title, body, severity }) => {
 
 // ── Auth ────────────────────────────────────────────────────────────
 const authMiddleware = createAuthMiddleware(db);
-if (!createAuthMiddleware.getSuperadminKey()) {
+const authEnforced = !!createAuthMiddleware.getSuperadminKey();
+if (!authEnforced) {
   console.warn("[SECURITY] ORBIT_SUPERADMIN_KEY is not set — the API and WebSocket are UNAUTHENTICATED (dev-mode: every caller is treated as superadmin).");
   console.warn("[SECURITY] Fine for local-only / single-user dev; set ORBIT_SUPERADMIN_KEY before exposing this server beyond 127.0.0.1.");
+}
+
+// Seed the local superadmin ACCOUNT used by the browser login form (username +
+// password — distinct from ORBIT_SUPERADMIN_KEY, which is the bearer credential
+// for programmatic API access). Only relevant when auth is enforced or a
+// password is explicitly configured; skipped in pure dev-mode (no login shown).
+if (authEnforced || process.env.ORBIT_SUPERADMIN_PASSWORD) {
+  const saUser = process.env.ORBIT_SUPERADMIN_USERNAME || "admin";
+  let saPass = process.env.ORBIT_SUPERADMIN_PASSWORD || "";
+  try {
+    if (!db.getUserByUsername(saUser) && !saPass) {
+      // No account yet and no password configured — generate one and print it
+      // once so the operator can sign in. Set ORBIT_SUPERADMIN_PASSWORD to control it.
+      saPass = require("crypto").randomBytes(9).toString("base64url");
+      db.ensureSuperadminAccount({ username: saUser, password: saPass });
+      console.warn(`[Auth] Seeded superadmin account "${saUser}" with a GENERATED password: ${saPass}`);
+      console.warn(`[Auth] Change it after login, or set ORBIT_SUPERADMIN_PASSWORD to manage it.`);
+    } else {
+      db.ensureSuperadminAccount({ username: saUser, password: saPass || undefined });
+      console.log(`[Auth] Superadmin login account "${saUser}" ready${saPass ? " (password from env)" : ""}.`);
+    }
+  } catch (e) {
+    console.error("[Auth] Failed to seed superadmin account:", e.message);
+  }
 }
 
 // ── Mount Routes ────────────────────────────────────────────────────
@@ -847,20 +872,8 @@ wss.on("connection", (ws) => {
     console.log("Dashboard client disconnected.");
     for (const [sid, ses] of activeSessions.entries()) {
       if (ses.ws === ws) {
-        // Persist final metrics
-        try {
-          const persistable = metricsManager.toPersistable(sid);
-          const existingSession = db.getSession(sid);
-          if (existingSession) {
-            db.saveSession({
-              ...existingSession,
-              metrics: persistable,
-              subagentTree: ses.subagentTracker ? ses.subagentTracker.toJSON() : existingSession.subagentTree,
-            });
-          }
-        } catch (e) {
-          console.error(`[Metrics] Error persisting session ${sid}:`, e.message);
-        }
+        // Persist final metrics (no-clobber: keeps the DB copy if already released)
+        persistSessionMetrics(sid, ses.subagentTracker);
 
         if (ses.harness) {
           try { ses.harness.disconnect(); } catch {}
@@ -879,6 +892,34 @@ wss.on("connection", (ws) => {
 });
 
 // ── Agent Task Handler ──────────────────────────────────────────────
+// Persist a session's metrics WITHOUT clobbering good DB values with a zeroed
+// snapshot. `metricsManager.toPersistable()` returns empty zeros once a session's
+// in-memory metrics have been released (releaseSession — 5s after a turn, or on
+// ws close). Several teardown paths race: e.g. on reload the browser-close
+// handler saves + releases, then the harness `close` event fires and would
+// re-save zeros over the real turn-end numbers — the "metrics show 0 after
+// reload" bug. Only write metrics when they're still live; otherwise keep the
+// DB copy. subagentTree is written from the (non-released) tracker when given.
+function persistSessionMetrics(sessionId, subagentTracker) {
+  try {
+    const existing = db.getSession(sessionId);
+    if (!existing) return;
+    const live = metricsManager.getMetrics(sessionId);
+    let metrics = existing.metrics;
+    if (live) {
+      metrics = metricsManager.toPersistable(sessionId);
+      if (subagentTracker) metrics.subagents = subagentTracker.toFrontendSummary();
+    }
+    db.saveSession({
+      ...existing,
+      metrics,
+      subagentTree: subagentTracker ? subagentTracker.toJSON() : existing.subagentTree,
+    });
+  } catch (e) {
+    console.error(`[Metrics] persist failed for ${sessionId}:`, e.message);
+  }
+}
+
 async function handleStartTask(ws, userPrompt, sessionId, mode, systemPromptType, skills, effort, harnessId, excludeTools, sandbox) {
   ws.activeSessionId = sessionId;
   ws.currentPrompt = userPrompt;
@@ -931,6 +972,21 @@ async function handleStartTask(ws, userPrompt, sessionId, mode, systemPromptType
   }
 
   // ── Initialize metrics ────────────────────────────────────
+  // Restore prior cumulative metrics from the DB when this session has no live
+  // in-memory metrics (a fresh turn after releaseSession, or after a server
+  // restart) — otherwise initSession would start from zero and the next
+  // turn-end save would overwrite the session's real running totals. This keeps
+  // per-session observability cumulative across turns and reloads.
+  if (!metricsManager.getMetrics(sessionId)) {
+    try {
+      const prior = db.getSession(sessionId);
+      if (prior && prior.metrics && Object.keys(prior.metrics).length) {
+        metricsManager.loadSession(sessionId, prior.metrics);
+      }
+    } catch (e) {
+      console.error(`[Metrics] Could not restore prior metrics for ${sessionId}:`, e.message);
+    }
+  }
   metricsManager.initSession(sessionId, activeMode, activeModelName);
 
   // ── Budget gate ───────────────────────────────────────────────────
@@ -1077,16 +1133,9 @@ async function handleStartTask(ws, userPrompt, sessionId, mode, systemPromptType
   const metricsAutoSave = setInterval(() => {
     const ses = activeSessions.get(sessionId);
     if (!ses) { clearInterval(metricsAutoSave); return; }
-    try {
-      const persistable = metricsManager.toPersistable(sessionId);
-      // Persist the RICH sub-agent summary (task/tools/reasoning) so the Trace
-      // tab rehydrates fully on refresh/switch, not just id/name/status.
-      persistable.subagents = subagentTracker.toFrontendSummary();
-      const existingSession = db.getSession(sessionId);
-      if (existingSession) {
-        db.saveSession({ ...existingSession, metrics: persistable, subagentTree: subagentTracker.toJSON() });
-      }
-    } catch {}
+    // No-clobber persist (keeps DB copy if metrics were released); also writes
+    // the rich sub-agent summary so the Trace tab rehydrates on refresh.
+    persistSessionMetrics(sessionId, subagentTracker);
   }, saveInterval);
   
   sessionItem._metricsAutoSave = metricsAutoSave;
@@ -1628,20 +1677,9 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
     // harness-close / the 30s autosave. Metrics are backend-owned (the client
     // POST can't write them — see routes/sessions.js), so without this a fresh
     // session refreshed before the next autosave/close read back zero — the
-    // "observability resets on refresh" bug. Merge so messages/logs survive.
-    try {
-      const persistable = metricsManager.toPersistable(sessionId);
-      const existing = db.getSession(sessionId);
-      if (existing) {
-        db.saveSession({
-          ...existing,
-          metrics: persistable,
-          subagentTree: subagentTracker ? subagentTracker.toJSON() : existing.subagentTree,
-        });
-      }
-    } catch (e) {
-      console.error(`[Metrics] turn-end persist failed for ${sessionId}:`, e.message);
-    }
+    // "observability resets on refresh" bug. Metrics are live here (mid-turn),
+    // so this writes the real cumulative numbers.
+    persistSessionMetrics(sessionId, subagentTracker);
 
     // Sync plans from workspace at turn end
     const planState = syncPlansFromWorkspace(sessionId);
@@ -1673,21 +1711,13 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
   events.on("close", ({ code }) => {
     const ses = activeSessions.get(sessionId);
     if (ses?._metricsAutoSave) clearInterval(ses._metricsAutoSave);
-    
-    // Persist final metrics
-    try {
-      const persistable = metricsManager.toPersistable(sessionId);
-      // Persist the RICH sub-agent summary (task/tools/reasoning) so the Trace
-      // tab rehydrates fully on refresh/switch, not just id/name/status.
-      persistable.subagents = subagentTracker.toFrontendSummary();
-      const existingSession = db.getSession(sessionId);
-      if (existingSession) {
-        db.saveSession({ ...existingSession, metrics: persistable, subagentTree: subagentTracker.toJSON() });
-      }
-    } catch (e) {
-      console.error(`[Metrics] Error persisting metrics for ${sessionId}:`, e.message);
-    }
-    
+
+    // Persist final metrics + the RICH sub-agent summary so the Trace tab
+    // rehydrates fully on refresh. No-clobber: if in-memory metrics were already
+    // released (e.g. the ws-close handler ran first on reload), keep the DB copy
+    // instead of overwriting the real turn-end numbers with zeros.
+    persistSessionMetrics(sessionId, subagentTracker);
+
     activeSessions.delete(sessionId);
     // NOTE: deliberately do NOT clear run_state here. A harness `close` can be a
     // genuine mid-turn crash/restart — precisely when the session IS resumable
@@ -1723,18 +1753,8 @@ async function shutdown(signal) {
   // Kill all active sessions
   for (const [sid, ses] of activeSessions.entries()) {
     console.log(`[Shutdown] Stopping session ${sid}...`);
-    try {
-      const persistable = metricsManager.toPersistable(sid);
-      const existing = db.getSession(sid);
-      if (existing) {
-        db.saveSession({
-          ...existing,
-          metrics: persistable,
-          subagentTree: ses.subagentTracker ? ses.subagentTracker.toJSON() : existing.subagentTree,
-        });
-      }
-    } catch {}
-    
+    persistSessionMetrics(sid, ses.subagentTracker);
+
     if (ses.harness) {
       try { ses.harness.disconnect(); } catch {}
     }
@@ -1763,12 +1783,15 @@ process.on("SIGINT", () => shutdown("SIGINT"));
 // port always match THIS install.
 function ensureOrbitMcpServersRegistered() {
   const servers = {
-    "orbit-fleet": { path: path.join(__dirname, "./fleet-mcp.js") },
-    "orbit-notify": { path: path.join(__dirname, "../mcp-server-notify/index.js") },
-    "orbit-transcript": { path: path.join(__dirname, "../mcp-server-transcript/index.js") },
-    "orbit-search": { path: path.join(__dirname, "../mcp-server-search/index.js") },
+    // Platform tool shims — native to the backend (thin MCP wrappers over
+    // notify-bus.js / fleet.js; MCP is the only way to expose a tool to pi).
+    "orbit-fleet": { path: path.join(__dirname, "./mcp/fleet-mcp.js") },
+    "orbit-notify": { path: path.join(__dirname, "./mcp/notify-mcp.js") },
+    // External capability servers — live under the top-level mcp-servers/ folder.
+    "orbit-transcript": { path: path.join(__dirname, "../mcp-servers/transcript/index.js") },
+    "orbit-search": { path: path.join(__dirname, "../mcp-servers/search/index.js") },
     "lightpanda": {
-      path: path.join(__dirname, "../mcp-server-lightpanda/index.js"),
+      path: path.join(__dirname, "../mcp-servers/lightpanda/index.js"),
       env: { LIGHTPANDA_WS: process.env.LIGHTPANDA_WS || "ws://127.0.0.1:9222" }
     }
   };

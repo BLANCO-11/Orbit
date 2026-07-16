@@ -192,7 +192,7 @@ export default function MissionView({ planSteps = [], plans = [], activePlanId =
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-[900px] px-6 py-6">
+      <div className="mx-auto max-w-[900px] px-6 pb-6 pt-[72px]">
         {hasPlan && (
           <div className="mb-5 overflow-hidden rounded-xl border border-border-soft bg-card">
             <div className="flex flex-wrap items-center gap-2 border-b border-border-soft px-4 py-3">

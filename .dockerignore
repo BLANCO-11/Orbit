@@ -1,0 +1,36 @@
+# Dependencies (reinstalled in the image) and build output (rebuilt)
+node_modules
+**/node_modules
+dashboard/.next
+dashboard/.next-verify
+.next
+.next-verify
+
+# VCS / local tooling (NOTE: keep .md files — prompts/ and skills/ ship as .md)
+.git
+.gitignore
+
+# Secrets & local config (compose passes .env via env_file at runtime)
+.env
+.env*.local
+agent-backend/security-config.json
+agent-backend/.orbit-secret
+
+# Runtime/generated data — must not bake into the image
+.pi
+workspace
+agent-backend/*.db
+agent-backend/*.db-*
+agent-backend/backups
+graphify-out
+plans
+
+# Editor / OS noise
+.vscode
+.idea
+.DS_Store
+
+# Docker artifacts themselves
+Dockerfile
+.dockerignore
+docker-compose*.yml

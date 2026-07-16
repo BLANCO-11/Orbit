@@ -1,4 +1,4 @@
-// agent-backend/fleet-mcp.js
+// agent-backend/mcp/fleet-mcp.js
 //
 // The baked-in `orbit-fleet` MCP server: the tools the LEAD agent uses to drive other
 // devices. It exposes two tools — list_devices and dispatch_to_device — and
