@@ -18,8 +18,10 @@ function requiresRespawn(oldCfg, newCfg) {
   if ((oldCfg.systemPromptType || "") !== (newCfg.systemPromptType || "")) return true;
   // Web-access extension toggle changes the --exclude-tools spawn arg.
   if (!!oldCfg.webAccess?.enabled !== !!newCfg.webAccess?.enabled) return true;
-  const o = oldCfg.litellm || {};
-  const n = newCfg.litellm || {};
+  // Merge the neutral `llm` alias over `litellm` on both sides so a change to
+  // either key is detected (Workstream F1).
+  const o = { ...(oldCfg.litellm || {}), ...(oldCfg.llm || {}) };
+  const n = { ...(newCfg.litellm || {}), ...(newCfg.llm || {}) };
   return SPAWN_TIME_KEYS.litellm.some((k) => o[k] !== n[k]);
 }
 

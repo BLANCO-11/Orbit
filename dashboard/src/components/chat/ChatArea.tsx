@@ -4,7 +4,8 @@ import React, { useRef, useEffect, useLayoutEffect } from 'react';
 import ApprovalBanner from '@/components/ApprovalBanner';
 import ChatMessage, { ChatEmptyState } from '@/components/ChatMessage';
 import ReasoningAccordion from './ReasoningAccordion';
-import { ModeBadge, ModePrompt } from './ModePrompt';
+import { ModeBadge } from './ModePrompt';
+import Banner from './Banner';
 import ChatInput from './ChatInput';
 import ModeSelector from './ModeSelector';
 import PromptTypeSelector from './PromptTypeSelector';
@@ -38,7 +39,6 @@ export default function ChatArea({
 
   // Mode
   sessionMode,
-  showModePrompt,
   onSetSessionMode,
   onSetSessionModeAndReRun,
 
@@ -65,6 +65,10 @@ export default function ChatArea({
   // Resume
   canResume,
   onResume,
+
+  // LLM status (Workstream F4)
+  llmStatus,
+  onOpenSettings,
 
   // Input
   prompt,
@@ -115,11 +119,38 @@ export default function ChatArea({
   const isProcessing = status === 'thinking' || status === 'executing';
   const lastAction = metrics?.actionFeed?.[metrics.actionFeed.length - 1]?.toolName;
 
+  // LLM readiness (Workstream F4). Only hard-block the composer when the endpoint
+  // is definitively unconfigured; an untested (null) state stays usable.
+  const llmUnconfigured = llmStatus?.configured === false;
+  const llmFailed = llmStatus?.configured === true && llmStatus?.connected === false;
+  const llmReady = !llmUnconfigured;
+
   return (
     <>
       {/* ── Scrolling conversation ── */}
       <div ref={containerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-6 pb-40 pt-7">
         <div className="mx-auto flex w-full max-w-[720px] flex-col gap-6">
+          {(llmUnconfigured || llmFailed) && (
+            <Banner tone={llmUnconfigured ? 'info' : 'danger'} className="flex items-center gap-3">
+              <span className="min-w-0 flex-1 text-[13px] text-muted-foreground">
+                {llmUnconfigured ? (
+                  <>No LLM configured. Add an OpenAI-compatible provider (URL, key, model) to start.</>
+                ) : (
+                  <>
+                    <span className="font-semibold text-destructive">LLM connection failed.</span>{' '}
+                    {llmStatus?.error ? `${llmStatus.error}. ` : ''}Check the endpoint URL, key, and model.
+                  </>
+                )}
+              </span>
+              <button
+                onClick={onOpenSettings}
+                className="ml-auto shrink-0 rounded-lg bg-primary px-3.5 py-1.5 text-[12.5px] font-semibold text-primary-foreground hover:opacity-90"
+              >
+                {llmUnconfigured ? 'Add a provider' : 'Open Settings'}
+              </button>
+            </Banner>
+          )}
+
           <ApprovalBanner
             approvalRequest={approvalRequest}
             onApprove={(decision) => onApprove(decision !== undefined ? decision : true)}
@@ -127,18 +158,17 @@ export default function ChatArea({
           />
 
           {canResume && (
-            <div className="flex items-center gap-3 rounded-[11px] border border-warning/40 bg-warning/8 px-4 py-3">
+            <Banner tone="warning" className="flex items-center gap-3">
               <span className="text-[13px] text-muted-foreground">
                 This session was <span className="font-semibold text-warning">interrupted</span> mid-run. Resume to continue where it left off.
               </span>
               <button onClick={onResume} className="ml-auto shrink-0 rounded-lg bg-primary px-3.5 py-1.5 text-[12.5px] font-semibold text-primary-foreground hover:opacity-90">
                 Resume
               </button>
-            </div>
+            </Banner>
           )}
 
-          {sessionMode && !showModePrompt && <ModeBadge sessionMode={sessionMode} />}
-          {showModePrompt && <ModePrompt onSetMode={onSetSessionMode} />}
+          {sessionMode && <ModeBadge sessionMode={sessionMode} />}
 
           {hasMoreMessages && (
             <div className="border-b border-dashed border-border pb-2 text-center text-xs text-faint">
@@ -226,6 +256,7 @@ export default function ChatArea({
             onStop={onStop}
             inputHistoryRef={inputHistoryRef}
             inputHistoryIndexRef={inputHistoryIndexRef}
+            llmReady={llmReady}
             profileButton={<ProfileSelector activeProfileId={activeProfileId} onApplyProfile={onApplyProfile} />}
             harnessButton={<HarnessSelector harnessId={harnessId} onSetHarnessId={onSetHarnessId} />}
             modeButton={<ModeSelector sessionMode={sessionMode} onSetSessionMode={onSetSessionMode} />}

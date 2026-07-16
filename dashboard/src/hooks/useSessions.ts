@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useOrbitDispatch, useOrbitState, actions } from '@/providers/OrbitProvider';
 
 // The complete flat UI-metrics shape, mirroring the reducer's initial
@@ -95,6 +95,12 @@ export function useSessions() {
 
   const debouncedSaveRef = useRef(null);
   const lastSavedRef = useRef(null);
+  // Mirror of the reducer's current session id, read inside loadSessions without
+  // making it a dependency (which would rebuild the callback every switch). Lets
+  // a background refresh detect "am I already viewing this session live?" and
+  // avoid clobbering the live reducer state.
+  const currentSessionIdRef = useRef(currentSessionId);
+  useEffect(() => { currentSessionIdRef.current = currentSessionId; }, [currentSessionId]);
 
   // ── Load from backend on mount ──
   useEffect(() => {
@@ -138,17 +144,26 @@ export function useSessions() {
       : new URLSearchParams(window.location.search).get('session');
     const active = urlId ? (loaded.find(s => s.id === urlId) || loaded[0]) : loaded[0];
 
-    dispatch(actions.setCurrentSession(active.id));
-    dispatch(actions.setMessages(active.messages || []));
-    dispatch(actions.setSessionMode(active.mode || ''));
-    dispatch(actions.setMetrics(normalizeMetricsForUI(active.metrics)));
-    dispatch(actions.setExecutionPlan(active.executionPlan || ''));
-    dispatch(actions.setLogs(active.logs || []));
-    dispatch(actions.setPlanState({
-      steps: active.planSteps || [],
-      plans: active.plans || [],
-      activePlanId: active.activePlanId || '',
-    }));
+    // Only hydrate the reducer from the DB snapshot when we're NOT already
+    // viewing this session live. A background refresh (e.g. a fleet event, or
+    // any future refresh_sessions) must refresh the LIST only — re-dispatching
+    // messages/metrics for the session already open would clobber the live,
+    // just-streamed reply with the lagging DB copy (the "response vanishes" bug).
+    // On the initial mount / a genuine switch, currentSessionId differs, so we
+    // hydrate fully and metrics restore from the DB.
+    if (currentSessionIdRef.current !== active.id) {
+      dispatch(actions.setCurrentSession(active.id));
+      dispatch(actions.setMessages(active.messages || []));
+      dispatch(actions.setSessionMode(active.mode || ''));
+      dispatch(actions.setMetrics(normalizeMetricsForUI(active.metrics)));
+      dispatch(actions.setExecutionPlan(active.executionPlan || ''));
+      dispatch(actions.setLogs(active.logs || []));
+      dispatch(actions.setPlanState({
+        steps: active.planSteps || [],
+        plans: active.plans || [],
+        activePlanId: active.activePlanId || '',
+      }));
+    }
 
     setIsLoading(false);
   }, [dispatch]);
@@ -381,13 +396,26 @@ export function useSessions() {
     return Object.entries(groups).filter(([, s]) => s.length > 0);
   })();
 
-  const getSessionPreview = (s) => {
-    if (!s.messages?.length) return '';
-    const lastAssistant = [...s.messages].reverse().find(m => m.role === 'assistant');
-    if (!lastAssistant?.content) return '';
-    const clean = lastAssistant.content.replace(/<[^>]*>/g, '').trim();
-    return clean.substring(0, 60) + (clean.length > 60 ? '...' : '');
-  };
+  // Parent→child / child→parent maps derived from each session's subagent tree.
+  // Computed here (memoized) instead of rebuilt inline on every SessionList
+  // render (Workstream C3). Keyed on the sessions array identity.
+  const sessionTree = useMemo(() => {
+    const childToParent = new Map();
+    const parentToChildren = new Map();
+    const byId = new Map(sessions.map(s => [s.id, s]));
+    for (const s of sessions) {
+      for (const agent of (s.subagentTree?.agents || [])) {
+        if (!agent.childSessionId) continue;
+        childToParent.set(agent.childSessionId, s.id);
+        const child = byId.get(agent.childSessionId);
+        if (child) {
+          if (!parentToChildren.has(s.id)) parentToChildren.set(s.id, []);
+          parentToChildren.get(s.id).push(child);
+        }
+      }
+    }
+    return { childToParent, parentToChildren };
+  }, [sessions]);
 
   useEffect(() => {
     const handleRefresh = () => loadSessions();
@@ -400,6 +428,8 @@ export function useSessions() {
     groupedSessions, hoveredSessionId, setHoveredSessionId,
     isLoading,
     createSession, switchSession, deleteSession, renameSession,
-    updateCurrentSession, getSessionPreview, clearRunState,
+    updateCurrentSession, clearRunState,
+    childToParent: sessionTree.childToParent,
+    parentToChildren: sessionTree.parentToChildren,
   };
 }

@@ -1,46 +1,136 @@
 // agent-backend/middleware/auth.js
-// Authentication middleware — accepts either a per-device token (issued via
-// the URL/OTP pairing flow, see routes/devices.js) or a shared-secret
-// stopgap for simple single-device local setups that haven't paired
-// anything. The key/token never comes from security-config.json, since
-// that file is writable via an API route and must not be able to reset
-// its own guard.
+// Authentication + RBAC. A presented credential is resolved to an identity
+// (`req.auth = { role, tenantId, keyId?, userId?, deviceId? }`) in priority
+// order:
+//   1. superadmin env key         → { role: 'superadmin' }        (the operator)
+//   2. paired device token        → role from the device scope    (Fleet devices)
+//   3. tenant API key             → row's role + tenant           (multi-tenant)
+//   4. SSO browser session token  → user's role + tenant          (enterprise login)
+//   5. no superadmin key set      → dev-mode: allow as superadmin (household/local)
+//
+// RBAC degrades gracefully: a single-user deploy sets nothing and everything
+// works (case 5, or one env key = case 1). Tenants/keys/SSO only matter once an
+// operator opts into them. Secrets never come from security-config.json (which
+// is writable via an API route and must not be able to reset its own guard).
 
-function getSharedApiKey() {
-  // ORBIT_API_KEY is the current name; AEGIS_API_KEY kept as a fallback so
-  // pre-rebrand .env files keep working.
-  return process.env.ORBIT_API_KEY || process.env.AEGIS_API_KEY || null;
+// Map a device pairing scope → an RBAC role. Devices are operator-paired, so a
+// full-scope device acts as an admin; restricted scopes are members/viewers.
+function roleForDeviceScope(scope) {
+  if (scope === "read_only") return "viewer";
+  if (scope === "chat_voice") return "member";
+  return "admin";
 }
 
-function checkApiKey(req, db) {
-  const provided = req.headers["x-api-key"] || (req.headers["authorization"] || "").replace("Bearer ", "");
+function getSuperadminKey() {
+  // ORBIT_SUPERADMIN_KEY is the current name. ORBIT_API_KEY (pre-multi-tenant)
+  // and AEGIS_API_KEY (pre-rebrand) are kept as fallbacks so existing .env
+  // files keep working unchanged.
+  return (
+    process.env.ORBIT_SUPERADMIN_KEY ||
+    process.env.ORBIT_API_KEY ||
+    process.env.AEGIS_API_KEY ||
+    null
+  );
+}
+
+// Legacy alias — some call sites/tests import getSharedApiKey. Same value.
+function getSharedApiKey() {
+  return getSuperadminKey();
+}
+
+// Resolve the presented credential to an identity, or null if unauthenticated.
+// Attaches nothing itself — the caller sets req.auth from the return value.
+function resolveIdentity(req, db) {
+  const provided =
+    req.headers["x-api-key"] ||
+    (req.headers["authorization"] || "").replace("Bearer ", "");
+
+  const superadminKey = getSuperadminKey();
+
+  // 1. Superadmin env key (constant-time-ish exact match).
+  if (superadminKey && provided && provided === superadminKey) {
+    return { role: "superadmin", tenantId: null };
+  }
 
   if (db && provided) {
+    // 2. Paired device token.
     const device = db.getDeviceByToken(provided);
     if (device) {
-      req.device = device;
       db.touchDeviceLastSeen(device.id);
-      return true;
+      return {
+        role: roleForDeviceScope(device.scope),
+        tenantId: device.tenantId || null,
+        deviceId: device.id,
+        scope: device.scope,
+      };
+    }
+
+    // 3. Tenant API key.
+    const apiKey = db.getApiKeyByToken(provided);
+    if (apiKey) {
+      db.touchApiKeyUsed(apiKey.id);
+      return {
+        role: apiKey.role,
+        tenantId: apiKey.tenantId || null,
+        keyId: apiKey.id,
+        scope: apiKey.scope,
+      };
+    }
+
+    // 4. SSO browser session token.
+    const sso = db.getSsoSessionByToken(provided);
+    if (sso && sso.user) {
+      return {
+        role: sso.user.role,
+        tenantId: sso.user.tenantId || null,
+        userId: sso.user.id,
+        email: sso.user.email,
+      };
     }
   }
 
-  const required = getSharedApiKey();
-  // No shared key configured and no matching device token: dev-mode, allow through.
-  if (!required) return true;
+  // 5. No superadmin key configured and no matching credential: dev-mode.
+  // Allow through as superadmin so a local/household setup is fully usable with
+  // zero config (matches the pre-multi-tenant unauthenticated behavior).
+  if (!superadminKey) {
+    return { role: "superadmin", tenantId: null, devMode: true };
+  }
 
-  return Boolean(provided) && provided === required;
+  return null;
+}
+
+// Back-compat boolean check used by a couple of call sites (WS handshake).
+function checkApiKey(req, db) {
+  return resolveIdentity(req, db) !== null;
 }
 
 function createAuthMiddleware(db) {
   return function authMiddleware(req, res, next) {
-    if (!checkApiKey(req, db)) {
+    const identity = resolveIdentity(req, db);
+    if (!identity) {
       res.setHeader("WWW-Authenticate", 'Bearer realm="Orbit"');
       return res.status(401).json({ success: false, message: "Unauthorized: invalid or missing API key." });
     }
+    req.auth = identity;
     next();
   };
 }
 
+// Route guard: require the caller's role to be one of `roles`. superadmin always
+// passes. Mount AFTER authMiddleware (which sets req.auth). Returns 403 on fail.
+function requireRole(...roles) {
+  const allowed = new Set(roles);
+  return function roleGuard(req, res, next) {
+    const role = req.auth && req.auth.role;
+    if (role === "superadmin" || allowed.has(role)) return next();
+    return res.status(403).json({ success: false, message: `Forbidden: requires role ${roles.join(" or ")}.` });
+  };
+}
+
 module.exports = createAuthMiddleware;
+module.exports.getSuperadminKey = getSuperadminKey;
 module.exports.getSharedApiKey = getSharedApiKey;
 module.exports.checkApiKey = checkApiKey;
+module.exports.resolveIdentity = resolveIdentity;
+module.exports.requireRole = requireRole;
+module.exports.roleForDeviceScope = roleForDeviceScope;

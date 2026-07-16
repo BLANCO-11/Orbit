@@ -7,6 +7,7 @@ export { useTTS } from './useTTS';
 export { useSTT } from './useSTT';
 export { useSettings } from './useSettings';
 export { useDevices } from './useDevices';
+export { useAuth } from './useAuth';
 
 export {
   OrbitProvider,

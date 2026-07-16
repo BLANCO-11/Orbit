@@ -47,8 +47,9 @@ cd Orbit
 npm install
 npm --prefix dashboard install
 
-cp .env.example .env          # set LITELLM_BASE_URL / LITELLM_KEY / LITELLM_MODEL
-                              # (or leave blank and configure in Settings after launch)
+cp .env.example .env          # set LLM_BASE_URL / LLM_API_KEY / LLM_MODEL
+                              # (LITELLM_* / OPENAI_* also accepted as fallbacks;
+                              #  or leave blank and configure in Settings after launch)
 
 npm run dev                   # backend :6800 + dashboard :6801
 # open http://localhost:6801
@@ -73,7 +74,8 @@ Two layers, and env wins:
 
 ## Features
 
-- **Unified console** — icon rail (Console / Fleet / Connectors / Policies / Settings); chat, per-turn reasoning, tools, and sub-agents in one stream; inspector tabs Overview · Preview · Console · Workspace · Trace · Logs.
+- **Unified console** — icon rail (Console / Fleet / Connectors / Policies / Admin / Settings); chat, per-turn reasoning, tools, and sub-agents in one stream; inspector tabs Overview · Preview · Console · Workspace · Trace · Logs.
+- **Admin & multi-tenancy** *(optional)* — an Admin console for tenants, tenant-scoped API keys, roles (superadmin/admin/member/viewer), per-tenant observability, and an enterprise **OIDC SSO** toggle. Degrades gracefully: a single-user/household deploy needs none of it.
 - **Real observability** — provider-reported tokens (not estimates) + directional cost, per-turn ledger, and a **Trace** giving every sub-agent its own task, tool calls, and tokens.
 - **Mission board** — the agent's structured plan (via the `orbit-plan` tool) as a live checklist with dependencies.
 - **Enforced policy + budgets** — capability×mode matrix, per-device tighten-only overrides, per-session cost/token/sub-agent-depth caps.
@@ -119,10 +121,10 @@ Never commit `.env`, `agent-backend/security-config.json`, or `agent-backend/.or
 
 Orbit can be run as a headless backend service (`agent-backend`). This allows third-party developers to connect their own dashboards, voice control suites, or external scripts.
 
-For detailed request/response structures, WebSocket event protocols, authentication, and stability notes, refer to the [API Specification Guide](file:///home/blanco/builds/LLM-OS-AGENT/API.md).
+For detailed request/response structures, WebSocket event protocols, authentication, and stability notes, refer to the [API Specification Guide](./API.md).
 
 ## Security notes
 
-- The backend binds to `127.0.0.1` only. Set `ORBIT_API_KEY` before exposing it beyond loopback.
+- The backend binds to `127.0.0.1` only. Set `ORBIT_SUPERADMIN_KEY` (formerly `ORBIT_API_KEY`, still accepted as a fallback) before exposing it beyond loopback — otherwise it runs in dev-mode, treating every caller as superadmin. For multi-user deployments, mint tenant-scoped API keys or enable OIDC SSO from the Admin console rather than sharing the superadmin key.
 - The agent runs real commands on your machine within the policy matrix — review Policies/Settings before granting `edit`/`yolo`, and use the container sandbox for untrusted work.
 - Tokens for connected services are encrypted at rest (`crypto-store.js`).

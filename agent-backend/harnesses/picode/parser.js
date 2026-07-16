@@ -63,4 +63,42 @@ function isConversationalPrompt(prompt) {
   return conversationalPhrases.some(regex => regex.test(prompt));
 }
 
-module.exports = { stripTuiChars, isMutatingTool, isReadOnlyTool, isConversationalPrompt };
+// Action verbs implying something is being BUILT or CHANGED (multi-step work).
+const ACTION_VERB = /\b(implement|build|create|add|write|refactor|migrate|fix|set\s?up|configure|integrate|deploy|rename|remove|delete|update|install|scaffold|port|convert|replace|generate|design|develop|rewrite|optimi[sz]e|automate|wire\s?up|hook\s?up|extract|split|merge|combine|set\s?up)\b/i;
+
+/**
+ * Positive heuristic: does this prompt look like genuine MULTI-STEP work that
+ * warrants a pre-generated execution plan? Default is NO — questions, lookups,
+ * and single-step asks must never trigger planning. This replaces the old
+ * greeting-only whitelist, which let *every* non-greeting question fire an
+ * extra reasoning round-trip (Workstream B1).
+ */
+function isMultiStepTask(prompt) {
+  if (!prompt || typeof prompt !== "string") return false;
+  const text = prompt.trim();
+  if (text.length < 25) return false; // too short to be real multi-step work
+
+  const lower = text.toLowerCase();
+
+  // Pure questions / lookups are Q&A, never tasks — no plan.
+  const questionStart = /^(what|why|how|who|when|where|which|whose|is|are|am|was|were|do|does|did|can|could|should|would|will|explain|tell\s+me|show\s+me|describe|summar(y|ize|ise)|list|find|search|look\s+up|read|check)\b/i;
+  if (questionStart.test(lower) || /\?\s*$/.test(text)) return false;
+
+  // Must be action-oriented to be a task at all.
+  if (!ACTION_VERB.test(lower)) return false;
+
+  // Multi-step signals: multiple actions, explicit enumeration/chaining, an
+  // "and"-joined compound ask, or a long substantive request.
+  const actionCount = (lower.match(new RegExp(ACTION_VERB.source, "gi")) || []).length;
+  const multiStep =
+    actionCount >= 2 ||
+    /\b(and then|then|after that|first|next|finally|step\s*\d|steps|following)\b/i.test(lower) ||
+    /(^|\n)\s*\d+[.)]\s/.test(text) ||       // numbered list
+    /(^|\n)\s*[-*]\s/.test(text) ||          // bulleted list
+    (/\band\b/i.test(lower) && text.length > 60) || // compound ask
+    text.length > 120;                        // long, substantive ask
+
+  return Boolean(multiStep);
+}
+
+module.exports = { stripTuiChars, isMutatingTool, isReadOnlyTool, isConversationalPrompt, isMultiStepTask };

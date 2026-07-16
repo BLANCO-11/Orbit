@@ -3,12 +3,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { Check } from 'lucide-react';
-
-const MODES = [
-  { id: 'plan', label: 'Plan', desc: 'All actions require approval', dot: 'bg-info' },
-  { id: 'edit', label: 'Edit', desc: 'Reads free, writes need approval', dot: 'bg-warning' },
-  { id: 'yolo', label: 'YOLO', desc: 'Full autonomous execution', dot: 'bg-destructive' },
-];
+import { SWITCHABLE_MODES as MODES } from '@/lib/modes';
 
 /**
  * ModeSelector — chip + popover for Plan / Edit / YOLO.
@@ -55,7 +50,7 @@ export default function ModeSelector({ sessionMode, onSetSessionMode }) {
                 <span className={`size-1.5 shrink-0 rounded-full ${m.dot}`} />
                 <span className="min-w-0 flex-1">
                   <span className="block text-[13px] font-semibold">{m.label}</span>
-                  <span className="block text-[11px] text-faint">{m.desc}</span>
+                  <span className="block text-[11px] text-faint">{m.tagline}</span>
                 </span>
                 {isActive && <Check size={14} className="shrink-0 text-primary" />}
               </button>

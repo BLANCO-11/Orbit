@@ -42,6 +42,7 @@ class PiCodeHarness extends HarnessInterface {
     // Effort-profile-resolved model wins; falls back to the config default.
     const normalModel = this.model || this.config.litellm.selectedNormalModel;
     const apiKey = this.config.litellm.apiKey;
+    const baseURL = this.config.litellm.baseURL;
     
     // Select and combine prompt files. The base prompt comes from the prompt
     // library (any prompts/<id>.md, e.g. frontier-style prompts); the mode
@@ -153,12 +154,21 @@ class PiCodeHarness extends HarnessInterface {
     const tempPromptPath = path.join(tempPromptDir, `system-prompt-${this.sessionId}.md`);
     fs.writeFileSync(tempPromptPath, combinedPrompt, "utf-8");
     
+    // Thread the CONFIGURED base URL into the child env (Workstream F2). Without
+    // this, a base URL set via the Settings UI never reached pi — childEnv only
+    // spread process.env — so "bring any OpenAI-compatible endpoint" worked from
+    // .env but not from the app. Set every alias pi's provider clients may read.
     const childEnv = {
       ...process.env,
       LITELLM_KEY: apiKey,
       OPENAI_API_KEY: apiKey,
       ORBIT_MODE: activeMode || "chat"
     };
+    if (baseURL) {
+      childEnv.LLM_BASE_URL = baseURL;
+      childEnv.LITELLM_BASE_URL = baseURL;
+      childEnv.OPENAI_BASE_URL = baseURL;
+    }
     
     const piArgs = [
       "--session-id", this.sessionId,
@@ -381,6 +391,19 @@ class PiCodeHarness extends HarnessInterface {
     this.piProcess.stdin.write(JSON.stringify({ type: "prompt", message: prompt }) + "\n");
   }
   
+  /**
+   * Abort the CURRENT turn without killing the pi process. Used for soft policy
+   * blocks (e.g. a write attempted in chat mode): we stop the offending turn but
+   * keep pi alive so its conversational context survives and the next prompt —
+   * often the same task re-run after a mode switch — reuses the same session
+   * instead of paying for a full re-spawn (Workstream A3). Only HARD blocklist
+   * hits (protected paths) should fall through to the fatal cancel() below.
+   */
+  async abortTurn() {
+    if (!this.piProcess) return;
+    try { this.piProcess.stdin.write(JSON.stringify({ type: "cancel" }) + "\n"); } catch {}
+  }
+
   async cancel() {
     if (!this.piProcess) return;
     const pid = this.piProcess.pid;

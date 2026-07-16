@@ -88,7 +88,7 @@ printf "▸ Configuring environment variables…\n"
 if [ ! -f .env ]; then
     cp .env.example .env
     printf "${GREEN}✓ Created .env file from .env.example.${NC}\n"
-    printf "Please edit .env to configure your LLM settings (LITELLM_BASE_URL, LITELLM_KEY, etc.).\n"
+    printf "Please edit .env to configure your LLM settings (LLM_BASE_URL, LLM_API_KEY, LLM_MODEL).\n"
 else
     printf "  - .env file already exists.\n"
 fi
@@ -106,12 +106,30 @@ npm --prefix dashboard install
 printf "${GREEN}✓ Dashboard dependencies installed.${NC}\n"
 echo ""
 
+# 7. Configure pi extensions (pi is a hard prerequisite for the local harness)
+if command -v pi > /dev/null 2>&1; then
+    printf "▸ Configuring pi agent extensions…\n"
+    pi install npm:pi-mcp-extension
+    pi install npm:pi-provider-litellm
+    printf "${GREEN}✓ pi agent extensions configured.${NC}\n"
+    echo ""
+else
+    printf "${YELLOW}⚠ pi CLI not found on PATH — the local agent harness will not run without it.${NC}\n"
+    printf "  Orbit spawns the ${YELLOW}pi${NC} CLI to run local agent sessions. Install it, then re-run\n"
+    printf "  this script (or the two commands below) so the required extensions are registered:\n"
+    printf "      ${YELLOW}pi install npm:pi-mcp-extension${NC}\n"
+    printf "      ${YELLOW}pi install npm:pi-provider-litellm${NC}\n"
+    printf "  See the pi install docs, or set ${YELLOW}PI_CLI_PATH${NC}/${YELLOW}PI_NODE_PATH${NC} if pi lives off PATH.\n"
+    printf "  (You can still run Orbit as a headless backend or drive a remote/paired harness.)\n"
+    echo ""
+fi
+
 printf "${GREEN}=========================================${NC}\n"
 printf "${GREEN}   Setup Completed Successfully!         ${NC}\n"
 printf "${GREEN}=========================================${NC}\n"
 echo ""
 printf "To get started:\n"
-printf "  1. Edit ${YELLOW}.env${NC} and fill in your LLM configuration (e.g. LITELLM_KEY).\n"
+printf "  1. Edit ${YELLOW}.env${NC} and fill in your LLM configuration (LLM_BASE_URL / LLM_API_KEY / LLM_MODEL).\n"
 printf "  2. Start the development servers by running:\n"
 printf "     ${YELLOW}npm run dev${NC}\n"
 printf "  3. Open ${YELLOW}http://localhost:6801${NC} in your browser.\n"

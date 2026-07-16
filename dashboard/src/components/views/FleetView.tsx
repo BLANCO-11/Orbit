@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useCallback, useEffect, useState } from 'react';
-import { Terminal, Globe, Laptop, Smartphone, Tablet, RefreshCw } from 'lucide-react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Terminal, Globe, Laptop, Smartphone, Tablet, RefreshCw, Copy, Check } from 'lucide-react';
 import { useDevices } from '@/hooks/useDevices';
 import { getDeviceToken } from '@/lib/device-auth';
 
@@ -9,6 +9,43 @@ function SectionHead({ children }: { children: React.ReactNode }) {
   return (
     <div className="mb-2 mt-5 text-[10.5px] font-bold uppercase tracking-[0.08em] text-faint first:mt-0">
       {children}
+    </div>
+  );
+}
+
+/** A monospace command/link box with a copy button. Falls back to select-all
+ *  when the clipboard API is unavailable (e.g. non-secure origin). */
+function CopyBox({ value, label }: { value: string; label?: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = useCallback(async () => {
+    try {
+      if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(value);
+      else throw new Error('no clipboard');
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // Fallback: select the text so the user can Ctrl+C.
+      const el = document.getElementById(`copybox-${label}`) as HTMLInputElement | null;
+      el?.focus();
+      el?.select();
+    }
+  }, [value, label]);
+  return (
+    <div className="flex items-stretch gap-1.5">
+      <input
+        id={`copybox-${label}`}
+        readOnly
+        value={value}
+        onFocus={(e) => e.currentTarget.select()}
+        className="min-w-0 flex-1 select-all rounded-lg border border-border bg-muted/60 px-2 py-1.5 font-mono text-[11.5px] text-accent-foreground"
+      />
+      <button
+        onClick={copy}
+        aria-label="Copy"
+        className="shrink-0 rounded-lg border border-border px-2 text-muted-foreground hover:bg-muted hover:text-accent-foreground"
+      >
+        {copied ? <Check size={13} className="text-success" /> : <Copy size={13} />}
+      </button>
     </div>
   );
 }
@@ -45,6 +82,21 @@ export default function FleetView() {
     return () => clearInterval(t);
   }, [refreshHarnesses]);
 
+  // Live pairing status: snapshot which harnesses exist the moment a code is
+  // minted, then a harness that shows up afterward (while the code is live) is
+  // the one that just paired → flip "waiting" to "connected" with no refresh.
+  // Drives off the existing /api/harnesses poll, so no extra WS plumbing.
+  const pairBaseline = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    if (pairing) pairBaseline.current = new Set(harnesses.map((h) => h.id));
+    else pairBaseline.current = null;
+    // Intentionally only re-snapshot when the code itself changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pairing?.code]);
+  const connectedHarness = pairing && pairBaseline.current
+    ? harnesses.find((h) => !pairBaseline.current!.has(h.id))
+    : null;
+
   // Countdown tick while a pairing code is showing
   useEffect(() => {
     if (!pairing) return;
@@ -65,36 +117,74 @@ export default function FleetView() {
 
         <div className="grid gap-4 lg:grid-cols-[minmax(300px,380px)_1fr]">
           {/* ── Pairing card ── */}
-          <div className="flex flex-col items-center rounded-2xl border border-border bg-card p-6 text-center shadow-card">
-            <h3 className="text-sm font-semibold">Pair a device</h3>
-            <p className="mb-4 mt-0.5 text-xs text-muted-foreground">
-              Open <span className="font-mono">/pair</span> on the other device and enter this code.
+          <div className="flex flex-col rounded-2xl border border-border bg-card p-6 shadow-card">
+            <h3 className="text-center text-sm font-semibold">Pair a harness</h3>
+            <p className="mb-4 mt-0.5 text-center text-xs text-muted-foreground">
+              Mint a code, then hand the harness machine <span className="font-medium">one command</span>. It
+              connects, persists its token, and reconnects on its own after that.
             </p>
 
             {pairing && secondsLeft > 0 ? (
               <>
-                <div className="rounded-xl border border-border bg-background px-6 py-3.5 font-mono text-[28px] font-bold tracking-[0.18em] text-accent-foreground">
-                  {pairing.code}
-                </div>
-                <div className="mt-2 text-[11px] text-faint">
-                  grants <span className="font-semibold text-muted-foreground">{SCOPES.find((s) => s.id === (pairing.scope || 'full'))?.label}</span>
-                </div>
-                <div className="mt-2 flex items-center gap-2 text-xs text-faint">
-                  expires in{' '}
-                  <span className="font-mono tabular-nums text-warning">
-                    {Math.floor(secondsLeft / 60)}:{String(secondsLeft % 60).padStart(2, '0')}
-                  </span>
-                  <button onClick={() => startPairing('New device', scope)} className="text-accent-foreground hover:underline">
-                    regenerate
-                  </button>
-                  <button onClick={clearPairing} className="text-faint hover:text-muted-foreground">
-                    done
-                  </button>
-                </div>
-                {pairing.pairingUrl && (
-                  <div className="mt-3 rounded-lg border border-dashed border-border bg-muted px-3 py-1.5 font-mono text-[11.5px] text-muted-foreground">
-                    {pairing.pairingUrl}
+                <div className="flex flex-col items-center">
+                  <div className="rounded-xl border border-border bg-background px-6 py-3.5 font-mono text-[28px] font-bold tracking-[0.18em] text-accent-foreground">
+                    {pairing.code}
                   </div>
+                  <div className="mt-2 text-[11px] text-faint">
+                    grants <span className="font-semibold text-muted-foreground">{SCOPES.find((s) => s.id === (pairing.scope || 'full'))?.label}</span>
+                  </div>
+                  <div className="mt-2 flex items-center gap-2 text-xs text-faint">
+                    expires in{' '}
+                    <span className="font-mono tabular-nums text-warning">
+                      {Math.floor(secondsLeft / 60)}:{String(secondsLeft % 60).padStart(2, '0')}
+                    </span>
+                    <button onClick={() => startPairing('New device', scope)} className="text-accent-foreground hover:underline">
+                      regenerate
+                    </button>
+                    <button onClick={clearPairing} className="text-faint hover:text-muted-foreground">
+                      done
+                    </button>
+                  </div>
+                </div>
+
+                {/* Live status — flips without a refresh once the harness registers. */}
+                <div className="mt-4 rounded-lg border border-border bg-background px-3 py-2 text-center text-xs">
+                  {connectedHarness ? (
+                    <span className="inline-flex items-center gap-1.5 font-medium text-success">
+                      <Check size={13} /> Connected — {connectedHarness.name}
+                      <span className="text-faint">({SCOPES.find((s) => s.id === (pairing.scope || 'full'))?.label})</span>
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                      <span className="size-[7px] animate-pulse rounded-full bg-warning" /> Waiting for harness…
+                    </span>
+                  )}
+                </div>
+
+                {/* Primary action: the exact command to paste on the harness machine. */}
+                {pairing.bootstrapCommand && (
+                  <div className="mt-4">
+                    <div className="mb-1 text-[10px] font-bold uppercase tracking-[0.08em] text-faint">
+                      Orbit adapter — paste this command
+                    </div>
+                    <CopyBox value={pairing.bootstrapCommand} label="bootstrap" />
+                  </div>
+                )}
+
+                {/* Secondary: the raw descriptor link for custom/third-party harnesses. */}
+                {pairing.connectUrl && (
+                  <div className="mt-3">
+                    <div className="mb-1 text-[10px] font-bold uppercase tracking-[0.08em] text-faint">
+                      Custom harness — fetch this connect link
+                    </div>
+                    <CopyBox value={pairing.connectUrl} label="connect" />
+                  </div>
+                )}
+
+                {pairing.pairingUrl && (
+                  <p className="mt-3 text-center text-[11px] text-faint">
+                    Pairing from another browser? Open <span className="font-mono">/pair</span> there and enter the code.
+                  </p>
                 )}
               </>
             ) : (
@@ -118,7 +208,7 @@ export default function FleetView() {
                 </div>
                 <button
                   onClick={() => startPairing('New device', scope)}
-                  className="rounded-[9px] bg-primary px-4 py-2 text-[13px] font-semibold text-primary-foreground hover:opacity-90"
+                  className="self-center rounded-[9px] bg-primary px-4 py-2 text-[13px] font-semibold text-primary-foreground hover:opacity-90"
                 >
                   Generate pairing code
                 </button>
@@ -155,40 +245,14 @@ export default function FleetView() {
                 </div>
               ))}
               <div className="rounded-xl border border-dashed border-border px-4 py-4 text-center text-xs text-faint">
-                <div className="font-semibold text-muted-foreground mb-2 text-center">
-                  Connect a remote harness:
-                </div>
                 {pairing && secondsLeft > 0 ? (
-                  (() => {
-                    const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
-                    const wsServerUrl = typeof window !== 'undefined' 
-                      ? `${isHttps ? 'wss' : 'ws'}://${window.location.hostname}${isHttps ? '' : ':6800'}`
-                      : 'ws://localhost:6800';
-                    const bootstrapOrigin = typeof window !== 'undefined'
-                      ? `${window.location.protocol}//${window.location.host}`
-                      : 'http://localhost:6801';
-                    
-                    return (
-                      <div className="flex flex-col gap-2.5 text-left max-w-full overflow-x-auto">
-                        <div>
-                          <span className="font-medium text-muted-foreground block mb-0.5">1. Standard Adapter:</span>
-                          <code className="font-mono bg-muted/60 border border-border px-2 py-1 rounded text-accent-foreground block select-all break-all whitespace-pre-wrap">
-                            node orbit-adapter.js --server {wsServerUrl} --code {pairing.code}
-                          </code>
-                        </div>
-                        <div>
-                          <span className="font-medium text-muted-foreground block mb-0.5">2. One-Click Bootstrap (Pipes directly to Node):</span>
-                          <code className="font-mono bg-muted/60 border border-border px-2 py-1 rounded text-accent-foreground block select-all break-all whitespace-pre-wrap">
-                            curl -sSf "{bootstrapOrigin}/api/pair/bootstrap?code={pairing.code}" | node
-                          </code>
-                        </div>
-                      </div>
-                    );
-                  })()
+                  <span className="text-muted-foreground">
+                    Copy the command from the <span className="font-semibold">Pair a harness</span> card and run it on the harness machine.
+                  </span>
                 ) : (
-                  <div className="py-2 text-center text-muted-foreground">
-                    Click <span className="font-semibold">Generate pairing code</span> on the left to show setup commands.
-                  </div>
+                  <span className="text-muted-foreground">
+                    Click <span className="font-semibold">Generate pairing code</span> to get the one-line connect command.
+                  </span>
                 )}
               </div>
             </div>

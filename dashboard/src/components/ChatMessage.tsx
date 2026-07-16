@@ -7,6 +7,8 @@ import {
   Check, Copy, ChevronDown, ChevronRight, Loader2, CheckCircle2,
   Shield, Edit3, Zap, Play, FileText, Search, Terminal, Globe, Wrench,
 } from 'lucide-react';
+import Banner from './chat/Banner';
+import { getMode } from '@/lib/modes';
 
 const TOOL_ICONS = {
   read: FileText,
@@ -45,8 +47,6 @@ function ChatMessageBase({
     return (
       <ModeSuggestionCard
         message={message}
-        sessionMode={sessionMode}
-        onSetMode={onSetSessionMode}
         onReRun={onSetSessionModeAndReRun}
       />
     );
@@ -251,46 +251,29 @@ function ToolRow({ tool, isExpanded, onToggle, getToolSummary, getToolOutput }) 
 
 // ── Mode suggestion card ────────────────────────────────────────
 
-function ModeSuggestionCard({ message, sessionMode, onSetMode, onReRun }) {
-  const modes = {
-    plan: { label: 'Plan', icon: Shield, cls: 'text-info' },
-    edit: { label: 'Edit', icon: Edit3, cls: 'text-warning' },
-    yolo: { label: 'YOLO', icon: Zap, cls: 'text-destructive' },
-  };
+// Compact, single-line mode prompt (Workstream D3). After Workstream A this
+// fires far less often, so it's a one-liner — the reason plus one primary
+// action — not a heading + three mode buttons. Mode metadata comes from the
+// single source in @/lib/modes (Workstream D1).
+function ModeSuggestionCard({ message, onReRun }) {
+  const suggested = getMode(message.suggestedMode) || getMode('plan');
+  const Icon = suggested.icon;
 
   return (
-    <div className="rounded-[11px] border border-warning/40 bg-warning/8 p-4 shadow-card">
-      <div className="mb-1.5 flex items-center gap-1.5 text-[13px] font-semibold text-warning">
-        <Shield size={14} /> Mode change suggested
-      </div>
-      <div className="mb-3 text-[13.5px] text-muted-foreground">
-        {message.reason || 'The agent needs a different mode to perform this action.'}
-      </div>
-      <div className="flex flex-wrap gap-1.5">
-        {Object.entries(modes).map(([key, m]) => (
-          <button
-            key={key}
-            onClick={() => onSetMode(key)}
-            className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[12.5px] font-semibold transition-colors ${
-              key === message.suggestedMode
-                ? 'border-warning/50 bg-warning/12'
-                : 'border-border bg-card hover:bg-muted'
-            }`}
-          >
-            <m.icon size={13} className={m.cls} />
-            {m.label}
-          </button>
-        ))}
-        {onReRun && (
-          <button
-            onClick={() => onReRun(message.suggestedMode || 'plan')}
-            className="flex items-center gap-1.5 rounded-lg bg-primary px-3.5 py-1.5 text-[12.5px] font-semibold text-primary-foreground hover:opacity-90"
-          >
-            <Play size={12} fill="currentColor" /> Switch &amp; re-run
-          </button>
-        )}
-      </div>
-    </div>
+    <Banner tone="warning" className="flex items-center gap-3">
+      <Icon size={15} className={`shrink-0 ${suggested.color}`} />
+      <span className="min-w-0 flex-1 text-[13px] text-muted-foreground">
+        {message.reason || `This action needs ${suggested.label} mode.`}
+      </span>
+      {onReRun && (
+        <button
+          onClick={() => onReRun(message.suggestedMode || 'plan')}
+          className="flex shrink-0 items-center gap-1.5 rounded-lg bg-primary px-3.5 py-1.5 text-[12.5px] font-semibold text-primary-foreground hover:opacity-90"
+        >
+          <Play size={12} fill="currentColor" /> Switch to {suggested.label} &amp; re-run
+        </button>
+      )}
+    </Banner>
   );
 }
 

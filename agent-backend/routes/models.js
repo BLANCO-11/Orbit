@@ -4,6 +4,7 @@
 const { Router } = require("express");
 const { OpenAI } = require("openai");
 const { Readable } = require("stream");
+const { probeLlm } = require("../services/llm-probe");
 
 // Local pocket-tts provider — single source of truth (was duplicated across
 // the TTS and voices routes).
@@ -46,7 +47,25 @@ function createModelsRouter(getConfig) {
       res.json([]);
     }
   });
-  
+
+  // Explicit connection test (Workstream F3). Runs a live probe against the
+  // configured OpenAI-compatible endpoint and returns a structured verdict the
+  // Settings UI can act on: { ok, models?, error? }. Also refreshes the cached
+  // result that capabilities.llm.connected reads.
+  router.post("/test", async (req, res) => {
+    try {
+      const result = await probeLlm(getConfig);
+      res.json({
+        ok: result.ok === true,
+        configured: result.configured,
+        models: result.models || [],
+        error: result.ok === true ? null : (result.error || "connection_failed"),
+      });
+    } catch (error) {
+      res.json({ ok: false, configured: true, models: [], error: error.message || "connection_failed" });
+    }
+  });
+
   return router;
 }
 

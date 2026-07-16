@@ -56,8 +56,24 @@ function buildCapabilities(deps = {}) {
   try {
     const l = config.litellm || {};
     const configured = !!(l.apiKey && l.baseURL);
-    capabilities.llm = cap(configured, configured ? null : false,
-      configured ? `model ${l.selectedNormalModel || "?"} via ${l.baseURL}` : "no LLM endpoint configured");
+    // `connected` reflects the last live probe (Workstream F3): true (reachable),
+    // false (configured but the endpoint/key/model failed), or null (untested).
+    let connected = null;
+    let detail = configured ? `model ${l.selectedNormalModel || "?"} via ${l.baseURL}` : "no LLM endpoint configured";
+    if (configured) {
+      try {
+        const probe = require("./services/llm-probe").getLastLlmProbe();
+        if (probe && probe.configured && probe.ok === true) {
+          connected = true;
+        } else if (probe && probe.configured && probe.ok === false) {
+          connected = false;
+          detail = `connection failed: ${probe.error || "unknown error"} (${l.baseURL})`;
+        }
+      } catch {}
+    } else {
+      connected = false;
+    }
+    capabilities.llm = cap(configured, connected, detail);
   } catch { capabilities.llm = cap(false, false, "unknown"); }
 
   // ── Text-to-speech ───────────────────────────────────────────────
@@ -125,6 +141,16 @@ function buildCapabilities(deps = {}) {
   // ── Notifications (always available: web bell + desktop + orbit-notify) ──
   capabilities.notify = cap(true, true, "orbit-notify tool → web/desktop/channel sinks");
 
+  // ── Enterprise SSO (OIDC) ────────────────────────────────────────
+  try {
+    const oidcConfigured = !!(process.env.OIDC_ISSUER_URL && process.env.OIDC_CLIENT_ID && process.env.OIDC_CLIENT_SECRET);
+    const enabled = !!(config.auth && config.auth.sso && config.auth.sso.enabled);
+    capabilities.sso = cap(oidcConfigured, oidcConfigured ? enabled : false,
+      oidcConfigured
+        ? (enabled ? `OIDC enabled · ${process.env.OIDC_ISSUER_URL}` : "OIDC configured but disabled (toggle in Admin)")
+        : "no OIDC env (set OIDC_ISSUER_URL / OIDC_CLIENT_ID / OIDC_CLIENT_SECRET)");
+  } catch { capabilities.sso = cap(false, false, "unknown"); }
+
   // ── Fleet devices ────────────────────────────────────────────────
   try {
     const devices = (db && db.listDevices && db.listDevices()) || [];
@@ -164,6 +190,7 @@ function renderPromptBlock(manifest) {
     ["tts", "Voice (TTS)"], ["notify", "Notifications"], ["telegram", "Telegram"],
     ["discord", "Discord"], ["slack", "Slack"], ["connectors", "MCP connectors"],
     ["connections", "Service connections"], ["fleet", "Fleet devices"],
+    ["sso", "Enterprise SSO"],
   ];
   for (const [key, name] of order) {
     const c = caps[key];

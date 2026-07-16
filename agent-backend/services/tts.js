@@ -3,12 +3,13 @@
 
 async function generateIntelligentSpeech(query, responseText, getConfig) {
   try {
-    const apiKey = process.env.LITELLM_KEY;
+    const config = getConfig();
+    // Resolved config key first (folds in LLM_*/LITELLM_*/OPENAI_* env — F1).
+    const apiKey = (config && config.litellm && config.litellm.apiKey) || process.env.LLM_API_KEY || process.env.LITELLM_KEY;
     if (!apiKey) {
-      console.error("[Intelligent TTS] LITELLM_KEY not set; skipping summary generation.");
+      console.error("[Intelligent TTS] No LLM API key configured; skipping summary generation.");
       return null;
     }
-    const config = getConfig();
     const baseURL = (config && config.litellm && config.litellm.baseURL) || "http://127.0.0.1:5000/v1";
     const model = (config && config.litellm && config.litellm.selectedNormalModel) || "litellm/deepseek-v4-flash";
 

@@ -152,5 +152,8 @@
   "150": "MCP (Model Context Protocol)",
   "151": "mcp-server-lightpanda",
   "152": "Dynamic Security Guard (HITL)",
-  "153": "Voice I/O (STT + TTS)"
+  "153": "Voice I/O (STT + TTS)",
+  "154": "index.js",
+  "155": "LogViewer.tsx",
+  "156": "NotificationCenter.tsx"
 }

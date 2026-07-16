@@ -19,7 +19,7 @@ if (!fs.existsSync(dbPath) && fs.existsSync(legacyDbPath)) {
 const db = new DatabaseSync(dbPath);
 
 // ── Schema Versioning ───────────────────────────────────────────────
-const CURRENT_SCHEMA_VERSION = 12;
+const CURRENT_SCHEMA_VERSION = 13;
 const BACKUP_INTERVAL = 10; // auto-backup every N saves
 let saveCount = 0;
 
@@ -65,6 +65,10 @@ try {
   }
   if (!columnSet.has("active_plan_id")) {
     try { db.exec("ALTER TABLE sessions ADD COLUMN active_plan_id TEXT NOT NULL DEFAULT ''"); } catch (e) {}
+  }
+  if (!columnSet.has("tenant_id")) {
+    // Nullable per-tenant TAG (see schema v13); not enforced isolation.
+    try { db.exec("ALTER TABLE sessions ADD COLUMN tenant_id TEXT"); } catch (e) {}
   }
 } catch (e) {
   console.error("[DB] Self-healing check failed:", e.message);
@@ -257,6 +261,69 @@ if (currentSchemaVersion < 12) {
   console.log(`[DB] Migrated sessions schema to version ${CURRENT_SCHEMA_VERSION}`);
 }
 
+if (currentSchemaVersion < 13) {
+  // Multi-tenancy + RBAC + SSO (Admin console). `tenant_id` is added to
+  // sessions/devices as a nullable TAG for per-tenant observability — NOT
+  // enforced row-level isolation (a deliberate follow-up). The access-control
+  // tables themselves are created unconditionally just below.
+  try { db.exec("ALTER TABLE sessions ADD COLUMN tenant_id TEXT"); } catch (e) {}
+  try { db.exec("ALTER TABLE devices ADD COLUMN tenant_id TEXT"); } catch (e) {}
+  db.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)").run(
+    "schema_version",
+    String(CURRENT_SCHEMA_VERSION)
+  );
+  console.log(`[DB] Migrated sessions schema to version ${CURRENT_SCHEMA_VERSION}`);
+}
+
+// ── Access-control tables (Admin console: tenants / API keys / SSO) ───
+// Created unconditionally (idempotent) so they exist regardless of the DB's
+// migration state. Secrets follow the `devices` model: the raw key/token is
+// returned exactly once and stored ONLY as a sha256 hash (see hashToken).
+db.exec(`
+  CREATE TABLE IF NOT EXISTS tenants (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'active',
+    sso_enabled INTEGER NOT NULL DEFAULT 0,
+    sso_config TEXT NOT NULL DEFAULT '{}',
+    created_at INTEGER NOT NULL
+  )
+`);
+db.exec(`
+  CREATE TABLE IF NOT EXISTS api_keys (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT,
+    label TEXT NOT NULL,
+    key_hash TEXT NOT NULL,
+    key_prefix TEXT NOT NULL,
+    role TEXT NOT NULL DEFAULT 'member',
+    scope TEXT NOT NULL DEFAULT 'full',
+    created_at INTEGER NOT NULL,
+    last_used INTEGER,
+    revoked_at INTEGER,
+    created_by TEXT
+  )
+`);
+db.exec(`
+  CREATE TABLE IF NOT EXISTS users (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT,
+    email TEXT NOT NULL,
+    sub TEXT,
+    role TEXT NOT NULL DEFAULT 'member',
+    created_at INTEGER NOT NULL,
+    last_login INTEGER
+  )
+`);
+db.exec(`
+  CREATE TABLE IF NOT EXISTS sso_sessions (
+    token_hash TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    expires_at INTEGER NOT NULL
+  )
+`);
+
 
 
 // ── Backup ───────────────────────────────────────────────────────────
@@ -337,6 +404,7 @@ function mapRow(row) {
     plans: JSON.parse(row.plans || "[]"),
     activePlanId: row.active_plan_id || "",
     runState: JSON.parse(row.run_state || "{}"),
+    tenantId: row.tenant_id || null,
     timestamp: row.timestamp,
     schemaVersion: row.schema_version || 0,
   };
@@ -373,8 +441,8 @@ function enforceTTL() {
 
 function saveSession(session) {
   const stmt = db.prepare(`
-    INSERT INTO sessions (id, title, messages, logs, execution_plan, metrics, mode, subagent_tree, plan_steps, plans, active_plan_id, timestamp)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO sessions (id, title, messages, logs, execution_plan, metrics, mode, subagent_tree, plan_steps, plans, active_plan_id, tenant_id, timestamp)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       title = excluded.title,
       messages = excluded.messages,
@@ -386,6 +454,7 @@ function saveSession(session) {
       plan_steps = excluded.plan_steps,
       plans = excluded.plans,
       active_plan_id = excluded.active_plan_id,
+      tenant_id = excluded.tenant_id,
       timestamp = excluded.timestamp
   `);
   stmt.run(
@@ -400,6 +469,7 @@ function saveSession(session) {
     JSON.stringify(session.planSteps || []),
     JSON.stringify(session.plans || []),
     session.activePlanId || "",
+    session.tenantId || null,
     session.timestamp || Date.now()
   );
 
@@ -512,13 +582,20 @@ function createPairingCode(label, scope) {
  * here), or null if the code is invalid/expired/already used.
  */
 function redeemPairingCode(code, deviceLabel) {
-  const row = db.prepare("SELECT * FROM pairing_codes WHERE code = ?").get(code);
-  if (!row) return null;
-  if (row.redeemed_at) return null;
-  if (Date.now() > row.expires_at) return null;
+  const now = Date.now();
+  // Atomic single-use claim: the guarded UPDATE marks the code redeemed only
+  // if it is still unredeemed and unexpired. Two harnesses racing the same
+  // code means exactly one UPDATE reports changes === 1; the loser gets null
+  // (→ code_expired), so a code can never be redeemed twice.
+  const info = db
+    .prepare(
+      "UPDATE pairing_codes SET redeemed_at = ? WHERE code = ? AND redeemed_at IS NULL AND expires_at > ?"
+    )
+    .run(now, code, now);
+  if (info.changes === 0) return null; // invalid, expired, or already used
 
-  db.prepare("UPDATE pairing_codes SET redeemed_at = ? WHERE code = ?").run(Date.now(), code);
-  return createDevice(deviceLabel || row.label, row.scope);
+  const row = db.prepare("SELECT * FROM pairing_codes WHERE code = ?").get(code);
+  return createDevice(deviceLabel || (row && row.label), row && row.scope);
 }
 
 function createDevice(label, scope) {
@@ -571,6 +648,7 @@ function mapDeviceRow(row) {
     lastSeen: row.last_seen,
     revoked: Boolean(row.revoked_at),
     scope: row.scope || "full",
+    tenantId: row.tenant_id || null,
     policyOverrides: JSON.parse(row.policy_overrides || "{}"),
   };
 }
@@ -711,6 +789,178 @@ function deleteConnection(provider) {
   db.prepare("DELETE FROM connections WHERE provider = ?").run(provider);
 }
 
+// ── Access control: tenants / API keys / SSO users + sessions ────────
+// RBAC that degrades gracefully: none of this is required for a single-user
+// deploy (the env superadmin key or dev-mode covers that). It only comes alive
+// once an operator creates tenants/keys or enables SSO. See middleware/auth.js.
+const VALID_ROLES = new Set(["superadmin", "admin", "member", "viewer"]);
+const normalizeRole = (r) => (VALID_ROLES.has(r) ? r : "member");
+const API_KEY_PREFIX = "orb_live_";
+
+// ── Tenants ──
+function createTenant(name) {
+  const id = crypto.randomUUID();
+  db.prepare(
+    "INSERT INTO tenants (id, name, status, sso_enabled, sso_config, created_at) VALUES (?, ?, 'active', 0, '{}', ?)"
+  ).run(id, String(name || "Tenant").slice(0, 120), Date.now());
+  return getTenant(id);
+}
+function listTenants() {
+  return db.prepare("SELECT * FROM tenants ORDER BY created_at DESC").all().map(mapTenantRow);
+}
+function getTenant(id) {
+  const row = db.prepare("SELECT * FROM tenants WHERE id = ?").get(id);
+  return row ? mapTenantRow(row) : null;
+}
+function updateTenant(id, fields = {}) {
+  const t = db.prepare("SELECT * FROM tenants WHERE id = ?").get(id);
+  if (!t) return null;
+  const name = fields.name !== undefined ? String(fields.name).slice(0, 120) : t.name;
+  const status = fields.status !== undefined ? String(fields.status) : t.status;
+  const ssoEnabled = fields.ssoEnabled !== undefined ? (fields.ssoEnabled ? 1 : 0) : t.sso_enabled;
+  const ssoConfig = fields.ssoConfig !== undefined ? JSON.stringify(fields.ssoConfig || {}) : t.sso_config;
+  db.prepare("UPDATE tenants SET name = ?, status = ?, sso_enabled = ?, sso_config = ? WHERE id = ?")
+    .run(name, status, ssoEnabled, ssoConfig, id);
+  return getTenant(id);
+}
+function deleteTenant(id) {
+  db.prepare("DELETE FROM tenants WHERE id = ?").run(id);
+  // Stop the tenant's credentials from authenticating once it's gone.
+  db.prepare("UPDATE api_keys SET revoked_at = ? WHERE tenant_id = ? AND revoked_at IS NULL").run(Date.now(), id);
+  db.prepare("DELETE FROM users WHERE tenant_id = ?").run(id);
+}
+function mapTenantRow(row) {
+  return {
+    id: row.id,
+    name: row.name,
+    status: row.status || "active",
+    ssoEnabled: !!row.sso_enabled,
+    ssoConfig: JSON.parse(row.sso_config || "{}"),
+    createdAt: row.created_at,
+  };
+}
+
+// ── API keys ── (raw key returned once; only the hash is stored)
+function createApiKey({ tenantId = null, label, role, scope, createdBy = null } = {}) {
+  const id = crypto.randomUUID();
+  const key = API_KEY_PREFIX + crypto.randomBytes(24).toString("hex");
+  const prefix = key.slice(0, API_KEY_PREFIX.length + 6) + "…";
+  const safeLabel = String(label || "API key").slice(0, 100);
+  const r = normalizeRole(role);
+  const s = normalizeScope(scope);
+  db.prepare(`
+    INSERT INTO api_keys (id, tenant_id, label, key_hash, key_prefix, role, scope, created_at, last_used, revoked_at, created_by)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?)
+  `).run(id, tenantId, safeLabel, hashToken(key), prefix, r, s, Date.now(), createdBy);
+  // `key` (raw) is only ever present in this return value.
+  return { id, tenantId, label: safeLabel, role: r, scope: s, keyPrefix: prefix, key };
+}
+function getApiKeyByToken(token) {
+  if (!token) return null;
+  const row = db.prepare("SELECT * FROM api_keys WHERE key_hash = ?").get(hashToken(token));
+  if (!row || row.revoked_at) return null;
+  return mapApiKeyRow(row);
+}
+function getApiKey(id) {
+  const row = db.prepare("SELECT * FROM api_keys WHERE id = ?").get(id);
+  return row ? mapApiKeyRow(row) : null;
+}
+function touchApiKeyUsed(id) {
+  try { db.prepare("UPDATE api_keys SET last_used = ? WHERE id = ?").run(Date.now(), id); } catch {}
+}
+function listApiKeys(tenantId) {
+  const rows = tenantId
+    ? db.prepare("SELECT * FROM api_keys WHERE tenant_id = ? ORDER BY created_at DESC").all(tenantId)
+    : db.prepare("SELECT * FROM api_keys ORDER BY created_at DESC").all();
+  return rows.map(mapApiKeyRow);
+}
+function revokeApiKey(id) {
+  db.prepare("UPDATE api_keys SET revoked_at = ? WHERE id = ?").run(Date.now(), id);
+}
+function mapApiKeyRow(row) {
+  return {
+    id: row.id,
+    tenantId: row.tenant_id || null,
+    label: row.label,
+    keyPrefix: row.key_prefix,
+    role: row.role || "member",
+    scope: row.scope || "full",
+    createdAt: row.created_at,
+    lastUsed: row.last_used,
+    revoked: !!row.revoked_at,
+    createdBy: row.created_by || null,
+  };
+}
+
+// ── SSO users ── (provisioned on first OIDC login)
+function upsertUser({ email, sub, tenantId = null, role } = {}) {
+  const normEmail = String(email || "").toLowerCase();
+  const existing = db.prepare("SELECT * FROM users WHERE email = ?").get(normEmail);
+  if (existing) {
+    const nextRole = role !== undefined ? normalizeRole(role) : existing.role;
+    db.prepare("UPDATE users SET sub = ?, tenant_id = ?, role = ?, last_login = ? WHERE id = ?")
+      .run(sub || existing.sub, tenantId ?? existing.tenant_id, nextRole, Date.now(), existing.id);
+    return getUser(existing.id);
+  }
+  const id = crypto.randomUUID();
+  db.prepare("INSERT INTO users (id, tenant_id, email, sub, role, created_at, last_login) VALUES (?, ?, ?, ?, ?, ?, ?)")
+    .run(id, tenantId, normEmail, sub || null, normalizeRole(role), Date.now(), Date.now());
+  return getUser(id);
+}
+function getUser(id) {
+  const row = db.prepare("SELECT * FROM users WHERE id = ?").get(id);
+  return row ? mapUserRow(row) : null;
+}
+function listUsers(tenantId) {
+  const rows = tenantId
+    ? db.prepare("SELECT * FROM users WHERE tenant_id = ? ORDER BY created_at DESC").all(tenantId)
+    : db.prepare("SELECT * FROM users ORDER BY created_at DESC").all();
+  return rows.map(mapUserRow);
+}
+function setUserRole(id, role) {
+  db.prepare("UPDATE users SET role = ? WHERE id = ?").run(normalizeRole(role), id);
+}
+function countUsers() {
+  return db.prepare("SELECT COUNT(*) AS n FROM users").get().n;
+}
+function mapUserRow(row) {
+  return {
+    id: row.id,
+    tenantId: row.tenant_id || null,
+    email: row.email,
+    sub: row.sub || null,
+    role: row.role || "member",
+    createdAt: row.created_at,
+    lastLogin: row.last_login,
+  };
+}
+
+// ── SSO browser sessions ── (issued after OIDC callback; presented as x-api-key)
+const SSO_SESSION_TTL_MS = 12 * 60 * 60 * 1000; // 12h
+function createSsoSession(userId, ttlMs = SSO_SESSION_TTL_MS) {
+  const token = crypto.randomBytes(32).toString("hex");
+  const now = Date.now();
+  db.prepare("INSERT INTO sso_sessions (token_hash, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)")
+    .run(hashToken(token), userId, now, now + ttlMs);
+  return { token, expiresAt: now + ttlMs };
+}
+function getSsoSessionByToken(token) {
+  if (!token) return null;
+  const row = db.prepare("SELECT * FROM sso_sessions WHERE token_hash = ?").get(hashToken(token));
+  if (!row) return null;
+  if (row.expires_at < Date.now()) {
+    try { db.prepare("DELETE FROM sso_sessions WHERE token_hash = ?").run(row.token_hash); } catch {}
+    return null;
+  }
+  const user = getUser(row.user_id);
+  if (!user) return null;
+  return { user, expiresAt: row.expires_at };
+}
+function revokeSsoSession(token) {
+  if (!token) return;
+  try { db.prepare("DELETE FROM sso_sessions WHERE token_hash = ?").run(hashToken(token)); } catch {}
+}
+
 module.exports = {
   saveSession,
   getSession,
@@ -745,4 +995,24 @@ module.exports = {
   getConnection,
   saveConnection,
   deleteConnection,
+  // Access control (tenants / API keys / SSO)
+  createTenant,
+  listTenants,
+  getTenant,
+  updateTenant,
+  deleteTenant,
+  createApiKey,
+  getApiKey,
+  getApiKeyByToken,
+  touchApiKeyUsed,
+  listApiKeys,
+  revokeApiKey,
+  upsertUser,
+  getUser,
+  listUsers,
+  setUserRole,
+  countUsers,
+  createSsoSession,
+  getSsoSessionByToken,
+  revokeSsoSession,
 };

@@ -17,7 +17,8 @@ export default function SidebarSwitcher({
   onSwitch,
   onDelete,
   onNewSession,
-  getSessionPreview,
+  childToParent,
+  parentToChildren,
   sessionsLength,
   onFileSelect,
 }: any) {
@@ -56,7 +57,6 @@ export default function SidebarSwitcher({
         {activeTab === 'sessions' ? (
           <div className="h-full w-full animate-fade-in">
             <SessionList
-              sessions={sessions}
               currentSessionId={currentSessionId}
               searchQuery={searchQuery}
               onSearchChange={onSearchChange}
@@ -67,7 +67,8 @@ export default function SidebarSwitcher({
               onSwitch={onSwitch}
               onDelete={onDelete}
               onNewSession={onNewSession}
-              getSessionPreview={getSessionPreview}
+              childToParent={childToParent}
+              parentToChildren={parentToChildren}
               sessionsLength={sessionsLength}
             />
           </div>

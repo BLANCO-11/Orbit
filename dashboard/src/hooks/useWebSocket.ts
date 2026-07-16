@@ -100,9 +100,10 @@ export function useWebSocket(
             dispatch(actions.toolEnd(data));
             break;
             
-          case 'plan':
-            dispatch(actions.setExecutionPlan(data.content));
-            break;
+          // NOTE: the legacy 'plan' message (a third, confusingly-named plan
+          // surface) was retired in Workstream B2. Reasoning now flows only to
+          // the reasoning accordion; the Mission board ('plan_state') is the
+          // single canonical plan surface.
 
           case 'plan_state':
             dispatch(actions.setPlanState({
@@ -117,7 +118,8 @@ export function useWebSocket(
             break;
             
           case 'reasoning_update':
-            dispatch(actions.setExecutionPlan(data.content));
+            // Reasoning feeds the per-turn reasoning accordion only — never an
+            // "execution plan" surface (Workstream B2).
             dispatch(actions.updateReasoningEntry({
               content: data.content,
               timestamp: new Date().toLocaleTimeString(),

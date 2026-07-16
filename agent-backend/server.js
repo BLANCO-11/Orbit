@@ -10,7 +10,7 @@ const cors = require("cors");
 const path = require("path");
 const EventEmitter = require("events");
 
-const { validateEnv, discoverPiBinaries } = require("./env");
+const { validateEnv, discoverPiBinaries, probePiBinary, resolveLlmEnv } = require("./env");
 const { loadConfig, saveConfig } = require("./config");
 const db = require("./db");
 const { metricsManager } = require("./metrics");
@@ -26,7 +26,7 @@ const {
   isPathInZones, isPathBlocked,
 } = require("./ws/session-helpers");
 const workspacePaths = require("./workspace-paths");
-const { isMutatingTool, isReadOnlyTool, isConversationalPrompt } = require("./harnesses/picode/parser");
+const { isMutatingTool, isReadOnlyTool, isMultiStepTask } = require("./harnesses/picode/parser");
 const policyEngine = require("./policy-engine");
 const { recordObserved } = require("./tool-catalog");
 
@@ -49,6 +49,8 @@ const { createSkillsRouter } = require("./routes/skills");
 const createConnectorsRouter = require("./routes/connectors");
 const createProfilesRouter = require("./routes/profiles");
 const createConnectionsRouters = require("./routes/connections");
+const createAdminRouter = require("./routes/admin");
+const createAuthSsoRouter = require("./routes/auth-sso");
 const { encrypt, decrypt } = require("./crypto-store");
 
 // WebSocket
@@ -65,6 +67,12 @@ validateEnv();
 
 // ── Shared State ────────────────────────────────────────────────────
 const PORT = process.env.PORT || 6800;
+// Bind host. Defaults to loopback (safe: only reachable on-box / by a co-located
+// nginx). Set HOST=0.0.0.0 (or a specific interface IP) to expose the backend to
+// an nginx/reverse-proxy running on a DIFFERENT host (Workstream G3). When you do
+// this the port is reachable off-box, so ORBIT_API_KEY becomes mandatory and the
+// port should be firewalled to the proxy host.
+const HOST = process.env.HOST || "127.0.0.1";
 const activeSessions = new Map();    // sessionId → { harness, ws, mode, subagentTracker }
 const pendingApprovals = new Map();  // toolCallId → resolve callback
 const turnGuards = new Map();         // sessionId → anti-flail counters for the active turn
@@ -300,19 +308,28 @@ const sessionAllowedPaths = new Map(); // sessionId → Set<allowedPaths>
 loadConfig(); // fail fast at boot if the config file is missing/corrupt
 const getConfig = () => {
   const config = loadConfig();
+  // `llm` is the neutral config key (Workstream F1); `litellm` is the historical
+  // one. Merge llm over litellm so either works, keeping `litellm` as the
+  // canonical internal shape the rest of the code already reads.
+  if (config.llm && typeof config.llm === "object") {
+    config.litellm = { ...(config.litellm || {}), ...config.llm };
+  }
   if (!config.litellm) config.litellm = {};
+  // Env fallbacks: LLM_* → LITELLM_* → OPENAI_* (see env.resolveLlmEnv).
+  const llmEnv = resolveLlmEnv();
   if (!config.litellm.baseURL) {
-    config.litellm.baseURL = process.env.LITELLM_BASE_URL || "http://127.0.0.1:5000/v1";
+    config.litellm.baseURL = llmEnv.baseURL || "http://127.0.0.1:5000/v1";
   }
   if (!config.litellm.apiKey) {
-    config.litellm.apiKey = process.env.LITELLM_KEY || process.env.OPENAI_API_KEY || "";
+    config.litellm.apiKey = llmEnv.apiKey || "";
   }
   if (!config.litellm.selectedNormalModel) {
-    config.litellm.selectedNormalModel = process.env.LITELLM_MODEL || "";
+    config.litellm.selectedNormalModel = llmEnv.model || "";
   }
   return config;
 };
 const { nodePath, piPath } = discoverPiBinaries();
+probePiBinary(piPath);
 
 // ── Express App ─────────────────────────────────────────────────────
 const app = express();
@@ -356,9 +373,9 @@ notifyBus.registerSink("desktop", ({ title, body, severity }) => {
 
 // ── Auth ────────────────────────────────────────────────────────────
 const authMiddleware = createAuthMiddleware(db);
-if (!createAuthMiddleware.getSharedApiKey()) {
-  console.warn("[SECURITY] ORBIT_API_KEY is not set — the API and WebSocket are UNAUTHENTICATED.");
-  console.warn("[SECURITY] Fine for local-only dev; set ORBIT_API_KEY before exposing this server beyond 127.0.0.1.");
+if (!createAuthMiddleware.getSuperadminKey()) {
+  console.warn("[SECURITY] ORBIT_SUPERADMIN_KEY is not set — the API and WebSocket are UNAUTHENTICATED (dev-mode: every caller is treated as superadmin).");
+  console.warn("[SECURITY] Fine for local-only / single-user dev; set ORBIT_SUPERADMIN_KEY before exposing this server beyond 127.0.0.1.");
 }
 
 // ── Mount Routes ────────────────────────────────────────────────────
@@ -386,6 +403,15 @@ const { connectionsRouter, oauthRouter } = createConnectionsRouters({
 });
 app.use("/api/connections", authMiddleware, connectionsRouter);
 app.use("/api/oauth", oauthRouter);
+
+// Admin console (multi-tenant API keys, RBAC, observability, SSO toggle). Authed;
+// each handler further gates on role (requireRole) inside the router.
+const adminOrigin = () => process.env.DASHBOARD_ORIGIN || "http://localhost:6801";
+app.use("/api/admin", authMiddleware, createAdminRouter(db, { getOrigin: adminOrigin }));
+
+// Auth: SSO login/callback/logout are public (browser-navigated); /whoami is
+// authed (it self-mounts authMiddleware inside the router).
+app.use("/api/auth", createAuthSsoRouter({ db, getOrigin: adminOrigin, authMiddleware }));
 
 // Channels: CRUD + test-fire are authed; the /:id/webhook receiver is public
 // (external senders can't present a device token) and self-verifies per channel.
@@ -782,6 +808,9 @@ wss.on("connection", (ws) => {
           activeSessions.delete(data.sessionId);
           sendLog(ws, `[Session Switch] Session ${data.sessionId} process terminated.`, false);
         }
+        // A cancelled session isn't mid-run anymore — clear the resumable flag so
+        // no stale "interrupted / Resume" banner lingers (Workstream D4).
+        try { db.clearSessionRunning(data.sessionId); } catch {}
       }
       
       // ── mode_switch_rerun ───────────────────────────────────
@@ -836,6 +865,12 @@ wss.on("connection", (ws) => {
         if (ses.harness) {
           try { ses.harness.disconnect(); } catch {}
         }
+        // The owning dashboard socket closed and we just tore down the harness,
+        // so this session isn't running — clear the resumable flag so it doesn't
+        // reopen showing a stale "interrupted / Resume" banner (Workstream D4). A
+        // hard server crash doesn't fire this handler, so restart-resume (which
+        // relies on run_state persisting in the DB) is unaffected.
+        try { db.clearSessionRunning(sid); } catch {}
         activeSessions.delete(sid);
         metricsManager.releaseSession(sid);
       }
@@ -881,12 +916,16 @@ async function handleStartTask(ws, userPrompt, sessionId, mode, systemPromptType
   // ── Hybrid planning ───────────────────────────────────────
   const isChat = !activeMode || activeMode === "chat";
 
-  if (taskMode === "hybrid" && !isChat && !isConversationalPrompt(userPrompt)) {
-    sendLog(ws, "Generating execution plan...", true, sessionId);
+  // Hybrid pre-planning only fires for genuine MULTI-STEP work — never for
+  // greetings, questions, lookups, or single-step asks (Workstream B1). The pre-
+  // plan is reasoning, not "the plan": it feeds the reasoning accordion only, so
+  // the Mission board (plan_state) stays the single canonical plan surface
+  // (Workstream B2).
+  if (taskMode === "hybrid" && !isChat && isMultiStepTask(userPrompt)) {
+    sendLog(ws, "Sketching an approach...", true, sessionId);
     const plan = await generatePlan(userPrompt, getConfig);
     if (plan) {
-      sendLog(ws, "TUI execution plan generated successfully.", true, sessionId);
-      sendWithSession(ws, { type: "plan", content: plan }, sessionId);
+      sendLog(ws, "Planning notes ready.", true, sessionId);
       sendWithSession(ws, { type: "reasoning_update", content: plan }, sessionId);
     }
   }
@@ -1187,7 +1226,9 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
   });
   
   events.on("accumulated_thinking", ({ text }) => {
-    sendWithSession(ws, { type: "plan", content: text }, sessionId);
+    // Live thinking is reasoning, not "the plan" — it feeds the reasoning
+    // accordion only. The Mission board (plan_state) is the canonical plan
+    // surface (Workstream B2).
     sendWithSession(ws, { type: "reasoning_update", content: text }, sessionId);
   });
   
@@ -1329,6 +1370,9 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
       const ses = activeSessions.get(sessionId);
       if (ses) ses.status = "done";
       if (ses?.harness) ses.harness.cancel();
+      // The turn stopped without a clean end — clear the resumable flag so no
+      // stale "interrupted / Resume" banner lingers (Workstream D4).
+      try { db.clearSessionRunning(sessionId); } catch {}
       sendStatus(ws, "done", sessionId);
       return;
     }
@@ -1347,8 +1391,12 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
     const capability = policyEngine.toolToCapability(name, isOutside);
     const deviceOverrides = ws.device?.policyOverrides || null;
     
-    // Auto-allow writing/reading plans in the workspace plans directory in PLAN, EDIT, or YOLO modes
-    const onlyTouchesPlans = activeMode !== "chat" && toolPaths.length > 0 && toolPaths.every(p => {
+    // Auto-allow reading/writing plans in the workspace plans directory in ALL
+    // modes, including chat. The behavior prompt instructs the agent to maintain
+    // plan files, so blocking that write in chat made the agent's own instructed
+    // behavior trigger a mode-switch halt (Workstream B3). The plans dir is
+    // sandboxed and low-risk, so a plan write is never worth a mode change.
+    const onlyTouchesPlans = toolPaths.length > 0 && toolPaths.every(p => {
       const plansDir = path.join(sessionRoot, "workspace", "plans");
       return p === plansDir || p.startsWith(plansDir + path.sep);
     });
@@ -1359,6 +1407,9 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
 
     if (decision === "block") {
       // Halt the turn so trailing blocked tool calls don't each re-fire the banner.
+      // This is a SOFT block (policy matrix) — unlike a hard blocklist hit, it must
+      // not tear down pi: we abort just the current turn and keep the process (and
+      // its conversational context) alive for the re-run after a mode switch.
       if (guard) guard.halted = true;
       // Suggest the least-privileged mode that would allow this capability.
       const suggestion = ["plan", "edit", "yolo"].find(m =>
@@ -1390,7 +1441,13 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
       }
       const ses = activeSessions.get(sessionId);
       if (ses) ses.status = "done";
-      if (ses?.harness) ses.harness.cancel();
+      // Soft block: abort just this turn but keep pi alive (context preserved for
+      // the re-run after a mode switch). Fall back to full cancel() for harnesses
+      // that don't support a graceful turn-abort (remote/container).
+      if (ses?.harness?.abortTurn) ses.harness.abortTurn();
+      else if (ses?.harness) ses.harness.cancel();
+      // Aborted turn is not a clean end — clear the resumable flag (Workstream D4).
+      try { db.clearSessionRunning(sessionId); } catch {}
       sendStatus(ws, "done", sessionId);
       return;
     }
@@ -1597,7 +1654,12 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
       }, sessionId);
     }
 
-    // Turn finished cleanly — no longer resumable.
+    // Turn finished cleanly — no longer resumable. Clear the DB run_state (so a
+    // later reload won't resurrect the "interrupted / Resume" banner). We do NOT
+    // broadcast refresh_sessions here: that triggers a full loadSessions() which
+    // re-dispatches messages/metrics from the (lagging) DB snapshot and clobbers
+    // the just-streamed reply. The banner is cleared optimistically on the client
+    // and via this DB clear on the next natural reload (Workstream D4).
     const ses = activeSessions.get(sessionId);
     if (ses) ses.status = "done";
     try { db.clearSessionRunning(sessionId); } catch {}
@@ -1627,8 +1689,13 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
     }
     
     activeSessions.delete(sessionId);
+    // NOTE: deliberately do NOT clear run_state here. A harness `close` can be a
+    // genuine mid-turn crash/restart — precisely when the session IS resumable
+    // and the "Resume" banner should appear. run_state is cleared only on the
+    // paths that represent a real stop: clean turn-end, policy block, and
+    // cancel_session (Workstream D4).
     sendStatus(ws, "done", sessionId);
-    
+
     setTimeout(() => metricsManager.releaseSession(sessionId), 5000);
   });
   
@@ -1738,14 +1805,21 @@ function ensureOrbitMcpServersRegistered() {
         console.log(`[Orbit MCP] Registered ${id} in .pi/mcp.json`);
       }
     }
-    if (changed) fs.writeFileSync(MCP_CONFIG_PATH, JSON.stringify(cfg, null, 2) + "\n");
+    if (changed) {
+      fs.mkdirSync(path.dirname(MCP_CONFIG_PATH), { recursive: true });
+      fs.writeFileSync(MCP_CONFIG_PATH, JSON.stringify(cfg, null, 2) + "\n");
+    }
   } catch (e) {
     console.error("[Orbit MCP] Could not register Orbit MCP servers:", e.message);
   }
 }
 
-server.listen(PORT, '127.0.0.1', () => {
-  console.log(`Orbit Backend Server listening on 127.0.0.1:${PORT} (internal only)`);
+server.listen(PORT, HOST, () => {
+  const exposed = HOST !== "127.0.0.1" && HOST !== "localhost";
+  console.log(`Orbit Backend Server listening on ${HOST}:${PORT}${exposed ? " (EXPOSED off-loopback)" : " (internal only)"}`);
+  if (exposed && !process.env.ORBIT_API_KEY) {
+    console.warn(`[SECURITY] HOST=${HOST} exposes the API/WS off-loopback but ORBIT_API_KEY is NOT set — anyone who can reach ${HOST}:${PORT} can drive the agent. Set ORBIT_API_KEY and firewall this port to the proxy host.`);
+  }
   // Essential service: the Lightpanda browser is the mandatory default browser
   // for every agent. Ensure its container is up with an auto-restart policy so
   // a crash never leaves agents web-blind (falling back to code_search/nonsense).
@@ -1753,6 +1827,12 @@ server.listen(PORT, '127.0.0.1', () => {
     console.error("[Lightpanda] ensure failed:", e.message));
   // Start the Telegram bridge (no-ops cleanly if no bot token is set).
   telegramBridge.start();
+  // Test the LLM endpoint once at boot so capabilities.llm.connected reflects
+  // reality immediately and the UI can show "connection failed" vs "not
+  // configured" without waiting for the first prompt (Workstream F3).
+  require("./services/llm-probe").probeLlm(getConfig)
+    .then((r) => console.log(`[LLM] Boot probe: ${r.ok ? `connected (${r.models.length} models)` : `not connected (${r.error})`}.`))
+    .catch(() => {});
   // Fire schedule-type channels locally (no inbound exposure needed).
   startScheduler({ db, runProfileHeadless });
   // Any session still marked running at startup was interrupted (this process

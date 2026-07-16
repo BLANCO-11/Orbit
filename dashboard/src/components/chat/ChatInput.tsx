@@ -36,6 +36,7 @@ export default function ChatInput({
   effortButton,
   inputHistoryRef,
   inputHistoryIndexRef,
+  llmReady = true,
 }) {
   const textareaRef = useRef(null);
   const [runConfigOpen, setRunConfigOpen] = useState(false);
@@ -114,7 +115,7 @@ export default function ChatInput({
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey) {
               e.preventDefault();
-              if (!isProcessing) submit();
+              if (!isProcessing && llmReady) submit();
             } else if (e.key === 'ArrowUp' && !e.shiftKey) {
               e.preventDefault();
               navigateHistory('up');
@@ -124,12 +125,14 @@ export default function ChatInput({
             }
           }}
           placeholder={
-            isProcessing
+            !llmReady
+              ? 'No LLM configured — add a provider in Settings to start.'
+              : isProcessing
               ? 'Agent is working — Stop to interrupt.'
               : 'Ask anything — browse, run code, audit, deploy…'
           }
           rows={1}
-          disabled={isProcessing}
+          disabled={isProcessing || !llmReady}
           aria-label="Message the agent"
           className="max-h-[120px] min-h-[40px] w-full resize-none bg-transparent px-0.5 pb-2 text-[14.5px] leading-relaxed outline-none placeholder:text-faint disabled:opacity-60"
         />
@@ -214,7 +217,9 @@ export default function ChatInput({
           ) : (
             <button
               onClick={submit}
-              className="ml-1 flex items-center gap-1.5 rounded-[9px] bg-primary px-3.5 py-[7px] text-[13px] font-semibold text-primary-foreground hover:opacity-90"
+              disabled={!llmReady}
+              title={llmReady ? 'Send' : 'Add an LLM provider in Settings first'}
+              className="ml-1 flex items-center gap-1.5 rounded-[9px] bg-primary px-3.5 py-[7px] text-[13px] font-semibold text-primary-foreground hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
             >
               <Send size={13} /> Send
             </button>

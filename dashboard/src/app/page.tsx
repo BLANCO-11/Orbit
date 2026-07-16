@@ -10,7 +10,7 @@ import NotificationCenter from '@/components/widgets/NotificationCenter';
 
 // Providers & Hooks
 import { OrbitProvider, useOrbitState, useOrbitDispatch, actions } from '@/providers/OrbitProvider';
-import { useTheme, useResponsive, useWebSocket, useSessions, useTTS, useSTT, useSettings } from '@/hooks';
+import { useTheme, useResponsive, useWebSocket, useSessions, useTTS, useSTT, useSettings, useAuth } from '@/hooks';
 
 // Layout
 import AppShell from '@/components/layout/AppShell';
@@ -32,6 +32,7 @@ import ConnectorsView from '@/components/views/ConnectorsView';
 import PoliciesView from '@/components/views/PoliciesView';
 import AgentsView from '@/components/views/AgentsView';
 import LibraryView from '@/components/views/LibraryView';
+import AdminView from '@/components/views/AdminView';
 
 // Components
 import SidebarSwitcher from '@/components/layout/SidebarSwitcher';
@@ -39,11 +40,27 @@ import LogViewer from '@/components/LogViewer';
 import SettingsPanel from '@/components/SettingsPanel';
 import PairDevice from '@/components/PairDevice';
 import { installApiAuthFetch } from '@/lib/api-auth';
-import { getDeviceToken } from '@/lib/device-auth';
+import { getDeviceToken, setDeviceToken, clearDeviceToken } from '@/lib/device-auth';
+import type { AuthIdentity } from '@/hooks/useAuth';
 
 installApiAuthFetch();
 
 export default function Dashboard() {
+  // Capture an SSO session token handed back by the OIDC callback
+  // (`/?ssoToken=…`) — store it in the shared credential slot and strip the
+  // param, so no dedicated frontend route is needed. Runs before any child
+  // effect fires its first /api fetch, so those calls carry the credential.
+  if (typeof window !== 'undefined' && window.location.search.includes('ssoToken=')) {
+    const params = new URLSearchParams(window.location.search);
+    const ssoToken = params.get('ssoToken');
+    if (ssoToken) {
+      setDeviceToken(ssoToken);
+      params.delete('ssoToken');
+      const qs = params.toString();
+      window.history.replaceState({}, '', window.location.pathname + (qs ? `?${qs}` : ''));
+    }
+  }
+
   // This app renders entirely client-side (see ClientDashboard.tsx's
   // ssr:false dynamic import) regardless of which path Next's router
   // resolved, so /pair is handled here as a client-side path check rather
@@ -54,12 +71,40 @@ export default function Dashboard() {
 
   return (
     <OrbitProvider>
-      <DashboardInner />
+      <AuthGate />
     </OrbitProvider>
   );
 }
 
-function DashboardInner() {
+// AuthGate — the login boundary. It renders BEFORE the dashboard (and thus
+// before the boot splash, which lives in DashboardInner), so an authenticated
+// session is required first. DashboardInner only mounts once authenticated, so
+// all of its mount-time /api fetches + the WebSocket carry a valid credential.
+// In dev-mode (no ORBIT_SUPERADMIN_KEY) whoami returns superadmin immediately,
+// so this never blocks a local/household deploy.
+function AuthGate() {
+  const { auth, loading, authenticated, ssoAvailable, refetch } = useAuth();
+
+  const handleLogout = useCallback(async () => {
+    try { await fetch('/api/auth/logout', { method: 'POST' }); } catch {}
+    clearDeviceToken();
+    refetch();
+  }, [refetch]);
+
+  if (loading) {
+    return (
+      <div className="flex h-dvh items-center justify-center bg-background text-sm text-muted-foreground">
+        Authenticating…
+      </div>
+    );
+  }
+  if (!authenticated || !auth) {
+    return <LoginPage ssoAvailable={ssoAvailable} onAuthed={refetch} />;
+  }
+  return <DashboardInner auth={auth} onLogout={handleLogout} />;
+}
+
+function DashboardInner({ auth, onLogout }: { auth: AuthIdentity; onLogout: () => void }) {
   const dispatch = useOrbitDispatch();
   const state = useOrbitState();
   const { theme, mounted, toggleTheme, setTheme } = useTheme();
@@ -71,21 +116,24 @@ function DashboardInner() {
     models, voices,
     systemPromptType, setSystemPromptType,
     saveAllSettings, addConfigItem, removeConfigItem,
+    llmStatus,
   } = useSettings();
   const { speakText, queueSentence, startSession: startTtsSession, stopSpeaking } = useTTS(settings.selectedVoice);
 
-  // WebSocket goes through Next.js custom server proxy → backend:6800
-  // A paired device token (see lib/device-auth.ts) takes priority; falls back
-  // to the shared NEXT_PUBLIC_AEGIS_API_KEY key for simple unpaired setups —
-  // both unset by default for local dev, matching the backend's dev-mode.
+  // WebSocket goes through Next.js custom server proxy → backend:6800. The
+  // credential is whatever the user logged in with (local superadmin key / SSO
+  // session / device token), stored by device-auth and sent as ?deviceToken.
+  // ws/index.js resolves any of these (see resolveIdentity). Empty in dev-mode
+  // (no key), which the backend accepts.
   const deviceToken = getDeviceToken();
-  const wsKeyParam = deviceToken
-    ? `?deviceToken=${encodeURIComponent(deviceToken)}`
-    : (process.env.NEXT_PUBLIC_ORBIT_API_KEY || process.env.NEXT_PUBLIC_AEGIS_API_KEY)
-      ? `?key=${encodeURIComponent(process.env.NEXT_PUBLIC_ORBIT_API_KEY || process.env.NEXT_PUBLIC_AEGIS_API_KEY)}`
-      : '';
+  const wsKeyParam = deviceToken ? `?deviceToken=${encodeURIComponent(deviceToken)}` : '';
+  // Derive the WS URL from window.location so it's TLS-safe behind nginx/HTTPS
+  // (Workstream G1): use wss:// on an https page, and reuse window.location.host
+  // (which already carries the right port, or none on 443/80) instead of
+  // hardcoding ws://…:6801 — the latter is blocked as mixed content over HTTPS
+  // and wrongly appends :6801 when the public port is 443.
   const backendWsUrl = typeof window !== 'undefined'
-    ? `ws://${window.location.hostname}:${window.location.port || '6801'}/api/ws${wsKeyParam}`
+    ? `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/api/ws${wsKeyParam}`
     : `ws://localhost:6801/api/ws${wsKeyParam}`;
 
   // ── WebSocket ──
@@ -103,7 +151,8 @@ function DashboardInner() {
     sessions, searchQuery, setSearchQuery,
     groupedSessions, hoveredSessionId, setHoveredSessionId,
     createSession, switchSession, deleteSession, renameSession,
-    updateCurrentSession, getSessionPreview, clearRunState,
+    updateCurrentSession, clearRunState,
+    childToParent, parentToChildren,
   } = useSessions();
 
   // Keep WebSocket session ID in sync and subscribe on the backend
@@ -265,7 +314,7 @@ function DashboardInner() {
 
   const [showThinking, setShowThinking] = useState(true);
   const [rightPanelTab, setRightPanelTab] = useState('agent');
-  const [activeView, setActiveView] = useState<'console' | 'agents' | 'fleet' | 'connectors' | 'policies' | 'library' | 'settings'>('console');
+  const [activeView, setActiveView] = useState<'console' | 'agents' | 'fleet' | 'connectors' | 'policies' | 'library' | 'admin' | 'settings'>('console');
   const [activeNavTab, setActiveNavTab] = useState('chat');
   const [cmdPaletteOpen, setCmdPaletteOpen] = useState(false);
   const inputHistoryRef = useRef([]);
@@ -557,6 +606,8 @@ function DashboardInner() {
         theme={theme}
         onToggleTheme={toggleTheme}
         isVisible={isVisible}
+        canAdmin={!!auth?.isAdmin}
+        onLogout={auth?.devMode ? undefined : onLogout}
       />
     )}
     <div className="relative min-w-0 flex-1">
@@ -565,6 +616,7 @@ function DashboardInner() {
     {activeView === 'connectors' && isVisible('rail', 'connectors') && <ComponentErrorBoundary label="Connectors"><ConnectorsView /></ComponentErrorBoundary>}
     {activeView === 'policies' && isVisible('rail', 'policies') && <ComponentErrorBoundary label="Policies"><PoliciesView /></ComponentErrorBoundary>}
     {activeView === 'library' && isVisible('rail', 'library') && <ComponentErrorBoundary label="Library"><LibraryView /></ComponentErrorBoundary>}
+    {activeView === 'admin' && auth?.isAdmin && <ComponentErrorBoundary label="Admin"><AdminView auth={auth} /></ComponentErrorBoundary>}
     {activeView === 'settings' && settingsView}
     {activeView === 'console' && (
     <AppShell
@@ -584,7 +636,8 @@ function DashboardInner() {
             onSwitch={handleSwitchSession}
             onDelete={deleteSession}
             onNewSession={createSession}
-            getSessionPreview={getSessionPreview}
+            childToParent={childToParent}
+            parentToChildren={parentToChildren}
             sessionsLength={sessions.length}
             onFileSelect={handleFileSelect}
           />
@@ -701,6 +754,8 @@ function DashboardInner() {
         onSetHarnessId={setHarnessId}
         activeProfileId={activeProfileId}
         onApplyProfile={applyProfile}
+        llmStatus={llmStatus}
+        onOpenSettings={() => setActiveView('settings')}
         canResume={Boolean(sessions.find((s) => s.id === state.currentSessionId)?.runState?.running) && state.status !== 'thinking' && state.status !== 'executing'}
         onResume={() => {
           if (sendMessage) {
@@ -723,7 +778,6 @@ function DashboardInner() {
         onApprove={(d) => handleApproval(d !== undefined ? d : true)}
         onDeny={() => handleApproval(state.approvalRequest?.type === 'edit_permission' ? 'deny' : false)}
         sessionMode={state.sessionMode}
-        showModePrompt={state.showModePrompt}
         onSetSessionMode={handleSetSessionMode}
         onSetSessionModeAndReRun={(mode) => {
           handleSetSessionMode(mode);
@@ -804,5 +858,105 @@ function DashboardInner() {
         }}
       />
     </ErrorBoundary>
+  );
+}
+
+// ── Login page ──
+// The sign-in boundary, shown before the boot splash whenever the backend
+// requires auth (ORBIT_SUPERADMIN_KEY set). Two ways in:
+//   • Local — prove the superadmin key (POST /api/auth/local); on success the
+//     key is stored as the request credential and resolves to superadmin.
+//   • SSO   — enterprise OIDC sign-in (shown when SSO is enabled).
+// On success it calls onAuthed() so AuthGate re-checks whoami and proceeds.
+function LoginPage({ ssoAvailable, onAuthed }: { ssoAvailable: boolean; onAuthed: () => void }) {
+  const [password, setPassword] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const ssoError = typeof window !== 'undefined'
+    ? new URLSearchParams(window.location.search).get('sso_error')
+    : null;
+
+  const submitLocal = useCallback(async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (!password || submitting) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const r = await fetch('/api/auth/local', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok || d.success === false) {
+        setError(d.message || 'Invalid superadmin key.');
+        setSubmitting(false);
+        return;
+      }
+      // Store the proven key as the request credential; AuthGate re-checks.
+      setDeviceToken(password);
+      onAuthed();
+    } catch {
+      setError('Could not reach the server. Try again.');
+      setSubmitting(false);
+    }
+  }, [password, submitting, onAuthed]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#faf9f6] px-6 dark:bg-[#0a0a0e]">
+      <div className="flex w-full max-w-sm flex-col items-center">
+        <div className="mb-6 grid size-14 place-items-center rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-7">
+            <circle cx="12" cy="12" r="8" strokeDasharray="3 3" className="opacity-50" />
+            <circle cx="12" cy="12" r="3" fill="currentColor" />
+            <circle cx="18" cy="6" r="1" fill="currentColor" />
+          </svg>
+        </div>
+        <h1 className="text-lg font-semibold text-foreground">Sign in to Orbit</h1>
+        <p className="mb-6 mt-1 text-center text-[13px] text-muted-foreground">Authentication is required to continue.</p>
+
+        {(error || ssoError) && (
+          <div className="mb-4 w-full rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-left text-[12.5px] text-destructive">
+            {error || `Sign-in failed: ${ssoError}`}
+          </div>
+        )}
+
+        {/* Local superadmin */}
+        <form onSubmit={submitLocal} className="w-full">
+          <label className="mb-1 block text-[11px] font-medium text-muted-foreground">Superadmin key</label>
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            autoFocus
+            placeholder="Enter the superadmin key"
+            className="mb-2 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring"
+          />
+          <button
+            type="submit"
+            disabled={submitting || !password}
+            className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/80 disabled:opacity-50"
+          >
+            {submitting ? 'Signing in…' : 'Sign in as superadmin'}
+          </button>
+        </form>
+
+        {/* SSO */}
+        {ssoAvailable && (
+          <>
+            <div className="my-4 flex w-full items-center gap-3 text-[11px] uppercase tracking-wide text-faint">
+              <span className="h-px flex-1 bg-border" /> or <span className="h-px flex-1 bg-border" />
+            </div>
+            <a
+              href="/api/auth/sso/login"
+              className="flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-background px-4 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+            >
+              Sign in with SSO
+            </a>
+          </>
+        )}
+      </div>
+    </div>
   );
 }

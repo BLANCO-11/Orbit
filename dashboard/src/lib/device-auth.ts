@@ -1,9 +1,11 @@
 'use client';
 
-// Client-side storage for the device token obtained via URL/OTP pairing
-// (see agent-backend/routes/devices.js). Falls back to the build-time
-// NEXT_PUBLIC_AEGIS_API_KEY shared-secret (lib/api-auth.ts) for simple
-// single-device setups that haven't paired anything.
+// Client-side storage for the active request credential. The same slot holds
+// whatever the user signed in with — a local superadmin key, an SSO session
+// token, or a device token from URL/OTP pairing (agent-backend/routes/devices.js).
+// There is no build-time key fallback: login is explicit (see app/page.tsx
+// LoginPage), so a keyed backend shows the login page instead of silently
+// authenticating.
 
 const DEVICE_TOKEN_KEY = 'orbit-device-token';
 
@@ -22,9 +24,13 @@ export function clearDeviceToken() {
   localStorage.removeItem(DEVICE_TOKEN_KEY);
 }
 
-// The credential to attach to API/WS requests — a paired device token if
-// one exists, otherwise the shared build-time key (may be undefined, in
-// which case the backend's own dev-mode fallback applies).
+// The credential to attach to API/WS requests: whatever the user logged in with
+// — a local superadmin key, an SSO session token, or a paired device token —
+// all stored in the same slot (see setDeviceToken). No build-time key fallback:
+// login is explicit, so when the backend requires auth the app shows the login
+// page instead of silently authenticating from a bundled key. In dev-mode (no
+// ORBIT_SUPERADMIN_KEY) the backend allows unauthenticated access, so a null
+// credential still lands straight in.
 export function getActiveCredential() {
-  return getDeviceToken() || process.env.NEXT_PUBLIC_ORBIT_API_KEY || process.env.NEXT_PUBLIC_AEGIS_API_KEY || null;
+  return getDeviceToken() || null;
 }

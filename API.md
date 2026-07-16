@@ -4,18 +4,34 @@ Orbit can run as a headless backend service (`agent-backend`), allowing third-pa
 
 ---
 
-## 1. Authentication & CORS
+## 1. Authentication, RBAC & CORS
 
-By default, in development mode, the API binds to loopback (`127.0.0.1:6800`) and does not enforce authentication.
+By default, in development mode, the API binds to loopback (`127.0.0.1:6800`) and does not enforce authentication (dev-mode treats every caller as **superadmin** — ideal for a single-user / household deploy).
 
-### API Key Authentication
-To secure Orbit, set the `ORBIT_API_KEY` environment variable on the backend:
+### Superadmin key
+To lock Orbit down, set the `ORBIT_SUPERADMIN_KEY` environment variable on the backend:
 ```bash
-export ORBIT_API_KEY="your-secure-api-token"
+export ORBIT_SUPERADMIN_KEY="your-secure-api-token"
 ```
 When set:
-- **REST requests** must include the `Authorization` header: `Authorization: Bearer your-secure-api-token`
-- **WebSocket connections** must append the token as a query parameter: `ws://localhost:6800/api/ws?key=your-secure-api-token`
+- **REST requests** must include the token as `Authorization: Bearer <token>` **or** `x-api-key: <token>`.
+- **WebSocket connections** must append it as a query parameter: `ws://localhost:6800/api/ws?key=<token>`.
+
+(`ORBIT_API_KEY` and `AEGIS_API_KEY` are still accepted as fallbacks so older `.env` files keep working.)
+
+### Credentials & roles (RBAC)
+Any of these credentials authenticates a request; each resolves to a **role** and optional **tenant**:
+
+| Credential | Role | Where it comes from |
+|---|---|---|
+| `ORBIT_SUPERADMIN_KEY` | `superadmin` | env — the single operator |
+| Tenant **API key** (`orb_live_…`) | `admin` / `member` / `viewer` | minted in Admin › API Keys |
+| **SSO session** token | user's role | issued after OIDC sign-in |
+| Paired **device token** | derived from device scope | Fleet pairing |
+
+`GET /api/auth/whoami` returns the caller's `{ role, tenantId, email, ssoEnabled, ssoConfigured, devMode }`.
+
+RBAC degrades gracefully: none of tenants/keys/SSO is required — they only matter once an operator creates them.
 
 ### Cross-Origin Resource Sharing (CORS)
 To allow a custom frontend domain to talk to the backend, set `DASHBOARD_ORIGIN`:
@@ -45,6 +61,22 @@ All REST endpoints are prefixed with `/api`.
     }
   }
   ```
+
+### Admin Console (RBAC, multi-tenancy, observability)
+All under `/api/admin` and authenticated; each further gates on role. Superadmin sees all tenants; a tenant-admin is scoped to its own tenant.
+- **`GET/POST /api/admin/tenants`**, **`PATCH/DELETE /api/admin/tenants/:id`** — tenant CRUD *(superadmin)*.
+- **`GET /api/admin/keys`** — list API keys (scoped). **`POST /api/admin/keys`** `{ label, role, scope, tenantId? }` — mints a key; the raw secret (`key`) is returned **exactly once**. **`DELETE /api/admin/keys/:id`** — revoke.
+- **`GET /api/admin/users`** — list SSO-provisioned users (scoped). **`PATCH /api/admin/users/:id`** `{ role }` — change a member's role.
+- **`GET /api/admin/observability`** — usage aggregated from session metrics, bucketed by tenant, plus tenant/key/device counts.
+- **`GET/PUT /api/admin/sso`** — read OIDC env presence + enable/disable SSO *(superadmin)*. The `PUT { enabled: true }` is rejected unless the OIDC env vars are present.
+
+### Enterprise SSO (OIDC)
+Authorization-Code + PKCE against any OIDC IdP (Entra/Azure AD, Okta, Google, Auth0, Keycloak). Secrets live only in env (`OIDC_ISSUER_URL`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`, …); the superadmin toggles it on in Admin › SSO.
+- **`GET /api/auth/sso/status`** *(public)* — `{ enabled, configured }` for the login screen.
+- **`GET /api/auth/sso/login`** *(public)* — redirects to the IdP.
+- **`GET /api/auth/sso/callback`** *(public)* — verifies the `id_token`, provisions the user, mints an SSO session, and redirects to `<DASHBOARD_ORIGIN>/?ssoToken=…` (the SPA stores it as the request credential).
+- **`POST /api/auth/logout`** *(public)* — revokes the presented SSO session token.
+- **`GET /api/auth/whoami`** *(authed)* — the caller's identity (see §1).
 
 ### Sessions Management
 - **`GET /api/sessions`**: List all saved sessions (returns metadata and metrics seeds).
@@ -214,7 +246,7 @@ Responds to a write restriction path gate.
   "type": "edit_permission_response",
   "toolCallId": "call_xyz789",
   "decision": "allow",
-  "path": "/home/blanco/my-file.txt"
+  "path": "/home/user/my-file.txt"
 }
 ```
 
@@ -301,6 +333,66 @@ Emitted when the turn settles and the agent process halts.
 
 ---
 
-## 4. Stability & Versioning
+## 4. Harness Pairing & Protocol v1
+
+A **harness** is any process that runs agent turns for the console (the local pi child, or a remote `orbit-adapter` dialing in from another machine). Pairing turns a short-lived code into a durable device token; the harness then holds an authenticated WebSocket open and services `spawn`/`prompt`/`cancel`. The same contract serves Orbit's own adapter and any third-party harness — they differ only in how they consume the descriptor below.
+
+### A. Minting a code (operator-only)
+- **`POST /api/pair/start`** (authenticated). Body: `{ label?, scope? }` where `scope ∈ {full, chat_voice, read_only}`. Returns:
+  ```json
+  {
+    "success": true,
+    "code": "ABC123",
+    "expiresAt": 1737000000000,
+    "scope": "full",
+    "pairingUrl": "https://<dashboard-origin>/pair?code=ABC123",
+    "connectUrl": "https://<public-origin>/api/pair/connect?code=ABC123",
+    "bootstrapCommand": "curl -fsSL 'https://<public-origin>/api/pair/bootstrap?code=ABC123' | node"
+  }
+  ```
+  The code is **6 chars, 5-minute TTL, single-use, scoped**. `connectUrl` / `bootstrapCommand` are built from the **public origin of the request** (honoring `x-forwarded-proto`), so they work off-box behind nginx.
+
+### B. Redeeming a code (open, code-gated, rate-limited)
+Each of these redeems the code **atomically and single-use** — a second consumer of the same code gets `410 { error: "code_expired" }`. All three are rate-limited per IP (20/min).
+
+- **`GET /api/pair/connect?code=CODE`** → the **connection descriptor** (JSON), the single source of truth a harness needs:
+  ```jsonc
+  {
+    "protocolVersion": "1",
+    "wsUrl": "wss://<public-origin>/api/harness",
+    "token": "…64-hex, returned once…",
+    "device": { "id": "…", "label": "My workstation", "scope": "full" },
+    "register": { "type": "register", "required": ["name", "machine", "capabilities"],
+                  "capabilitiesExample": ["chat","plan","edit","yolo","subagents","tools"] },
+    "heartbeat": { "intervalMs": 30000, "type": "ping" },
+    "reconnect": { "backoffMs": [1000, 2000, 5000, 15000], "maxJitterMs": 500 }
+  }
+  ```
+- **`GET /api/pair/bootstrap?code=CODE`** → a runnable Node installer (Orbit adapter): it persists the descriptor to `~/.orbit/adapter-credentials.json`, downloads the adapter, and launches it. Intended for `… | node`.
+- **`POST /api/pair/redeem`** (body `{ code, label? }`) → `{ success, device: { id, label, token, scope } }`. The bare-token path for a harness that builds its own WS URL.
+
+> **The raw token is returned exactly once**, at redemption, and only its SHA-256 hash is stored. It rides in the URL/body, so **HTTPS/WSS is mandatory** for any non-loopback use.
+
+### C. Connecting (WebSocket)
+The harness opens `wss://<host>/api/harness?token=<deviceToken>` and sends its first frame:
+```json
+{ "type": "register", "name": "My workstation", "machine": "host-1", "capabilities": ["chat","plan","edit","yolo","subagents","tools"] }
+```
+The server replies `{ "type": "registered", "harnessId": "remote-…" }`. A rejected/revoked token fails the upgrade with **HTTP 401**.
+
+**Backend → harness:** `{ type: "spawn", sessionId, mode, systemPromptType, skills, model, excludeTools }`, `{ type: "prompt", sessionId, message }`, `{ type: "cancel", sessionId }`, `{ type: "disconnect", sessionId }`, `{ type: "list_tools", reqId }`.
+**Harness → backend:** `{ type: "event", sessionId, event, data }` (relayed harness events), `{ type: "tools_list", reqId, tools }`.
+
+### D. Staying connected
+- **Heartbeat:** the harness sends WS `ping` frames every `heartbeat.intervalMs` to hold the socket through proxy idle timeouts; the server auto-pongs.
+- **Reconnect:** on a dropped socket the harness retries with `reconnect.backoffMs` + up to `maxJitterMs` jitter, then re-`register`s (a fresh `harnessId`).
+- **Restart:** the persisted token in `~/.orbit/adapter-credentials.json` (keyed by server host, chmod 600) lets a restarted harness reconnect with **no re-pairing** — the expired code is irrelevant.
+- **Revocation:** `DELETE /api/devices/:id` marks the token revoked; the next WS upgrade returns 401 and the adapter drops its stored credential and exits "re-pair required."
+
+`protocolVersion` is advisory today (best-effort); it is surfaced so future breaking changes to the register/event shape can be negotiated.
+
+---
+
+## 5. Stability & Versioning
 
 The endpoints listed under `/api/sessions`, `/api/capabilities`, and `/api/config` represent the stable public surface of Orbit Backend v2. Custom frontends built against these structures are guaranteed to remain compatible across patch releases.

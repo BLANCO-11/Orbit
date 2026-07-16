@@ -1,134 +1,78 @@
-process.env.ORBIT_MODE = "edit"; // default for legacy tests
+// security-guard is now the HARD blocklist only — no mode/permission gating
+// (that lives in policy-engine.js + the tool_call gate; see policy-engine tests).
+// These tests exercise the non-overridable guardrail: protected secrets, write-
+// protected source, and high-risk command patterns.
 
 const { validatePath, validateCommand } = require("../agent-backend/security-guard");
 const assert = require("assert");
-const path = require("path");
+
+const REPO = "/home/user/builds/Orbit";
 
 const mockConfig = {
   fileSystem: {
-    allowedReadPaths: ["/home/blanco/builds/LLM-OS-AGENT", "/tmp"],
-    allowedWritePaths: ["/home/blanco/builds/LLM-OS-AGENT/workspace", "/tmp"],
-    blockedPaths: ["/home/blanco/.ssh", "/etc"]
+    // Secrets: no read, no write.
+    blockedPaths: ["/home/user/.ssh", "/etc"],
+    // Orbit source: read OK, no write.
+    writeBlockedPaths: [REPO + "/agent-backend"],
   },
   shellCommands: {
-    autoApprove: ["git status", "git diff", "ls -la"],
-    allowedPrefixes: ["git", "npm", "node", "python3", "docker"],
-    blockedCommands: ["rm -rf /", "dd", "mkfs"],
-    requireApproval: true
-  }
+    blockedCommands: ["dd", "mkfs", "shutdown"],
+  },
 };
 
 function testFileSystem() {
-  console.log("Running filesystem security tests...");
-  
-  // Test Read Allowed (Edit mode)
-  let res = validatePath("read", "/home/blanco/builds/LLM-OS-AGENT/package.json", mockConfig.fileSystem);
-  assert.strictEqual(res.allowed, true, "Should allow read inside workspace in edit mode");
-  
-  // Test Read Blocked (outer path)
-  res = validatePath("read", "/home/blanco/documents", mockConfig.fileSystem);
-  assert.strictEqual(res.allowed, false, "Should deny read outside allowed directories in edit mode");
-  
-  // Test Read Explicitly Blocked
-  res = validatePath("read", "/home/blanco/.ssh/id_rsa", mockConfig.fileSystem);
-  assert.strictEqual(res.allowed, false, "Should deny read in blocked directory in edit mode");
+  console.log("Running filesystem hard-blocklist tests...");
 
-  // Test Write Allowed
-  res = validatePath("write", "/home/blanco/builds/LLM-OS-AGENT/workspace/file.txt", mockConfig.fileSystem);
-  assert.strictEqual(res.allowed, true, "Should allow write inside allowed workspace write directory in edit mode");
+  // Ordinary paths are allowed (permission gating happens elsewhere now).
+  let res = validatePath("read", REPO + "/package.json", mockConfig.fileSystem);
+  assert.strictEqual(res.allowed, true, "Non-protected read should be allowed by the hard guard");
 
-  // Test Write Denied (Read-only workspace root)
-  res = validatePath("write", "/home/blanco/builds/LLM-OS-AGENT/package.json", mockConfig.fileSystem);
-  assert.strictEqual(res.allowed, false, "Should deny write outside allowed write directories in edit mode");
+  res = validatePath("write", REPO + "/workspace/file.txt", mockConfig.fileSystem);
+  assert.strictEqual(res.allowed, true, "Non-protected write should be allowed by the hard guard");
 
-  // Test YOLO mode path validation
-  res = validatePath("read", "/home/blanco/documents", mockConfig.fileSystem, "yolo");
-  assert.strictEqual(res.allowed, true, "YOLO mode should bypass read path restrictions");
-  res = validatePath("write", "/etc/hosts", mockConfig.fileSystem, "yolo");
-  assert.strictEqual(res.allowed, true, "YOLO mode should bypass write path restrictions");
+  // Secrets: blocked for both read and write.
+  res = validatePath("read", "/home/user/.ssh/id_rsa", mockConfig.fileSystem);
+  assert.strictEqual(res.allowed, false, "Reading a secret path must be hard-blocked");
+  res = validatePath("write", "/etc/hosts", mockConfig.fileSystem);
+  assert.strictEqual(res.allowed, false, "Writing a secret path must be hard-blocked");
 
-  // Test Plan mode path validation
-  const planDir = path.resolve(path.join(__dirname, "../plan"));
-  res = validatePath("write", path.join(planDir, "test.md"), mockConfig.fileSystem, "plan");
-  assert.strictEqual(res.allowed, true, "Plan mode should allow access under plan directory");
-  res = validatePath("read", "/home/blanco/builds/LLM-OS-AGENT/package.json", mockConfig.fileSystem, "plan");
-  assert.strictEqual(res.allowed, false, "Plan mode should block access outside plan directory");
+  // Write-protected source: read OK, write blocked.
+  res = validatePath("read", REPO + "/agent-backend/server.js", mockConfig.fileSystem);
+  assert.strictEqual(res.allowed, true, "Reading write-protected source should be allowed");
+  res = validatePath("write", REPO + "/agent-backend/server.js", mockConfig.fileSystem);
+  assert.strictEqual(res.allowed, false, "Writing write-protected source must be hard-blocked");
 
-  // Test Chat mode path validation
-  res = validatePath("read", "/home/blanco/builds/LLM-OS-AGENT/package.json", mockConfig.fileSystem, "chat");
-  assert.strictEqual(res.allowed, false, "Chat mode should block all read access");
-  res = validatePath("write", "/home/blanco/builds/LLM-OS-AGENT/workspace/test.txt", mockConfig.fileSystem, "chat");
-  assert.strictEqual(res.allowed, false, "Chat mode should block all write access");
-
-  console.log("FileSystem security tests passed!");
+  console.log("FileSystem hard-blocklist tests passed!");
 }
 
 function testCommands() {
-  console.log("Running shell command security tests...");
+  console.log("Running shell command hard-blocklist tests...");
 
-  // Test Auto-Approve Command
+  // Ordinary commands pass the hard guard (mode gating happens elsewhere).
   let res = validateCommand("git status", mockConfig.shellCommands);
-  assert.strictEqual(res.allowed, true, "Should allow auto-approved command");
-  assert.strictEqual(res.action, "allow", "Action should be 'allow'");
-
-  // Test Auto-Approve prefix match
-  res = validateCommand("git status --porcelain", mockConfig.shellCommands);
-  assert.strictEqual(res.allowed, true);
+  assert.strictEqual(res.allowed, true, "Ordinary command should pass the hard guard");
   assert.strictEqual(res.action, "allow");
 
-  // Test Allowed Prefix but Requires Approval (Edit mode)
-  res = validateCommand("npm install express", mockConfig.shellCommands, "edit");
-  assert.strictEqual(res.allowed, true, "Should allow with approval");
-  assert.strictEqual(res.action, "approve", "Action should be 'approve' in edit mode");
+  // High-risk pattern is always blocked.
+  res = validateCommand("rm -rf /", mockConfig.shellCommands);
+  assert.strictEqual(res.allowed, false, "rm -rf / must be hard-blocked");
+  assert.strictEqual(res.action, "block");
 
-  // Test Disallowed Prefix (Edit mode)
-  res = validateCommand("apt-get update", mockConfig.shellCommands, "edit");
-  assert.strictEqual(res.allowed, false, "Should block disallowed command");
-  assert.strictEqual(res.action, "block", "Action should be 'block' in edit mode");
+  res = validateCommand("dd if=/dev/zero of=/dev/sda", mockConfig.shellCommands);
+  assert.strictEqual(res.allowed, false, "dd if= must be hard-blocked");
+  assert.strictEqual(res.action, "block");
 
-  // Test YOLO mode command execution
-  res = validateCommand("apt-get update", mockConfig.shellCommands, "yolo");
-  assert.strictEqual(res.allowed, true, "YOLO mode should allow any command utility");
-  assert.strictEqual(res.action, "allow", "Action should be 'allow' in YOLO mode");
+  // Explicitly blocked command.
+  res = validateCommand("shutdown -h now", mockConfig.shellCommands);
+  assert.strictEqual(res.allowed, false, "Explicitly blocked command must be blocked");
+  assert.strictEqual(res.action, "block");
 
-  // Test Plan mode command execution
-  res = validateCommand("git status", mockConfig.shellCommands, "plan");
-  assert.strictEqual(res.allowed, true, "Plan mode should allow commands with approval");
-  assert.strictEqual(res.action, "approve", "Action should be 'approve' in Plan mode");
-
-  // Test Chat mode command execution
-  res = validateCommand("git status", mockConfig.shellCommands, "chat");
-  assert.strictEqual(res.allowed, false, "Chat mode should block all commands");
-  assert.strictEqual(res.action, "block", "Action should be 'block' in Chat mode");
-
-  // Test Dangerous Pattern
-  res = validateCommand("rm -rf /", mockConfig.shellCommands, "edit");
-  assert.strictEqual(res.allowed, false, "Should block dangerous patterns");
-  assert.strictEqual(res.action, "block", "Action should be 'block'");
-
-  console.log("Shell command security tests passed!");
-}
-
-function testSubagentInheritance() {
-  console.log("Running sub-agent inheritance security tests...");
-  // A subagent inherits the mode of the parent (e.g. "edit" mode).
-  const subagentInheritedMode = "edit";
-  
-  // Test a sub-agent attempting to write outside the workspace
-  let res = validatePath("write", "/home/blanco/documents/secret.txt", mockConfig.fileSystem, subagentInheritedMode);
-  assert.strictEqual(res.allowed, false, "Subagent in inherited 'edit' mode should be blocked from writing outside allowed write directories");
-
-  // In chat mode, subagents shouldn't even be spawned, but if one tries to write, it should be blocked:
-  res = validatePath("write", "/home/blanco/builds/LLM-OS-AGENT/workspace/file.txt", mockConfig.fileSystem, "chat");
-  assert.strictEqual(res.allowed, false, "Subagent in inherited 'chat' mode should be blocked from writing anywhere");
-
-  console.log("Sub-agent inheritance security tests passed!");
+  console.log("Shell command hard-blocklist tests passed!");
 }
 
 try {
   testFileSystem();
   testCommands();
-  testSubagentInheritance();
   console.log("\nAll security guard tests completed successfully!");
 } catch (e) {
   console.error("Test failed:", e);

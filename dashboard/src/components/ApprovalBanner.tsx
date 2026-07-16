@@ -3,6 +3,7 @@
 
 import React from "react";
 import { AlertTriangle, ShieldCheck, Shield, ShieldOff, ExternalLink } from "lucide-react";
+import Banner from "./chat/Banner";
 
 /**
  * ApprovalBanner — HITL approval cards (command execution / edit-mode path access).
@@ -13,7 +14,7 @@ export default function ApprovalBanner({ approvalRequest, onApprove, onDeny }) {
   // Edit-mode directory permission request
   if (approvalRequest.type === "edit_permission") {
     return (
-      <div className="rounded-[11px] border border-warning/40 bg-warning/8 p-4 shadow-card">
+      <Banner tone="warning">
         <h4 className="mb-1.5 flex items-center gap-1.5 text-[13.5px] font-semibold text-warning">
           <Shield size={15} /> Path outside the safe zone
         </h4>
@@ -55,13 +56,13 @@ export default function ApprovalBanner({ approvalRequest, onApprove, onDeny }) {
             <ShieldOff size={14} /> Deny
           </button>
         </div>
-      </div>
+      </Banner>
     );
   }
 
   // Standard command approval
   return (
-    <div className="rounded-[11px] border border-warning/40 bg-warning/8 p-4 shadow-card">
+    <Banner tone="warning">
       <h4 className="mb-2 flex items-center gap-1.5 text-[13.5px] font-semibold text-warning">
         <AlertTriangle size={15} /> Command needs your approval
       </h4>
@@ -82,6 +83,6 @@ export default function ApprovalBanner({ approvalRequest, onApprove, onDeny }) {
           Deny
         </button>
       </div>
-    </div>
+    </Banner>
   );
 }

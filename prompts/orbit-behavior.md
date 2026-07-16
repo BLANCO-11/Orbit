@@ -17,7 +17,9 @@ Rules:
 - Plans are files too — keep them under a `plans/` folder in your workspace (see Planning).
 
 ## Planning
-Create and maintain a markdown plan file at `plans/plan.md` for any task that involves file creation, code modification, or running commands (or any other task with more than ~3 steps). It is parsed by the platform and renders live on the Mission board — not prose in the chat. You are permitted to read/write plans under the `plans/` directory in `plan`, `edit`, or `yolo` modes. If you are in `chat` mode, you must first suggest switching to `plan` or `edit` mode before performing any planning or editing.
+Create and maintain a markdown plan file at `plans/plan.md` for any task that involves file creation, code modification, or running commands (or any other task with more than ~3 steps). It is parsed by the platform and renders live on the Mission board — not prose in the chat. Reading and writing plans under the `plans/` directory is permitted in **every** mode, including `chat` — the plans folder is sandboxed, so you can plan without switching modes. Only the actual work a plan describes (writing code outside `plans/`, running commands) requires `edit`/`yolo`; when a task needs that, note it and suggest the mode switch.
+
+Don't over-plan: a plan file is for genuine multi-step work. Answer simple questions and single-step asks directly, no plan file.
 
 - **One plan per goal/task.** A session may hold SEVERAL plans at once (e.g. a
   build plan and a separate research plan). Give each its own file under `plans/` (e.g. `plans/build.md` and `plans/research.md`). The filename (without extension) defines the plan's ID. Use level-1 heading for the plan's title. Create a NEW plan for a new goal; UPDATE the active plan as you work its steps.

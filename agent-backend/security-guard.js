@@ -1,5 +1,19 @@
 const path = require("path");
 
+// ─────────────────────────────────────────────────────────────────────────────
+// HARD blocklist guard — the non-overridable guardrail, and ONLY that.
+//
+// This module used to also gate by permission MODE (chat/plan/edit/yolo) with
+// its own "switch to PLAN/EDIT/YOLO mode" copy. That was a second, drifting
+// enforcement layer. The permission model is now owned entirely by
+// policy-engine.js (the capability × mode matrix) evaluated at the
+// `tool_call_start` gate in server.js — the single source of truth. To avoid a
+// request being blocked by one layer with different wording than the other, the
+// mode logic has been retired here (Workstream A4). What remains is the hard
+// guardrail: protected secrets (no read/write) and protected source (no write),
+// plus high-risk command patterns — guardrails that user consent cannot loosen.
+// ─────────────────────────────────────────────────────────────────────────────
+
 /**
  * Checks if a target path is under a parent directory.
  */
@@ -9,116 +23,43 @@ function isUnderDirectory(parent, target) {
 }
 
 /**
- * Validates a filesystem path against read/write configs.
+ * Hard-blocklist path guard. Not the permission layer — only answers whether a
+ * path is a protected secret (blocked for read + write) or protected source
+ * (blocked for write). Everything else is allowed here; mode/permission gating
+ * happens in the policy engine.
+ *
  * @param {string} action - 'read' or 'write'
  * @param {string} targetPath - The path being accessed
- * @param {object} config - The security configuration
- * @returns {object} { allowed: boolean, reason?: string, resolvedPath: string }
+ * @param {object} config - fileSystem config: { blockedPaths, writeBlockedPaths }
+ * @returns {{allowed: boolean, reason?: string, resolvedPath: string}}
  */
-function validatePath(action, targetPath, config, mode) {
+function validatePath(action, targetPath, config = {}) {
   const resolved = path.resolve(targetPath);
-  const activeMode = mode || process.env.ORBIT_MODE || (config && config.defaultMode) || "chat";
 
-  // YOLO mode: full access (bypasses all allowed/blocked restrictions)
-  if (activeMode === "yolo") {
-    return { allowed: true, resolvedPath: resolved };
-  }
-
-  // Check explicit blocklist first
-  if (config.blockedPaths) {
-    for (const blocked of config.blockedPaths) {
-      const resolvedBlocked = path.resolve(blocked);
-      if (resolved === resolvedBlocked || isUnderDirectory(resolvedBlocked, resolved)) {
-        return {
-          allowed: false,
-          reason: `Access explicitly blocked to path: ${blocked}`,
-          resolvedPath: resolved
-        };
-      }
+  // No-read + no-write: secrets (~/.ssh, ~/.aws, …).
+  for (const blocked of config.blockedPaths || []) {
+    const resolvedBlocked = path.resolve(blocked);
+    if (resolved === resolvedBlocked || isUnderDirectory(resolvedBlocked, resolved)) {
+      return {
+        allowed: false,
+        reason: `Access explicitly blocked to path: ${blocked}`,
+        resolvedPath: resolved,
+      };
     }
   }
 
-  // Check explicit write blocklist
-  if (action === "write" && config.writeBlockedPaths) {
-    for (const blocked of config.writeBlockedPaths) {
+  // No-write, read OK: Orbit's own source (the agent may read/explain it but
+  // never modify it).
+  if (action === "write") {
+    for (const blocked of config.writeBlockedPaths || []) {
       const resolvedBlocked = path.resolve(blocked);
       if (resolved === resolvedBlocked || isUnderDirectory(resolvedBlocked, resolved)) {
         return {
           allowed: false,
           reason: `Write access explicitly blocked to path: ${blocked}`,
-          resolvedPath: resolved
+          resolvedPath: resolved,
         };
       }
-    }
-  }
-
-  // Plan mode: only reading and writing plans (under workspace/plans/ directory)
-  if (activeMode === "plan") {
-    const isPlanPath = resolved.includes("/workspace/plans/") || resolved.endsWith("/workspace/plans");
-    if (!isPlanPath) {
-      return {
-        allowed: false,
-        reason: `Plan mode restriction: reading and writing is restricted to the plans directory only. Path: ${targetPath}`,
-        resolvedPath: resolved
-      };
-    }
-    return { allowed: true, resolvedPath: resolved };
-  }
-
-  // Chat mode: no OS filesystem access
-  if (activeMode === "chat") {
-    return {
-      allowed: false,
-      reason: `Access denied: Chat mode does not allow filesystem access. Please switch to PLAN, EDIT, or YOLO mode.`,
-      resolvedPath: resolved
-    };
-  }
-
-  // Check read permissions
-  if (action === "read") {
-    if (!config.allowedReadPaths || config.allowedReadPaths.length === 0) {
-      return { allowed: false, reason: "No read paths are allowed in security config", resolvedPath: resolved };
-    }
-    
-    let isAllowed = false;
-    for (const allowed of config.allowedReadPaths) {
-      const resolvedAllowed = path.resolve(allowed);
-      if (resolved === resolvedAllowed || isUnderDirectory(resolvedAllowed, resolved)) {
-        isAllowed = true;
-        break;
-      }
-    }
-    
-    if (!isAllowed) {
-      return {
-        allowed: false,
-        reason: `Read access denied for path outside of allowed directories. Path: ${targetPath}`,
-        resolvedPath: resolved
-      };
-    }
-  }
-
-  // Check write permissions
-  if (action === "write") {
-    if (!config.allowedWritePaths || config.allowedWritePaths.length === 0) {
-      return { allowed: false, reason: "No write paths are allowed in security config", resolvedPath: resolved };
-    }
-    
-    let isAllowed = false;
-    for (const allowed of config.allowedWritePaths) {
-      const resolvedAllowed = path.resolve(allowed);
-      if (resolved === resolvedAllowed || isUnderDirectory(resolvedAllowed, resolved)) {
-        isAllowed = true;
-        break;
-      }
-    }
-    
-    if (!isAllowed) {
-      return {
-        allowed: false,
-        reason: `Write access denied for path outside of allowed write directories. Path: ${targetPath}`,
-        resolvedPath: resolved
-      };
     }
   }
 
@@ -126,166 +67,55 @@ function validatePath(action, targetPath, config, mode) {
 }
 
 /**
- * Read-only command patterns used in Edit mode to auto-approve reads.
+ * High-risk command execution patterns that are always blocked, regardless of
+ * mode or user consent.
  */
-const READ_ONLY_COMMANDS = [
-  /^\s*(ls|pwd|echo|cat|head|tail|less|more|wc|sort|uniq|grep|find|which|stat|du|df|file|type|whereis|locate|strings|diff|cmp)\b/,
-  /^\s*git\s+(status|diff|log|show|branch|remote|ls-files|ls-tree|describe|rev-parse|config|help|version)/,
-  /^\s*npm\s+(list|view|search|pack|help|version)/,
-  /^\s*docker\s+(ps|images|logs|inspect|stats|info|version)/,
-  /^\s*node\s+(-[evp]|--version|--help)/
+const DANGEROUS_PATTERNS = [
+  /rm\s+-(rf|fr|r|f)\s+\//,
+  /chmod\s+.*-R/,
+  /chown\s+.*-R/,
+  /mkfs/,
+  /dd\s+if=/,
+  />\s*\/dev\//,
+  /:\(\)\{\s*:\s*\|\s*:\s*&\s*\};:/, // fork bomb
 ];
 
 /**
- * Check if a command is read-only (safe for auto-approval in Edit mode).
- */
-function isReadOnlyCommand(commandString) {
-  const cmd = commandString.trim();
-  for (const pattern of READ_ONLY_COMMANDS) {
-    if (pattern.test(cmd)) {
-      return true;
-    }
-  }
-  return false;
-}
-
-/**
- * Validates a shell command string against security rules.
+ * Hard-blocklist command guard. Only blocks high-risk patterns and explicitly
+ * blocked commands; it does NOT approve/gate by mode (the policy engine does).
+ *
  * @param {string} commandString - The full command execution request
- * @param {object} config - The security configuration
- * @param {string} [mode] - The session mode: 'plan', 'edit', 'yolo', or undefined
- * @returns {object} { allowed: boolean, action: 'allow' | 'approve' | 'block', reason?: string }
+ * @param {object} config - shellCommands config: { blockedCommands }
+ * @returns {{allowed: boolean, action: 'allow' | 'block', reason?: string}}
  */
-function validateCommand(commandString, config, mode) {
-  const activeMode = mode || process.env.ORBIT_MODE || (config && config.defaultMode) || "chat";
+function validateCommand(commandString, config = {}) {
   const cmd = commandString.trim();
-  const tokens = cmd.split(/\s+/);
-  const primaryCommand = tokens[0];
+  const primaryCommand = cmd.split(/\s+/)[0];
 
-  // 1. Strict pattern blocklist (e.g. rm -rf, dd, etc.)
-  const dangerousPatterns = [
-    /rm\s+-(rf|fr|r|f)\s+\//,
-    /chmod\s+.*-R/,
-    /chown\s+.*-R/,
-    /mkfs/,
-    /dd\s+if=/,
-    />\s*\/dev\//,
-    /:\(\)\{\s*:\s*\|\s*:\s*&\s*\};:/ // fork bomb
-  ];
-
-  for (const pattern of dangerousPatterns) {
+  for (const pattern of DANGEROUS_PATTERNS) {
     if (pattern.test(cmd)) {
       return {
         allowed: false,
         action: "block",
-        reason: "Command matches a blocked high-risk execution pattern."
+        reason: "Command matches a blocked high-risk execution pattern.",
       };
     }
   }
 
-  // Check against config blockedCommands
-  if (config.blockedCommands) {
-    for (const blocked of config.blockedCommands) {
-      if (cmd.startsWith(blocked) || primaryCommand === blocked) {
-        return {
-          allowed: false,
-          action: "block",
-          reason: `Command matches explicitly blocked instruction: "${blocked}"`
-        };
-      }
-    }
-  }
-
-  // YOLO mode check: bypass remaining whitelists/blocklists
-  if (activeMode === "yolo") {
-    return {
-      allowed: true,
-      action: "allow"
-    };
-  }
-
-  // Chat mode check: block all command execution
-  if (activeMode === "chat") {
-    return {
-      allowed: false,
-      action: "block",
-      reason: "Command execution blocked: Chat mode does not allow executing commands. Please switch to PLAN, EDIT, or YOLO mode."
-    };
-  }
-
-  // Plan mode check: require approval for all command execution
-  if (activeMode === "plan") {
-    return {
-      allowed: true,
-      action: "approve",
-      reason: "Command requires human approval (Plan mode)."
-    };
-  }
-
-  // 2. Check for auto-approve whitelist
-  if (config.autoApprove) {
-    for (const approved of config.autoApprove) {
-      if (cmd === approved || cmd.startsWith(approved + " ")) {
-        return {
-          allowed: true,
-          action: "allow"
-        };
-      }
-    }
-  }
-
-  // 3. Check for allowed prefixes / commands
-  if (config.allowedPrefixes) {
-    let isAllowedPrefix = false;
-    for (const prefix of config.allowedPrefixes) {
-      if (cmd.startsWith(prefix) || primaryCommand === prefix) {
-        isAllowedPrefix = true;
-        break;
-      }
-    }
-
-    if (!isAllowedPrefix) {
+  for (const blocked of config.blockedCommands || []) {
+    if (cmd.startsWith(blocked) || primaryCommand === blocked) {
       return {
         allowed: false,
         action: "block",
-        reason: `Command execution forbidden: primary utility "${primaryCommand}" is not in the allowed prefixes list.`
+        reason: `Command matches explicitly blocked instruction: "${blocked}"`,
       };
     }
   }
 
-  // 4. Edit mode check
-  if (activeMode === "edit") {
-    // Edit mode: read-only commands auto-approved, writes need approval
-    if (isReadOnlyCommand(cmd)) {
-      return {
-        allowed: true,
-        action: "allow"
-      };
-    }
-    // Everything else needs approval
-    return {
-      allowed: true,
-      action: "approve",
-      reason: "Write command requires human approval (Edit mode)."
-    };
-  }
-
-  // 5. Fallback: use config-level requireApproval
-  if (config.requireApproval) {
-    return {
-      allowed: true,
-      action: "approve",
-      reason: "Command is valid but requires human approval."
-    };
-  }
-
-  return {
-    allowed: true,
-    action: "allow"
-  };
+  return { allowed: true, action: "allow" };
 }
 
 module.exports = {
   validatePath,
-  validateCommand
+  validateCommand,
 };

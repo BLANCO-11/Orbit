@@ -10,8 +10,8 @@
     "semantic_hash": ""
   },
   "agent-backend/env.js": {
-    "mtime": 1784186724.214463,
-    "ast_hash": "9d204045c17e5eaed7d03d181f23f050",
+    "mtime": 1784195321.1492467,
+    "ast_hash": "40b0f69b03b90dbc964e5cbe49ab6b6c",
     "semantic_hash": ""
   },
   "agent-backend/harnesses/index.js": {
@@ -105,8 +105,8 @@
     "semantic_hash": ""
   },
   "agent-backend/server.js": {
-    "mtime": 1784193996.796802,
-    "ast_hash": "9b4f30340221718b83e2b48750b38ff3",
+    "mtime": 1784194440.0366602,
+    "ast_hash": "ae429f2330d8edc5ffa414c3edbf7fbd",
     "semantic_hash": ""
   },
   "agent-backend/services/plan-generator.js": {
@@ -840,8 +840,13 @@
     "semantic_hash": ""
   },
   "setup.sh": {
-    "mtime": 1784185750.9057646,
-    "ast_hash": "dd2da0d3a8fb6a6687ba91a7fa27bd61",
+    "mtime": 1784195873.1087308,
+    "ast_hash": "bca5c0231180bed670ed01bc503098dd",
+    "semantic_hash": ""
+  },
+  "plans/harness_capabilities_and_mcp_visibility.md": {
+    "mtime": 1784196203.4267561,
+    "ast_hash": "a5fe8f6b46c9147a12ff4313ad634e3e",
     "semantic_hash": ""
   }
 }

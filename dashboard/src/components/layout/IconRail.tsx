@@ -1,7 +1,7 @@
 import React from 'react';
-import { Terminal, Server, Shield, Plug, Bot, Library, Volume2, VolumeX, Sun, Moon, Settings } from 'lucide-react';
+import { Terminal, Server, Shield, Plug, Bot, Library, ShieldUser, Volume2, VolumeX, Sun, Moon, Settings, LogOut } from 'lucide-react';
 
-export type RailView = 'console' | 'agents' | 'fleet' | 'connectors' | 'policies' | 'library' | 'settings';
+export type RailView = 'console' | 'agents' | 'fleet' | 'connectors' | 'policies' | 'library' | 'admin' | 'settings';
 
 const VIEWS: { id: RailView; label: string; icon: React.ComponentType<{ size?: number }> }[] = [
   { id: 'console', label: 'Console', icon: Terminal },
@@ -21,6 +21,10 @@ interface IconRailProps {
   theme?: { mode: 'light' | 'dark' } | any;
   onToggleTheme?: () => void;
   isVisible?: (category: string, id: string) => boolean;
+  /** Show the Admin destination — only for admins/superadmins (see useAuth). */
+  canAdmin?: boolean;
+  /** When set, render a logout control (hidden in dev-mode where there's no session). */
+  onLogout?: () => void;
 }
 
 /**
@@ -36,6 +40,8 @@ export default function IconRail({
   theme,
   onToggleTheme,
   isVisible,
+  canAdmin = false,
+  onLogout,
 }: IconRailProps) {
   return (
     <nav
@@ -75,6 +81,23 @@ export default function IconRail({
           <Icon size={17} />
         </button>
       ))}
+
+      {/* Admin — multi-tenant keys, roles, observability, SSO. Admins only. */}
+      {canAdmin && (
+        <button
+          onClick={() => onViewChange('admin')}
+          aria-label="Admin — tenants, keys, roles & SSO"
+          title="Admin — tenants, keys, roles & SSO"
+          aria-current={activeView === 'admin' ? 'page' : undefined}
+          className={`grid size-9 place-items-center rounded-[10px] transition-colors ${
+            activeView === 'admin'
+              ? 'bg-accent text-accent-foreground'
+              : 'text-faint hover:bg-muted hover:text-muted-foreground'
+          }`}
+        >
+          <ShieldUser size={17} />
+        </button>
+      )}
 
       <div className="flex-1" />
 
@@ -120,6 +143,18 @@ export default function IconRail({
       >
         <Settings size={16} />
       </button>
+
+      {/* Logout — only when there's a real session (hidden in dev-mode). */}
+      {onLogout && (
+        <button
+          onClick={onLogout}
+          aria-label="Sign out"
+          title="Sign out"
+          className="grid size-9 place-items-center rounded-[10px] text-faint transition-colors hover:bg-destructive/10 hover:text-destructive"
+        >
+          <LogOut size={16} />
+        </button>
+      )}
     </nav>
   );
 }

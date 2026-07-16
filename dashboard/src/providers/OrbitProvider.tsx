@@ -32,8 +32,7 @@ const initialState = {
   // Session
   currentSessionId: '',
   sessionMode: '',
-  showModePrompt: false,
-  
+
   // Display
   expandedTools: {},
   visibleCount: 10,
@@ -74,7 +73,6 @@ const ADD_APPROVAL_HISTORY = 'ADD_APPROVAL_HISTORY';
 const UPDATE_APPROVAL_HISTORY = 'UPDATE_APPROVAL_HISTORY';
 const SET_CURRENT_SESSION = 'SET_CURRENT_SESSION';
 const SET_SESSION_MODE = 'SET_SESSION_MODE';
-const SET_SHOW_MODE_PROMPT = 'SET_SHOW_MODE_PROMPT';
 const SET_VOICE_STATE = 'SET_VOICE_STATE';
 const SET_IS_LISTENING = 'SET_IS_LISTENING';
 const SET_SCREENSHOT = 'SET_SCREENSHOT';
@@ -263,11 +261,8 @@ function orbitReducer(state, action) {
       return { ...state, currentSessionId: action.payload };
     
     case SET_SESSION_MODE:
-      return { ...state, sessionMode: action.payload, showModePrompt: false };
-    
-    case SET_SHOW_MODE_PROMPT:
-      return { ...state, showModePrompt: action.payload };
-    
+      return { ...state, sessionMode: action.payload };
+
     case SET_VOICE_STATE:
       return { ...state, voiceState: action.payload };
     
@@ -375,7 +370,6 @@ export const actions = {
   updateApprovalHistory: (id, updates) => ({ type: UPDATE_APPROVAL_HISTORY, payload: { id, updates } }),
   setCurrentSession: (id) => ({ type: SET_CURRENT_SESSION, payload: id }),
   setSessionMode: (mode) => ({ type: SET_SESSION_MODE, payload: mode }),
-  setShowModePrompt: (show) => ({ type: SET_SHOW_MODE_PROMPT, payload: show }),
   setVoiceState: (state) => ({ type: SET_VOICE_STATE, payload: state }),
   setIsListening: (listening) => ({ type: SET_IS_LISTENING, payload: listening }),
   setScreenshot: (file) => ({ type: SET_SCREENSHOT, payload: file }),

@@ -37,7 +37,7 @@ function cwdFor(session) {
 
 // Best-effort: reject a command that names a hard-blocklisted absolute path.
 // Soft — a determined shell can construct paths dynamically — but it catches
-// the obvious `cat /home/blanco/.ssh/id_rsa` class of mistakes.
+// the obvious `cat ~/.ssh/id_rsa` class of mistakes.
 function blockedReason(command) {
   let blocked = [];
   try {

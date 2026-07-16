@@ -31,6 +31,9 @@ export function useSettings() {
   const [models, setModels] = useState([]);
   const [voices, setVoices] = useState([]);
   const [systemPromptType, setSystemPromptType] = useState('standard');
+  // LLM connection status (Workstream F4). configured: has baseURL+key;
+  // connected: null (untested) | true | false; error: message when failed.
+  const [llmStatus, setLlmStatus] = useState({ configured: null, connected: null, error: null, models: [] });
 
   const updateSettings = useCallback((patch) => {
     setSettings(prev => ({ ...prev, ...patch }));
@@ -41,6 +44,24 @@ export function useSettings() {
       .then(res => res.json())
       .then(data => setModels(data))
       .catch(() => {});
+  }, []);
+
+  // Run a live connection test against the configured endpoint (Workstream F4).
+  const testLlm = useCallback(() => {
+    return fetch(`/api/models/test`, { method: 'POST' })
+      .then(res => res.json())
+      .then(data => {
+        setLlmStatus({
+          configured: !!data.configured,
+          connected: data.ok === true,
+          error: data.ok === true ? null : (data.error || null),
+          models: data.models || [],
+        });
+        return data;
+      })
+      .catch(() => {
+        setLlmStatus(prev => ({ ...prev, connected: false, error: 'request_failed' }));
+      });
   }, []);
 
   const fetchVoices = useCallback(() => {
@@ -84,7 +105,7 @@ export function useSettings() {
       .catch(err => console.error('Error loading config:', err));
   }, [fetchModels, updateSettings]);
 
-  useEffect(() => { fetchConfig(); fetchVoices(); }, [fetchConfig, fetchVoices]);
+  useEffect(() => { fetchConfig(); fetchVoices(); testLlm(); }, [fetchConfig, fetchVoices, testLlm]);
 
   const saveAllSettings = useCallback(() => {
     const updatedConfig = {
@@ -112,10 +133,11 @@ export function useSettings() {
         if (data.success) {
           setSecurityConfig(updatedConfig);
           fetchModels();
+          testLlm(); // re-test the endpoint on save (Workstream F4)
         }
       })
       .catch(err => console.error('Error saving settings:', err));
-  }, [securityConfig, systemPromptType, settings, fetchModels]);
+  }, [securityConfig, systemPromptType, settings, fetchModels, testLlm]);
 
   // settingsKey (optional): a `settings` field to clear after a successful add,
   // e.g. the "new path" input that fed this addition.
@@ -143,5 +165,6 @@ export function useSettings() {
     systemPromptType, setSystemPromptType,
     fetchConfig, fetchModels, fetchVoices,
     saveAllSettings, addConfigItem, removeConfigItem,
+    llmStatus, testLlm,
   };
 }

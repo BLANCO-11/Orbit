@@ -9,7 +9,7 @@ import { useState, useCallback, useEffect } from 'react';
  */
 export function useDevices() {
   const [devices, setDevices] = useState([]);
-  const [pairing, setPairing] = useState(null); // { code, expiresAt, pairingUrl } | null
+  const [pairing, setPairing] = useState(null); // { code, expiresAt, scope, pairingUrl, connectUrl, bootstrapCommand } | null
 
   const fetchDevices = useCallback(() => {
     fetch('/api/devices')
