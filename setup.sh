@@ -9,16 +9,16 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
 
-echo -e "${GREEN}=========================================${NC}"
-echo -e "${GREEN}   Orbit Platform Setup Script           ${NC}"
-echo -e "${GREEN}=========================================${NC}"
-echo
+printf "${GREEN}=========================================${NC}\n"
+printf "${GREEN}   Orbit Platform Setup Script           ${NC}\n"
+printf "${GREEN}=========================================${NC}\n"
+echo ""
 
 # 1. Check Node.js
-echo -e "▸ Checking Node.js version…"
-if ! command -v node &> /dev/null; then
-    echo -e "${RED}✗ Error: Node.js is not installed.${NC}"
-    echo -e "Please install Node.js (v22.5.0 or higher is required for node:sqlite DatabaseSync support)."
+printf "▸ Checking Node.js version…\n"
+if ! command -v node > /dev/null 2>&1; then
+    printf "${RED}✗ Error: Node.js is not installed.${NC}\n"
+    printf "Please install Node.js (v22.5.0 or higher is required for node:sqlite DatabaseSync support).\n"
     exit 1
 fi
 
@@ -28,91 +28,91 @@ NODE_MINOR=$(echo "$NODE_VERSION" | cut -d'.' -f2)
 
 # node:sqlite requires Node v22.5.0+ or v23+
 if [ "$NODE_MAJOR" -lt 22 ] || { [ "$NODE_MAJOR" -eq 22 ] && [ "$NODE_MINOR" -lt 5 ]; }; then
-    echo -e "${YELLOW}⚠ Warning: Node.js version is v$NODE_VERSION.${NC}"
-    echo -e "Node.js v22.5.0 or higher is required for built-in SQLite DatabaseSync."
-    echo -e "Please upgrade Node.js if you encounter database initialization issues."
+    printf "${YELLOW}⚠ Warning: Node.js version is v$NODE_VERSION.${NC}\n"
+    printf "Node.js v22.5.0 or higher is required for built-in SQLite DatabaseSync.\n"
+    printf "Please upgrade Node.js if you encounter database initialization issues.\n"
 else
-    echo -e "${GREEN}✓ Node.js v$NODE_VERSION detected (supported).${NC}"
+    printf "${GREEN}✓ Node.js v$NODE_VERSION detected (supported).${NC}\n"
 fi
-echo
+echo ""
 
 # 2. Check Docker
-echo -e "▸ Checking Docker…"
-if ! command -v docker &> /dev/null; then
-    echo -e "${YELLOW}⚠ Warning: Docker is not installed or not in PATH.${NC}"
-    echo -e "Docker is required to run the mandatory Lightpanda headless browser."
-    echo -e "Please install Docker to enable agent web browsing: https://docs.docker.com/get-docker/"
+printf "▸ Checking Docker…\n"
+if ! command -v docker > /dev/null 2>&1; then
+    printf "${YELLOW}⚠ Warning: Docker is not installed or not in PATH.${NC}\n"
+    printf "Docker is required to run the mandatory Lightpanda headless browser.\n"
+    printf "Please install Docker to enable agent web browsing: https://docs.docker.com/get-docker/\n"
     DOCKER_AVAILABLE=false
 else
-    if ! docker info &> /dev/null; then
-        echo -e "${YELLOW}⚠ Warning: Docker is installed, but the daemon is not running.${NC}"
-        echo -e "Please start the Docker service/daemon (e.g. systemctl start docker or start Docker Desktop)."
+    if ! docker info > /dev/null 2>&1; then
+        printf "${YELLOW}⚠ Warning: Docker is installed, but the daemon is not running.${NC}\n"
+        printf "Please start the Docker service/daemon (e.g. systemctl start docker or start Docker Desktop).\n"
         DOCKER_AVAILABLE=false
     else
-        echo -e "${GREEN}✓ Docker is installed and running.${NC}"
+        printf "${GREEN}✓ Docker is installed and running.${NC}\n"
         DOCKER_AVAILABLE=true
     fi
 fi
-echo
+echo ""
 
 # 3. Setup Lightpanda Docker Container
 if [ "$DOCKER_AVAILABLE" = true ]; then
-    echo -e "▸ Setting up Lightpanda browser container…"
+    printf "▸ Setting up Lightpanda browser container…\n"
     if docker ps -a --format '{{.Names}}' | grep -Eq "^lightpanda-browser$"; then
-        echo -e "  - Container 'lightpanda-browser' already exists."
+        printf "  - Container 'lightpanda-browser' already exists.\n"
         if [ "$(docker inspect -f '{{.State.Status}}' lightpanda-browser)" != "running" ]; then
-            echo -e "  - Starting 'lightpanda-browser'…"
+            printf "  - Starting 'lightpanda-browser'…\n"
             docker start lightpanda-browser
         else
-            echo -e "  - 'lightpanda-browser' is already running."
+            printf "  - 'lightpanda-browser' is already running.\n"
         fi
     else
-        echo -e "  - Pulling lightpanda/browser:nightly…"
+        printf "  - Pulling lightpanda/browser:nightly…\n"
         docker pull lightpanda/browser:nightly
-        echo -e "  - Running lightpanda-browser container (restart policy: unless-stopped)…"
+        printf "  - Running lightpanda-browser container (restart policy: unless-stopped)…\n"
         docker run -d \
             --name lightpanda-browser \
             --restart unless-stopped \
             -p 127.0.0.1:9222:9222 \
             lightpanda/browser:nightly
     fi
-    echo -e "${GREEN}✓ Lightpanda container is up and running on port 9222.${NC}"
+    printf "${GREEN}✓ Lightpanda container is up and running on port 9222.${NC}\n"
 else
-    echo -e "${YELLOW}⚠ Skipping Lightpanda setup (Docker unavailable).${NC}"
-    echo -e "You can configure a fallback browser/web access in your profile settings later."
+    printf "${YELLOW}⚠ Skipping Lightpanda setup (Docker unavailable).${NC}\n"
+    printf "You can configure a fallback browser/web access in your profile settings later.\n"
 fi
-echo
+echo ""
 
 # 4. Copy Environment File
-echo -e "▸ Configuring environment variables…"
+printf "▸ Configuring environment variables…\n"
 if [ ! -f .env ]; then
     cp .env.example .env
-    echo -e "${GREEN}✓ Created .env file from .env.example.${NC}"
-    echo -e "Please edit .env to configure your LLM settings (LITELLM_BASE_URL, LITELLM_KEY, etc.)."
+    printf "${GREEN}✓ Created .env file from .env.example.${NC}\n"
+    printf "Please edit .env to configure your LLM settings (LITELLM_BASE_URL, LITELLM_KEY, etc.).\n"
 else
-    echo -e "  - .env file already exists."
+    printf "  - .env file already exists.\n"
 fi
-echo
+echo ""
 
 # 5. Install root dependencies
-echo -e "▸ Installing backend dependencies…"
+printf "▸ Installing backend dependencies…\n"
 npm install
-echo -e "${GREEN}✓ Backend dependencies installed.${NC}"
-echo
+printf "${GREEN}✓ Backend dependencies installed.${NC}\n"
+echo ""
 
 # 6. Install dashboard dependencies
-echo -e "▸ Installing dashboard dependencies…"
+printf "▸ Installing dashboard dependencies…\n"
 npm --prefix dashboard install
-echo -e "${GREEN}✓ Dashboard dependencies installed.${NC}"
-echo
+printf "${GREEN}✓ Dashboard dependencies installed.${NC}\n"
+echo ""
 
-echo -e "${GREEN}=========================================${NC}"
-echo -e "${GREEN}   Setup Completed Successfully!         ${NC}"
-echo -e "${GREEN}=========================================${NC}"
-echo
-echo -e "To get started:"
-echo -e "  1. Edit ${YELLOW}.env${NC} and fill in your LLM configuration (e.g. LITELLM_KEY)."
-echo -e "  2. Start the development servers by running:"
-echo -e "     ${YELLOW}npm run dev${NC}"
-echo -e "  3. Open ${YELLOW}http://localhost:6801${NC} in your browser."
-echo
+printf "${GREEN}=========================================${NC}\n"
+printf "${GREEN}   Setup Completed Successfully!         ${NC}\n"
+printf "${GREEN}=========================================${NC}\n"
+echo ""
+printf "To get started:\n"
+printf "  1. Edit ${YELLOW}.env${NC} and fill in your LLM configuration (e.g. LITELLM_KEY).\n"
+printf "  2. Start the development servers by running:\n"
+printf "     ${YELLOW}npm run dev${NC}\n"
+printf "  3. Open ${YELLOW}http://localhost:6801${NC} in your browser.\n"
+echo ""
