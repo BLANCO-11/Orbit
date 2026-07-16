@@ -4,7 +4,7 @@
   "description": "Orbit — local agent-operations console: harness orchestration, policy, observability.",
   "main": "index.js",
   "scripts": {
-    "dev": "concurrently -k -n backend,dashboard -c blue,magenta \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev": "npm run clean && concurrently -k -n backend,dashboard -c blue,magenta \"npm run dev:backend\" \"npm run dev:frontend\"",
     "dev:backend": "node agent-backend/server.js",
     "dev:frontend": "npm --prefix dashboard run dev",
     "build": "npm --prefix dashboard run build",
