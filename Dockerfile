@@ -16,8 +16,10 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends tini ca-certificates \
  && rm -rf /var/lib/apt/lists/* \
  && npm install -g @earendil-works/pi-coding-agent@${PI_VERSION} \
- && pi install npm:pi-mcp-extension \
- && pi install npm:pi-provider-litellm
+ && pi install npm:pi-mcp-extension
+# LLM access uses pi's NATIVE OpenAI-compatible provider (registered per-spawn by
+# agent-backend/harnesses/picode/orbit-provider.mjs, pointed at the app's own LLM
+# gateway) — so the bespoke `pi-provider-litellm` extension is no longer baked in.
 # pi is now on PATH (/usr/local/bin/pi) with node at /usr/local/bin/node, so
 # Orbit's binary discovery finds it — no PI_CLI_PATH/PI_NODE_PATH needed.
 

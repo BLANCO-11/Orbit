@@ -45,14 +45,23 @@ class ContainerHarness extends PiCodeHarness {
       "-v", `${PI_CONFIG_DIR}:${home}/.pi:rw`,              // pi settings/auth + session/lock files (pi writes here)
       "-v", `${sessionRoot}:${sessionRoot}:rw`,             // this session's tree (workspace/artifacts/tmp)
     ];
-    // Forward only the LLM creds + mode the agent needs.
+    // The `orbit` provider extension (`-e <path>`) lives in the backend source,
+    // outside every other mount — bind-mount its dir read-only at the same
+    // absolute path so pi resolves it inside the container.
+    if (this._providerExtPath) {
+      const extDir = path.dirname(this._providerExtPath);
+      mounts.push("-v", `${extDir}:${extDir}:ro`);
+    }
+    // Forward only the gateway-provider env + mode the agent needs. The child
+    // reaches the app's LLM gateway on the host loopback via --network host, so
+    // the real upstream key stays in the app (never entering this container).
     const envArgs = [];
-    for (const k of ["LITELLM_KEY", "OPENAI_API_KEY", "ORBIT_MODE", "LITELLM_BASE_URL"]) {
+    for (const k of ["ORBIT_MODE", "ORBIT_LLM_BASE_URL", "ORBIT_LLM_KEY", "ORBIT_LLM_MODEL"]) {
       if (childEnv[k]) envArgs.push("-e", `${k}=${childEnv[k]}`);
     }
     const dockerArgs = [
       "run", "--rm", "-i",
-      "--network", "host",              // reach the local LiteLLM endpoint
+      "--network", "host",              // reach the app's LLM gateway on loopback
       "--pull", "never",
       ...mounts,
       "-w", workspace,

@@ -8,6 +8,8 @@ interface Harness {
   name: string;
   transport: 'local' | 'remote';
   machine?: string;
+  model?: string;
+  provider?: string;
 }
 
 interface HarnessSelectorProps {
@@ -89,7 +91,11 @@ export default function HarnessSelector({ harnessId, onSetHarnessId }: HarnessSe
                 {h.transport === 'remote' ? <Globe size={14} className="shrink-0 text-faint" /> : <Terminal size={14} className="shrink-0 text-faint" />}
                 <span className="min-w-0 flex-1">
                   <span className="block text-[13px] font-semibold">{h.name}</span>
-                  <span className="block text-[11px] text-faint">{h.transport === 'remote' ? `${h.machine || 'remote'} · via adapter` : 'local child process'}</span>
+                  <span className="block truncate text-[11px] text-faint">
+                    {h.model
+                      ? `${h.model}${h.provider ? ` · ${h.provider}` : ''}`
+                      : (h.transport === 'remote' ? `${h.machine || 'remote'} · via adapter` : 'local child process')}
+                  </span>
                 </span>
                 {isActive && <Check size={14} className="shrink-0 text-primary" />}
               </button>

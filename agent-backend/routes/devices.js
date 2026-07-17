@@ -113,75 +113,30 @@ function createDevicesRouter(db, authMiddleware, getDashboardOrigin) {
       return res.status(410).send("// Error: Invalid, expired, or already-used pairing code. Ask the operator for a fresh code.");
     }
 
-    // Same descriptor as /pair/connect — one contract. The bootstrap is a thin
-    // convenience wrapper: it bakes the descriptor into a launcher that
-    // persists the token and starts Orbit's adapter, so a restart reconnects
-    // without re-pairing.
-    const { httpOrigin } = detectOrigins(req);
+    // The bootstrap IS the adapter: we serve the generic, zero-dependency
+    // `orbit-connect.js` with the pairing descriptor baked in. `curl … | node`
+    // then pairs + connects in one step — no secondary download, no `npm
+    // install ws`, no `pi`, no repo checkout. It runs on any OS with a stock
+    // Node 20+ and drives whatever OpenAI-SDK-compatible model the machine has.
     const descriptor = buildDescriptor(req, device);
+    const adapterPath = path.join(__dirname, "../adapter/orbit-connect.js");
+    let adapterSrc;
+    try { adapterSrc = fs.readFileSync(adapterPath, "utf8"); }
+    catch { return res.status(500).send("// Error: adapter source not found on server."); }
 
-    const script = `
-// Injected by the Orbit server at request-time — one-time redemption of a
-// pairing code. The descriptor below is the durable credential from here on.
-const DESCRIPTOR = ${JSON.stringify(descriptor)};
-const BOOTSTRAP_ORIGIN = ${JSON.stringify(httpOrigin)};
+    const header =
+      `// Injected by the Orbit server — one-time redemption of a pairing code.\n` +
+      `// The descriptor below is the durable credential from here on; it is\n` +
+      `// persisted to ~/.orbit so a restart reconnects without re-pairing.\n` +
+      `globalThis.__ORBIT_DESCRIPTOR__ = ${JSON.stringify(descriptor)};\n\n`;
 
-const fs = require("fs");
-const os = require("os");
-const path = require("path");
-const { spawn } = require("child_process");
-
-console.log("[bootstrap] Starting Orbit remote harness installer...");
-
-async function run() {
-  try {
-    // 1. Persist the descriptor so restarts reconnect without re-pairing.
-    const home = process.env.ORBIT_ADAPTER_HOME || path.join(os.homedir(), ".orbit");
-    fs.mkdirSync(home, { recursive: true });
-    const credsPath = path.join(home, "adapter-credentials.json");
-    let store = {};
-    try { store = JSON.parse(fs.readFileSync(credsPath, "utf8")); } catch {}
-    const host = new URL(DESCRIPTOR.wsUrl).host;
-    store[host] = {
-      wsUrl: DESCRIPTOR.wsUrl,
-      token: DESCRIPTOR.token,
-      deviceId: DESCRIPTOR.device.id,
-      label: DESCRIPTOR.device.label,
-      scope: DESCRIPTOR.device.scope,
-    };
-    fs.writeFileSync(credsPath, JSON.stringify(store, null, 2), { mode: 0o600 });
-    try { fs.chmodSync(credsPath, 0o600); } catch {}
-    console.log(\`[bootstrap] Saved credentials to \${credsPath}\`);
-
-    // 2. Download the adapter source from the server.
-    console.log("[bootstrap] Downloading orbit-adapter.js...");
-    const response = await fetch(\`\${BOOTSTRAP_ORIGIN}/api/pair/adapter\`);
-    if (!response.ok) throw new Error("Failed to download adapter source.");
-    const targetPath = path.join(process.cwd(), "orbit-adapter.js");
-    fs.writeFileSync(targetPath, await response.text());
-    console.log(\`[bootstrap] Saved adapter to \${targetPath}\`);
-
-    // 3. Launch the adapter. It reads the persisted credential itself — no
-    //    token on the command line — and supervises its own reconnects.
-    console.log("[bootstrap] Launching adapter daemon...");
-    const child = spawn("node", [targetPath, "--server", DESCRIPTOR.wsUrl], {
-      stdio: "inherit",
-    });
-    child.on("exit", (code) => process.exit(code || 0));
-  } catch (err) {
-    console.error("[bootstrap] Installation failed:", err.message);
-    process.exit(1);
-  }
-}
-
-run();
-`;
     res.setHeader("Content-Type", "application/javascript");
-    res.send(script);
+    res.send(header + adapterSrc);
   });
 
+  // Raw generic adapter source (no descriptor) — for manual download / inspection.
   router.get("/pair/adapter", (req, res) => {
-    const adapterPath = path.join(__dirname, "../adapter/orbit-adapter.js");
+    const adapterPath = path.join(__dirname, "../adapter/orbit-connect.js");
     if (!fs.existsSync(adapterPath)) {
       return res.status(404).send("// Error: Adapter source not found on server.");
     }

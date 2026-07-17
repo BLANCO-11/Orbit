@@ -43,59 +43,10 @@ class PiCodeHarness extends HarnessInterface {
     const normalModel = this.model || this.config.litellm.selectedNormalModel;
     const apiKey = this.config.litellm.apiKey;
     const baseURL = this.config.litellm.baseURL;
-    
-    // Select and combine prompt files. The base prompt comes from the prompt
-    // library (any prompts/<id>.md, e.g. frontier-style prompts); the mode
-    // directive is appended on top of it.
-    const { resolvePromptFile } = require("../../routes/prompts");
-    const basePromptFile = resolvePromptFile(activePromptType);
-    
-    let modePromptFile = null;
-    if (activeMode === "plan") modePromptFile = "plan-mode.md";
-    else if (activeMode === "edit") modePromptFile = "edit-mode.md";
-    else if (activeMode === "yolo") modePromptFile = "yolo-mode.md";
-    
-    const promptsDir = path.join(__dirname, "../../../prompts");
-    const basePrompt = fs.readFileSync(path.join(promptsDir, basePromptFile), "utf-8");
-    let combinedPrompt = basePrompt;
 
-    // Always inject Orbit's self-knowledge (who it is, its modes + capability
-    // matrix, connectors, the fleet + notify tools) so the agent answers
-    // questions about itself and picks the notify tool over bash — instead of
-    // grepping its own source at runtime.
-    try {
-      const systemDocs = fs.readFileSync(path.join(promptsDir, "orbit-system.md"), "utf-8");
-      combinedPrompt = combinedPrompt + "\n\n" + systemDocs;
-    } catch (e) {
-      console.error("[PiCodeHarness] orbit-system.md not found:", e.message);
-    }
-
-    // Static operating manual — HOW to operate (file mgmt, planning, tracking,
-    // rules). Separated from orbit-system.md (WHAT Orbit is) per Workstream D1.
-    try {
-      const behavior = fs.readFileSync(path.join(promptsDir, "orbit-behavior.md"), "utf-8");
-      combinedPrompt = combinedPrompt + "\n\n" + behavior;
-    } catch (e) {
-      console.error("[PiCodeHarness] orbit-behavior.md not found:", e.message);
-    }
-
-    // Live capability × mode matrix, generated FROM the enforced policy config so
-    // the prompt can never drift from what the backend actually enforces (D1).
-    try {
-      const matrix = PiCodeHarness._renderPolicyMatrix(this.config);
-      if (matrix) combinedPrompt = combinedPrompt + "\n\n" + matrix;
-    } catch (e) { /* non-fatal */ }
-
-    // Dynamic capability manifest — "what's configured right now" — laid in fresh
-    // each session start so the agent knows what it can use vs what needs setup
-    // (Workstream D2). Rendered by the backend and passed via capabilitiesBlock.
-    if (this.capabilitiesBlock) {
-      combinedPrompt = combinedPrompt + "\n\n" + this.capabilitiesBlock;
-    }
-
-    // Per-session workspace: create the session's dir tree and tell the agent
-    // exactly where it may work, so it never dumps files at random (and never
-    // into Orbit's source). This is dynamic — the paths are session-specific.
+    // Per-session workspace: create the session's dir tree first, so the
+    // workspace block can name the exact paths the agent may work in (and never
+    // Orbit's source). This is the ONE machine-specific part of the prompt.
     const dirs = workspacePaths.ensureSessionDirs(this.sessionId);
     this._workspaceDir = dirs.workspace;
 
@@ -118,8 +69,9 @@ class PiCodeHarness extends HarnessInterface {
     } catch (e) {
       console.error("[PiCodeHarness] Could not mirror .pi/mcp.json to workspace:", e.message);
     }
-    combinedPrompt = combinedPrompt +
-      `\n\n## Your workspace (this session)\n` +
+
+    const workspaceBlock =
+      `## Your workspace (this session)\n` +
       `You are running in an isolated per-session workspace sandboxed under a single session directory. Layout of the session:\n` +
       `- \`${dirs.workspace}\` (current working directory): Do all standard coding, scripting, and file creation here. Relative paths land here by default.\n` +
       `- \`${dirs.artifacts}\` (accessible relatively via \`../artifacts/\`): Put finished deliverables, reports, build outputs, and export files here so they are preserved and shown on the dashboard.\n` +
@@ -131,21 +83,18 @@ class PiCodeHarness extends HarnessInterface {
       `- Accessing folders outside the session root directory is blocked or requires manual user approval.\n` +
       `Keep things tidy — this layout is how the user tracks and manages your work.`;
 
-    if (modePromptFile) {
-      const modePrompt = fs.readFileSync(path.join(promptsDir, modePromptFile), "utf-8");
-      combinedPrompt = combinedPrompt + "\n\n" + modePrompt;
-    }
+    // Compose the full system prompt via the SHARED composer (same code the
+    // backend uses to build a remote agent's prompt — see harnesses/picode/prompt.js).
+    const { composeSystemPrompt } = require("./prompt");
+    const combinedPrompt = composeSystemPrompt({
+      config: this.config,
+      systemPromptType: activePromptType,
+      mode: activeMode,
+      skills: this.skills || this.config.skills || [],
+      capabilitiesBlock: this.capabilitiesBlock,
+      workspaceBlock,
+    });
 
-    // Append attached skills (reusable instruction packs). Inherited by
-    // sub-agents because they share this session's system prompt.
-    try {
-      const { resolveSkills } = require("../../routes/skills");
-      const skillsText = resolveSkills(this.skills || this.config.skills || []);
-      if (skillsText) combinedPrompt = combinedPrompt + skillsText;
-    } catch (e) {
-      console.error("[PiCodeHarness] Skill resolution failed:", e.message);
-    }
-    
     // Write combined prompt to temp file
     const tempPromptDir = path.join(__dirname, "../../../workspace/temp");
     if (!fs.existsSync(tempPromptDir)) {
@@ -153,27 +102,53 @@ class PiCodeHarness extends HarnessInterface {
     }
     const tempPromptPath = path.join(tempPromptDir, `system-prompt-${this.sessionId}.md`);
     fs.writeFileSync(tempPromptPath, combinedPrompt, "utf-8");
-    
-    // Thread the CONFIGURED base URL into the child env (Workstream F2). Without
-    // this, a base URL set via the Settings UI never reached pi — childEnv only
-    // spread process.env — so "bring any OpenAI-compatible endpoint" worked from
-    // .env but not from the app. Set every alias pi's provider clients may read.
+
+    // LLM access goes through the NATIVE "orbit" OpenAI-compatible provider
+    // (registered by the per-spawn `orbit-provider.mjs` extension), NOT the old
+    // bespoke `--provider litellm` path. Two shapes, decided by whether the app
+    // gateway is present in this process's env:
+    //   • local, app-spawned pi → the backend sets ORBIT_GATEWAY_KEY/URL. Point
+    //     pi at the app's internal gateway and pass ONLY the app-local key; the
+    //     real upstream key never enters the child.
+    //   • remote pi (run by orbit-adapter, which doesn't set those) → talk
+    //     straight to the remote's own upstream with the remote's own creds
+    //     (bring-your-own-LLM).
+    const gatewayKey = process.env.ORBIT_GATEWAY_KEY;
+    const gatewayUrl = process.env.ORBIT_GATEWAY_URL;
+    const useGateway = !!(gatewayKey && gatewayUrl);
+    const providerBaseUrl = useGateway ? gatewayUrl : baseURL;
+    const providerKey = useGateway ? gatewayKey : apiKey;
+
     const childEnv = {
       ...process.env,
-      LITELLM_KEY: apiKey,
-      OPENAI_API_KEY: apiKey,
-      ORBIT_MODE: activeMode || "chat"
+      ORBIT_MODE: activeMode || "chat",
+      ORBIT_LLM_BASE_URL: providerBaseUrl || "",
+      // Keyless local servers still need a non-empty placeholder for pi to treat
+      // the models as usable (see pi models.md).
+      ORBIT_LLM_KEY: providerKey || "orbit-local",
+      ORBIT_LLM_MODEL: normalModel || "",
     };
-    if (baseURL) {
-      childEnv.LLM_BASE_URL = baseURL;
-      childEnv.LITELLM_BASE_URL = baseURL;
-      childEnv.OPENAI_BASE_URL = baseURL;
+    if (useGateway) {
+      // Enforce the contract: the real upstream key must not leak into the child
+      // via any inherited alias. Only the gateway key (as ORBIT_LLM_KEY) remains.
+      delete childEnv.OPENAI_API_KEY;
+      delete childEnv.LLM_API_KEY;
+      delete childEnv.LITELLM_KEY;
+      delete childEnv.OPENAI_BASE_URL;
+      delete childEnv.LLM_BASE_URL;
+      delete childEnv.LITELLM_BASE_URL;
     }
-    
+
+    // Absolute path to the provider extension, so `-e` resolves regardless of
+    // pi's cwd (the session workspace). ContainerHarness reads this to bind-mount
+    // the file into the sandbox at the same path.
+    this._providerExtPath = path.join(__dirname, "orbit-provider.mjs");
+
     const piArgs = [
       "--session-id", this.sessionId,
-      "--provider", "litellm",
-      "--model", `litellm/${normalModel}`,
+      "-e", this._providerExtPath,
+      "--provider", "orbit",
+      "--model", `orbit/${normalModel}`,
       "--mode", "rpc",
       "--system-prompt", combinedPrompt,
     ];
@@ -497,27 +472,12 @@ class PiCodeHarness extends HarnessInterface {
    * back to a browser sign-in, so we exclude it and rely on orbit-search.
    */
   /**
-   * Render config.policyMatrix as a markdown table for the system prompt. This
-   * is the SINGLE authoritative matrix — generated from the enforced config so
-   * it can never disagree with what the backend actually gates (Workstream D1).
+   * The SINGLE authoritative capability×mode matrix now lives in the shared
+   * prompt composer (harnesses/picode/prompt.js) so local pi and remote agents
+   * render it identically. Kept as a thin delegate for any external caller.
    */
   static _renderPolicyMatrix(config) {
-    const matrix = config && config.policyMatrix;
-    if (!matrix || typeof matrix !== "object") return "";
-    const modes = ["chat", "plan", "edit", "yolo"];
-    const rows = Object.entries(matrix).map(([cap, byMode]) => {
-      const cells = modes.map((m) => String((byMode && byMode[m]) || "—").padEnd(5));
-      return `| ${cap.padEnd(15)} | ${cells.join(" | ")} |`;
-    });
-    if (!rows.length) return "";
-    return [
-      "## Capability × mode policy (live)",
-      "Authoritative, generated from the backend's enforced policy config:",
-      "",
-      `| ${"capability".padEnd(15)} | ${modes.map((m) => m.padEnd(5)).join(" | ")} |`,
-      `|-${"-".repeat(15)}-|${modes.map(() => "-------").join("|")}|`,
-      ...rows,
-    ].join("\n");
+    return require("./prompt").renderPolicyMatrix(config);
   }
 
   static _hasNativeSearchConfigured() {

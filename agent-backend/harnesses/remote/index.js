@@ -67,13 +67,40 @@ class RemoteHarness extends HarnessInterface {
     });
     entry.sessions.add(this.sessionId);
 
+    // Build the FULL portable Orbit system prompt HERE (on the backend, which
+    // has the prompt library, policy config, and capabilities manifest) and send
+    // it down, so a remote agent behaves as a real Orbit agent — not a generic
+    // coder. The ONE machine-specific piece, the per-session workspace block, is
+    // omitted: the remote appends its own (only it knows its paths). Uses the
+    // SAME composer as local pi, so the two prompts match. No secrets ride along
+    // (no API keys). Enforcement still happens centrally on each tool_call_start.
+    let systemPrompt = "";
+    try {
+      const { composeSystemPrompt } = require("../picode/prompt");
+      systemPrompt = composeSystemPrompt({
+        config: this.config,
+        systemPromptType: this.systemPromptType,
+        mode: this.mode,
+        skills: this.skills,
+        capabilitiesBlock: this.capabilitiesBlock,
+        // workspaceBlock omitted — the remote adds its own.
+      });
+    } catch (e) {
+      console.error("[RemoteHarness] Failed to compose system prompt:", e.message);
+    }
+
     this._send({
       type: "spawn",
       mode: this.mode,
       systemPromptType: this.systemPromptType,
+      systemPrompt,
       skills: this.skills,
       model: this.model,
       excludeTools: this.excludeTools,
+      // Kept for older/pi-based adapters that build their own prompt from parts.
+      capabilitiesBlock: this.capabilitiesBlock,
+      policyMatrix: this.config && this.config.policyMatrix,
+      webAccess: this.config && this.config.webAccess,
     });
   }
 

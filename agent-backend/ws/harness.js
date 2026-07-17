@@ -36,6 +36,9 @@ function createHarnessRegistry() {
           name: msg.name || device.label || "remote harness",
           machine: msg.machine || "unknown",
           capabilities: Array.isArray(msg.capabilities) ? msg.capabilities : [],
+          // Remote's bring-your-own LLM, reported for read-only display only.
+          model: typeof msg.model === "string" ? msg.model : "",
+          provider: typeof msg.provider === "string" ? msg.provider : "",
           ws,
           device,
           sessions: new Set(),
@@ -81,6 +84,8 @@ function createHarnessRegistry() {
       name: h.name,
       machine: h.machine,
       capabilities: h.capabilities,
+      model: h.model || "",
+      provider: h.provider || "",
       transport: "remote",
       status: "connected",
       activeSessions: h.sessions.size,

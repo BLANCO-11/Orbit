@@ -8,6 +8,7 @@ const express = require("express");
 const http = require("http");
 const cors = require("cors");
 const path = require("path");
+const crypto = require("crypto");
 const EventEmitter = require("events");
 
 const { validateEnv, discoverPiBinaries, probePiBinary, resolveLlmEnv } = require("./env");
@@ -73,6 +74,16 @@ const PORT = process.env.PORT || 6800;
 // this the port is reachable off-box, so ORBIT_API_KEY becomes mandatory and the
 // port should be firewalled to the proxy host.
 const HOST = process.env.HOST || "127.0.0.1";
+
+// ── Internal LLM gateway credential ─────────────────────────────────
+// Local, app-spawned harnesses (pi/OpenCode) reach the upstream LLM only
+// through the app's own /llm/v1 gateway, authenticating with this app-local
+// key — the REAL upstream key never enters a child process. Generated per boot
+// unless pinned via env; both are published on process.env so the picode
+// harness (and the container sandbox) can thread them into the child env.
+const GATEWAY_KEY = process.env.ORBIT_GATEWAY_KEY || crypto.randomBytes(24).toString("hex");
+process.env.ORBIT_GATEWAY_KEY = GATEWAY_KEY;
+process.env.ORBIT_GATEWAY_URL = process.env.ORBIT_GATEWAY_URL || `http://127.0.0.1:${PORT}/llm/v1`;
 const activeSessions = new Map();    // sessionId → { harness, ws, mode, subagentTracker }
 const pendingApprovals = new Map();  // toolCallId → resolve callback
 const turnGuards = new Map();         // sessionId → anti-flail counters for the active turn
@@ -316,9 +327,15 @@ const getConfig = () => {
   }
   if (!config.litellm) config.litellm = {};
   // Env fallbacks: LLM_* → LITELLM_* → OPENAI_* (see env.resolveLlmEnv).
+  // NOTE: no hardcoded baseURL default. A non-empty placeholder here (the old
+  // "http://127.0.0.1:5000/v1") is truthy, so the `if (!baseURL)` guard below
+  // would never fall back to the env value — that's exactly the Docker "app
+  // ignores LLM_BASE_URL / dials 127.0.0.1:5000" bug. Leave it empty when
+  // nothing is configured so the "no LLM configured" state stays honest and the
+  // env value is actually used.
   const llmEnv = resolveLlmEnv();
   if (!config.litellm.baseURL) {
-    config.litellm.baseURL = llmEnv.baseURL || "http://127.0.0.1:5000/v1";
+    config.litellm.baseURL = llmEnv.baseURL || "";
   }
   if (!config.litellm.apiKey) {
     config.litellm.apiKey = llmEnv.apiKey || "";
@@ -331,6 +348,20 @@ const getConfig = () => {
 const { nodePath, piPath } = discoverPiBinaries();
 probePiBinary(piPath);
 
+// OpenCode is an OPTIONAL second local harness. Only offer it when its binary is
+// actually on PATH — otherwise selecting it just yields `spawn opencode ENOENT`.
+// pi is the default; this keeps the UI honest about what can run here (item 5).
+const OPENCODE_AVAILABLE = (() => {
+  try {
+    const fsx = require("fs");
+    const dirs = (process.env.PATH || "").split(path.delimiter);
+    return dirs.some((d) => { try { return fsx.existsSync(path.join(d, "opencode")); } catch { return false; } });
+  } catch { return false; }
+})();
+if (!OPENCODE_AVAILABLE) {
+  console.log("[Harness] OpenCode not found on PATH — hiding it from the harness list (pi is the default).");
+}
+
 // ── Express App ─────────────────────────────────────────────────────
 const app = express();
 app.use(cors({ origin: process.env.DASHBOARD_ORIGIN || "http://localhost:6801" }));
@@ -339,6 +370,25 @@ app.use(cors({ origin: process.env.DASHBOARD_ORIGIN || "http://localhost:6801" }
 app.use(express.json({ limit: "50mb", verify: (req, _res, buf) => { req.rawBody = buf; } }));
 app.use("/screenshots", express.static(path.join(__dirname, "../workspace/screenshots")));
 app.use(requestIdMiddleware);
+
+// ── Internal LLM gateway (local agents only) ────────────────────────
+// Mounted before the API auth middleware: it has its OWN app-local bearer auth
+// (the gateway key), and its clients are the app's own harness children, not
+// dashboard users. Per-session token metering stays on the harness `usage`
+// event (real provider usage); the onUsage hook here is the seam for
+// authoritative per-tenant accounting (see [[orbit-admin-rbac-sso]]).
+const createLlmGateway = require("./llm-gateway");
+app.use("/llm/v1", createLlmGateway({
+  getConfig,
+  gatewayKey: GATEWAY_KEY,
+  onUsage: ({ sessionId, tenantId, model, usage }) => {
+    // Tenant-level metering hook. Kept intentionally light in v1 — per-session
+    // budgets are enforced on the harness usage-event path in handleStartTask.
+    if (tenantId) {
+      try { db.recordTenantUsage?.(tenantId, usage); } catch {}
+    }
+  },
+}));
 
 // ── MCP Connector Registry ──────────────────────────────────────────
 // Owns .pi/mcp.json (the servers the agent reaches) and keeps a backend-side
@@ -556,26 +606,35 @@ notifyBus.registerSink("channel", ({ title, body, severity }) => {
 // Harness registry: the always-present local pi-code plus any connected remote
 // orbit-adapters. Sessions can target a specific harness by id on start_task.
 app.get("/api/harnesses", authMiddleware, (req, res) => {
+  // The local pi child's LLM is app-owned: it runs through the internal gateway,
+  // so the model is whatever the app has configured. Surface it read-only, same
+  // shape as remotes, so Fleet + the chat header can show it uniformly.
+  const llmCfg = getConfig().litellm || {};
   const local = {
     id: "local",
     name: "pi-code",
     machine: "local",
     transport: "local",
     status: "connected",
+    model: llmCfg.selectedNormalModel || "",
+    provider: llmCfg.baseURL ? "orbit gateway" : "",
     capabilities: ["chat", "plan", "edit", "yolo", "subagents", "tools", "browser"],
     activeSessions: [...activeSessions.values()].filter(s => !s.harnessId || s.harnessId === "local").length,
   };
-  // OpenCode as a selectable local harness (a second, harness-agnostic agent).
-  const opencode = {
+  // OpenCode as a selectable local harness (a second, harness-agnostic agent) —
+  // only when its binary is present (item 5); otherwise it isn't offered.
+  const opencode = OPENCODE_AVAILABLE ? {
     id: "opencode",
     name: "OpenCode",
     machine: "local",
     transport: "local",
     status: "connected",
+    model: llmCfg.selectedNormalModel || "",
+    provider: llmCfg.baseURL ? "orbit gateway" : "",
     capabilities: ["chat", "plan", "edit", "yolo", "tools"],
     activeSessions: [...activeSessions.values()].filter(s => s.harnessId === "opencode").length,
-  };
-  res.json({ success: true, harnesses: [local, opencode, ...harnessRegistry.list()] });
+  } : null;
+  res.json({ success: true, harnesses: [local, ...(opencode ? [opencode] : []), ...harnessRegistry.list()] });
 });
 
 // Disconnect a connected remote harness from the UI. Local harnesses (the pi

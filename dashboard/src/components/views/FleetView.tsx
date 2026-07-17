@@ -251,6 +251,14 @@ export default function FleetView() {
                       {h.transport === 'remote' ? `${h.machine} · via adapter` : 'child process'}
                       {typeof h.activeSessions === 'number' ? ` · ${h.activeSessions} active session${h.activeSessions === 1 ? '' : 's'}` : ''}
                     </div>
+                    {/* Read-only LLM the harness is using: app-owned gateway for
+                        local, bring-your-own for remotes. Display only. */}
+                    {h.model && (
+                      <div className="mt-0.5 font-mono text-[11px] text-faint">
+                        <span className="text-muted-foreground">{h.model}</span>
+                        {h.provider ? ` · ${h.provider}` : ''}
+                      </div>
+                    )}
                   </div>
                   {/* Remote harnesses can be disconnected; local ones are this host. */}
                   {h.transport === 'remote' && (

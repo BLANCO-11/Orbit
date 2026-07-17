@@ -31,7 +31,7 @@ const path = require("path");
 const WebSocket = require("ws");
 const EventEmitter = require("events");
 const PiCodeHarness = require("../harnesses/picode");
-const { discoverPiBinaries } = require("../env");
+const { discoverPiBinaries, resolveLlmEnv } = require("../env");
 
 const DEFAULT_RECONNECT = { backoffMs: [1000, 2000, 5000, 15000], maxJitterMs: 500 };
 const DEFAULT_HEARTBEAT = { intervalMs: 30000, type: "ping" };
@@ -198,10 +198,18 @@ function connectSupervised(descriptor, { name, machine, config, binaries, credsP
     ws.on("open", () => {
       attempt = 0;
       console.log(`[adapter] Connected to ${descriptor.wsUrl}. Registering as "${name}".`);
+      // Report (read-only) which LLM this remote is bringing, so the console can
+      // DISPLAY it in Fleet + the chat header. The app never manages or proxies
+      // a remote's LLM — this is observability only.
+      const llmModel = (config.litellm && config.litellm.selectedNormalModel) || "";
+      let llmProvider = "";
+      try { llmProvider = config.litellm && config.litellm.baseURL ? new URL(config.litellm.baseURL).host : ""; } catch {}
       ws.send(JSON.stringify({
         type: "register",
         name,
         machine,
+        model: llmModel,
+        provider: llmProvider,
         capabilities: ["chat", "plan", "edit", "yolo", "subagents", "tools"],
       }));
       // Heartbeat: WS ping frames keep the socket alive through nginx idle
@@ -243,11 +251,21 @@ function connectSupervised(descriptor, { name, machine, config, binaries, credsP
           try { ws.send(JSON.stringify({ type: "event", sessionId, event, data })); } catch {}
           return origEmit(event, data);
         };
+        // Merge the app-computed policy matrix + webAccess into this remote's
+        // config so PiCodeHarness renders the SAME live policy table + web-tool
+        // excludes a local pi would (the adapter's own config has neither). The
+        // capabilities manifest is passed through pre-rendered.
+        const spawnConfig = {
+          ...config,
+          ...(msg.policyMatrix ? { policyMatrix: msg.policyMatrix } : {}),
+          ...(msg.webAccess ? { webAccess: msg.webAccess } : {}),
+        };
         const harness = new PiCodeHarness({
-          events, config, sessionId,
+          events, config: spawnConfig, sessionId,
           mode: msg.mode, systemPromptType: msg.systemPromptType,
           skills: msg.skills || [], model: msg.model,
           excludeTools: msg.excludeTools || null, binaries,
+          capabilitiesBlock: msg.capabilitiesBlock || "",
         });
         harnesses.set(sessionId, harness);
         try {
@@ -331,11 +349,16 @@ async function main() {
 
   console.log(`[adapter] Using ${persisted ? "stored" : "fresh"} credentials for ${descriptor.wsUrl}.`);
 
+  // Bring-your-own-LLM: a remote harness uses THIS machine's own OpenAI-compatible
+  // endpoint (the app does not proxy it). Neutral LLM_* names win, with the
+  // historical LITELLM_* / OPENAI_* as fallbacks. No poisoned default — an empty
+  // baseURL means "not configured here" rather than silently dialing 127.0.0.1.
+  const llm = resolveLlmEnv();
   const config = {
     litellm: {
-      baseURL: process.env.LITELLM_BASE_URL || "http://127.0.0.1:5000/v1",
-      apiKey: process.env.LITELLM_KEY || process.env.OPENAI_API_KEY || "",
-      selectedNormalModel: process.env.LITELLM_MODEL || "deepseek-v4-flash",
+      baseURL: llm.baseURL,
+      apiKey: llm.apiKey,
+      selectedNormalModel: llm.model,
     },
   };
   const binaries = discoverPiBinaries();
