@@ -123,6 +123,10 @@ function createDevicesRouter(db, authMiddleware, getDashboardOrigin) {
     let adapterSrc;
     try { adapterSrc = fs.readFileSync(adapterPath, "utf8"); }
     catch { return res.status(500).send("// Error: adapter source not found on server."); }
+    // Node only strips a shebang on LINE 1. Prepending the descriptor header
+    // pushes orbit-connect's `#!/usr/bin/env node` down, which then throws a
+    // SyntaxError under `curl … | node`. Drop the leading shebang before injecting.
+    adapterSrc = adapterSrc.replace(/^#![^\n]*\n/, "");
 
     const header =
       `// Injected by the Orbit server — one-time redemption of a pairing code.\n` +
