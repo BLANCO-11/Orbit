@@ -31,20 +31,11 @@ services:
       # Persist the SQLite DB + session workspaces on the named volume below.
       ORBIT_DB_PATH: "/data/orbit.db"
       ORBIT_HOME: "/data/orbit-home"
-      # Point Orbit at the bind-mounted host `pi` (see volumes). Adjust if your
-      # pi layout differs.
-      PI_NODE_PATH: "/opt/pi/bin/node"
-      PI_CLI_PATH: "/opt/pi/bin/pi"
-      # Do NOT set PORT/HOST here: backend (6800) and dashboard (6801) both read
-      # PORT and would collide; backend defaults to internal 127.0.0.1.
+      # pi (@earendil-works/pi-coding-agent) is baked into the image and on PATH,
+      # so no PI_CLI_PATH / host mount is needed. PORT/HOST are forced per-process
+      # by the entrypoint (backend :6800, dashboard :6801) — don't set them here.
     volumes:
       - orbit-data:/data
-      # ── Host `pi` install (read-only) ──
-      # Point PI_HOST_DIR at the directory that contains bin/pi and bin/node.
-      # Default matches the pi-node layout Orbit auto-discovers on Linux.
-      - "${PI_HOST_DIR:-${HOME}/.local/share/pi-node/node-v22.22.3-linux-x64}:/opt/pi:ro"
-      # pi's own config + extensions (pi-mcp-extension, pi-provider-litellm).
-      - "${PI_CONFIG_DIR:-${HOME}/.pi}:/root/.pi"
     depends_on:
       - lightpanda
 

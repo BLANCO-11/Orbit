@@ -91,7 +91,28 @@ function createHarnessRegistry() {
     return harnesses.get(harnessId);
   }
 
-  return { wss, list, get, harnesses };
+  /**
+   * Operator-initiated disconnect of a connected remote harness (from the UI).
+   * Asks the adapter to stop, closes the socket (the 'close' handler above then
+   * notifies any bound RemoteHarness and removes it from the registry), and
+   * drops it immediately so it disappears from the list even if the socket lingers.
+   * Returns true if a harness with that id existed.
+   */
+  function disconnect(harnessId) {
+    const entry = harnesses.get(harnessId);
+    if (!entry) return false;
+    try { entry.ws.send(JSON.stringify({ type: "disconnect" })); } catch {}
+    try { entry.ws.close(1000, "disconnected by operator"); } catch {}
+    if (entry._eventHandlers) {
+      for (const handler of entry._eventHandlers.values()) {
+        try { handler("close", { code: 1000 }); } catch {}
+      }
+    }
+    harnesses.delete(harnessId);
+    return true;
+  }
+
+  return { wss, list, get, harnesses, disconnect };
 }
 
 module.exports = createHarnessRegistry;

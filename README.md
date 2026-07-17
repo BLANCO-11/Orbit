@@ -110,6 +110,30 @@ npm run verify     # typecheck + production build
 npm test           # security-guard tests
 ```
 
+## Docker
+
+One image runs the backend + dashboard; `pi` (the agent harness) and its extensions
+are **baked into the image** — no host mount needed. Lightpanda runs as a sibling
+service. Copy `.env.example` → `.env` and fill it in first.
+
+```bash
+# prod (slim built image)
+docker compose up -d --build
+
+# dev (HMR, source bind-mounted) — include BOTH files
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+```
+
+- Only **`6801`** (dashboard) is published by default; it proxies `/api` + `/api/ws`
+  to the backend. `6800` is also published so an external nginx can hit the backend
+  directly — firewall it to the proxy host, or remove it and point nginx `/api` at `6801`.
+- The entrypoint **forces** ports in-container (backend `6800`, dashboard `6801`);
+  `PORT`/`HOST` from `.env` are ignored there.
+- `docker compose` `env_file` does **not** strip inline `# comments` — keep comments
+  on their own lines in `.env`.
+- The SQLite DB + session workspaces persist on the `orbit-data` volume
+  (`ORBIT_DB_PATH`, `ORBIT_HOME`).
+
 ## Branching
 
 - **`main`** — stable, releasable. Protect it; merge via PR.

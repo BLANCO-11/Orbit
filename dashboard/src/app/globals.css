@@ -624,9 +624,12 @@
   animation: spin-slow 20s linear infinite;
 }
 
+/* End at transform:none (not translateY(0)) — a retained transform makes the
+   element a containing block for position:fixed descendants, trapping
+   fullscreen overlays inside the animated pane. */
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: translateY(0); }
+  to { opacity: 1; transform: none; }
 }
 
 .animate-fade-in {

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Terminal, Globe, Laptop, Smartphone, Tablet, RefreshCw, Copy, Check } from 'lucide-react';
+import { Terminal, Globe, Laptop, Smartphone, Tablet, RefreshCw, Copy, Check, Unplug } from 'lucide-react';
 import { useDevices } from '@/hooks/useDevices';
 import { getDeviceToken } from '@/lib/device-auth';
 
@@ -76,6 +76,16 @@ export default function FleetView() {
   const refreshHarnesses = useCallback(() => {
     fetch('/api/harnesses').then((r) => r.json()).then((d) => { if (d.success) setHarnesses(d.harnesses); }).catch(() => {});
   }, []);
+  const [disconnecting, setDisconnecting] = useState<string | null>(null);
+  const disconnectHarness = useCallback((h: any) => {
+    if (!confirm(`Disconnect "${h.name}"? Any sessions running on it will be cancelled.`)) return;
+    setDisconnecting(h.id);
+    fetch(`/api/harnesses/${encodeURIComponent(h.id)}`, { method: 'DELETE' })
+      .then((r) => r.json())
+      .then(() => refreshHarnesses())
+      .catch(() => {})
+      .finally(() => setDisconnecting(null));
+  }, [refreshHarnesses]);
   useEffect(() => {
     refreshHarnesses();
     const t = setInterval(refreshHarnesses, 5000); // remote adapters connect/leave live
@@ -230,7 +240,7 @@ export default function FleetView() {
                   <div className="grid size-9 shrink-0 place-items-center rounded-[10px] border border-border bg-muted text-muted-foreground">
                     {h.transport === 'remote' ? <Globe size={16} /> : <Terminal size={16} />}
                   </div>
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 text-[13px] font-semibold">
                       {h.name}
                       <span className="inline-flex items-center gap-1 text-[11px] font-medium text-success">
@@ -242,6 +252,17 @@ export default function FleetView() {
                       {typeof h.activeSessions === 'number' ? ` · ${h.activeSessions} active session${h.activeSessions === 1 ? '' : 's'}` : ''}
                     </div>
                   </div>
+                  {/* Remote harnesses can be disconnected; local ones are this host. */}
+                  {h.transport === 'remote' && (
+                    <button
+                      onClick={() => disconnectHarness(h)}
+                      disabled={disconnecting === h.id}
+                      title="Disconnect this harness"
+                      className="flex shrink-0 items-center gap-1 rounded-lg border border-border px-2 py-1 text-[11px] font-medium text-muted-foreground hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 disabled:opacity-50"
+                    >
+                      <Unplug size={12} /> {disconnecting === h.id ? 'Disconnecting…' : 'Disconnect'}
+                    </button>
+                  )}
                 </div>
               ))}
               <div className="rounded-xl border border-dashed border-border px-4 py-4 text-center text-xs text-faint">

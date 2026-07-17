@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useCallback, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useOrbitState } from '@/providers/OrbitProvider';
 import { Monitor, FileText, RefreshCw, ExternalLink, AlertCircle, Maximize2, Minimize2, X } from 'lucide-react';
 import { marked } from 'marked';
@@ -179,7 +180,10 @@ export default function PreviewTab({ activeFilePath, onFilePathChange }: { activ
   // Fullscreen: dim backdrop + large centered surface. Click the backdrop or
   // the close button (or Esc) to return to the docked panel. Rendered as a
   // single instance (not duplicated behind) so only one iframe mounts.
-  return (
+  // Portaled to <body>: any transformed/animated ancestor (e.g. the pane's
+  // entrance animation) would otherwise become the containing block for
+  // position:fixed and trap the overlay inside the inspector.
+  return createPortal(
     <div
       className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm sm:p-8"
       onClick={() => setFullscreen(false)}
@@ -204,7 +208,8 @@ export default function PreviewTab({ activeFilePath, onFilePathChange }: { activ
         </div>
         <div className="min-h-0 flex-1">{panel}</div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

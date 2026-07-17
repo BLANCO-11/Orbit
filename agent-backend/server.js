@@ -578,6 +578,28 @@ app.get("/api/harnesses", authMiddleware, (req, res) => {
   res.json({ success: true, harnesses: [local, opencode, ...harnessRegistry.list()] });
 });
 
+// Disconnect a connected remote harness from the UI. Local harnesses (the pi
+// child / OpenCode) are part of this host and can't be "disconnected" — cancel
+// their sessions instead. Closes the adapter socket + drops it from the registry.
+app.delete("/api/harnesses/:id", authMiddleware, (req, res) => {
+  const id = req.params.id;
+  if (id === "local" || id === "opencode" || id === "pi-code" || id === "picode") {
+    return res.status(400).json({ success: false, error: "Local harnesses can't be disconnected; cancel their sessions instead." });
+  }
+  // Cancel any active sessions running on this harness first, so nothing is left
+  // orphaned when the adapter socket drops.
+  for (const [sid, ses] of activeSessions.entries()) {
+    if (ses.harnessId === id) {
+      try { ses.harness?.disconnect?.(); } catch {}
+      activeSessions.delete(sid);
+      try { db.clearSessionRunning(sid); } catch {}
+    }
+  }
+  const ok = harnessRegistry.disconnect(id);
+  if (!ok) return res.status(404).json({ success: false, error: "harness not connected" });
+  res.json({ success: true });
+});
+
 // Tools a harness can offer, for the tools/extensions manager. Merges the
 // harness's own tools (built-ins + extensions + observed) with the shared MCP
 // connector tools (which every harness reaches). Harness-agnostic: the backend
