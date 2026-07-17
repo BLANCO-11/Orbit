@@ -1,0 +1,23 @@
+# Dev override — hot-reloading development mode.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+#
+# Builds the `dev` image target (keeps dev deps), runs the dashboard as
+# `next dev` (HMR) via NODE_ENV=development, and bind-mounts your working tree so
+# edits reload live. Anonymous volumes keep the image's node_modules/.next from
+# being shadowed by the host bind-mount.
+
+services:
+  orbit:
+    build:
+      context: .
+      target: dev
+    image: orbit:dev
+    environment:
+      NODE_ENV: development
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/dashboard/node_modules
+      - /app/dashboard/.next
+      - /app/mcp-servers/lightpanda/node_modules

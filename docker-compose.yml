@@ -5,10 +5,15 @@
 #
 # The `pi` CLI is bind-mounted from the host (see the `volumes` note). Copy
 # .env.example → .env first and set your LLM creds + ORBIT_SUPERADMIN_* there.
+#
+# PROD (default):  docker compose up -d --build
+# DEV  (HMR):      docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
 
 services:
   orbit:
-    build: .
+    build:
+      context: .
+      target: runtime          # prod image (built .next, deps pruned). Dev override flips this.
     image: orbit:latest
     restart: unless-stopped
     ports:
