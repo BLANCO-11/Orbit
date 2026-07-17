@@ -20,7 +20,11 @@ set -euo pipefail
 
 echo "[entrypoint] starting Orbit (NODE_ENV=${NODE_ENV:-production})"
 
-PORT=6800 HOST=127.0.0.1 node agent-backend/server.js &
+# Backend PORT is always forced (both processes read process.env.PORT, so a
+# shared value would collide). HOST is honored from the environment so an
+# EXTERNAL nginx that proxies /api straight to the backend's 6800 can reach it
+# (set HOST=0.0.0.0 + publish 6800); it defaults to internal-only 127.0.0.1.
+PORT=6800 HOST="${HOST:-127.0.0.1}" node agent-backend/server.js &
 backend=$!
 
 ( cd dashboard && PORT=6801 exec node server.js ) &

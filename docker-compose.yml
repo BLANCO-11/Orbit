@@ -17,7 +17,12 @@ services:
     image: orbit:latest
     restart: unless-stopped
     ports:
-      - "6801:6801"            # dashboard (public). Backend 6800 stays internal.
+      - "6801:6801"            # dashboard (UI + proxies /api and /api/ws to the backend)
+      # Backend API/WS. Only needed if an EXTERNAL nginx proxies /api straight to
+      # :6800 (the bare-metal layout). Requires HOST=0.0.0.0 (backend binds all
+      # interfaces) + ORBIT_SUPERADMIN_KEY set; firewall this port to the proxy
+      # host. If nginx instead sends /api to :6801, you can remove this line.
+      - "6800:6800"
     env_file:
       - .env
     environment:
