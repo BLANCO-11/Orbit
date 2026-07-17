@@ -1848,8 +1848,9 @@ server.listen(PORT, HOST, () => {
   // a crash never leaves agents web-blind (falling back to code_search/nonsense).
   require("./lightpanda").ensureLightpandaRunning().catch((e) =>
     console.error("[Lightpanda] ensure failed:", e.message));
-  // Start the Telegram bridge (no-ops cleanly if no bot token is set).
-  telegramBridge.start();
+  // Start the Telegram bridge (no-ops cleanly if no bot token is set). Guard it:
+  // a boot-time failure here must not take the whole server down / crash-loop.
+  try { telegramBridge.start(); } catch (e) { console.error("[Telegram] start failed:", e.message); }
   // Test the LLM endpoint once at boot so capabilities.llm.connected reflects
   // reality immediately and the UI can show "connection failed" vs "not
   // configured" without waiting for the first prompt (Workstream F3).

@@ -10,16 +10,20 @@
 # the same either way — we just run it from the dashboard/ dir so Next resolves
 # its project (and .next) there, not at /app.
 #
-# NOTE: do NOT set a global PORT env — the backend and dashboard BOTH read
-# process.env.PORT and would collide; leave them on their defaults (6800 / 6801).
+# Ports/host are FORCED per-process here, overriding whatever the environment (or
+# an env_file'd .env) provides. This is deliberate: the backend and dashboard
+# both read process.env.PORT, and a host .env often sets PORT=6800 / HOST=0.0.0.0
+# for a bare-metal + nginx setup — which would collide (dashboard would grab 6800)
+# and expose the backend. In-container the split is fixed: backend on internal
+# 127.0.0.1:6800, dashboard (the only published port) on 0.0.0.0:6801.
 set -euo pipefail
 
 echo "[entrypoint] starting Orbit (NODE_ENV=${NODE_ENV:-production})"
 
-node agent-backend/server.js &
+PORT=6800 HOST=127.0.0.1 node agent-backend/server.js &
 backend=$!
 
-( cd dashboard && exec node server.js ) &
+( cd dashboard && PORT=6801 exec node server.js ) &
 dashboard=$!
 
 shutdown() { kill "$backend" "$dashboard" 2>/dev/null || true; }

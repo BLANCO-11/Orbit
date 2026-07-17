@@ -279,6 +279,71 @@ if (currentSchemaVersion < 13) {
   console.log(`[DB] Migrated sessions schema to version ${CURRENT_SCHEMA_VERSION}`);
 }
 
+// ── Core tables (ensure they ALL exist regardless of schema_version) ──
+// Historically devices/pairing_codes/profiles/channels/connections were created
+// inside version-gated `if (currentSchemaVersion < N)` blocks, and the first
+// block writes schema_version=CURRENT immediately. So a DB whose meta was set by
+// an older/partial boot (e.g. a persisted Docker volume) could permanently SKIP
+// those blocks, leaving tables missing → "no such table: connections/profiles"
+// crashes on boot. Recreate them unconditionally (IF NOT EXISTS, idempotent),
+// with the FULL current column set so a fresh create is complete; the ALTERs in
+// the gated blocks above still patch columns onto older existing tables.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS devices (
+    id TEXT PRIMARY KEY,
+    label TEXT NOT NULL,
+    token_hash TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    last_seen INTEGER,
+    revoked_at INTEGER,
+    policy_overrides TEXT NOT NULL DEFAULT '{}',
+    scope TEXT NOT NULL DEFAULT 'full',
+    tenant_id TEXT
+  )
+`);
+db.exec(`
+  CREATE TABLE IF NOT EXISTS pairing_codes (
+    code TEXT PRIMARY KEY,
+    label TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    expires_at INTEGER NOT NULL,
+    redeemed_at INTEGER,
+    scope TEXT NOT NULL DEFAULT 'full'
+  )
+`);
+db.exec(`
+  CREATE TABLE IF NOT EXISTS profiles (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    config_json TEXT NOT NULL DEFAULT '{}',
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  )
+`);
+db.exec(`
+  CREATE TABLE IF NOT EXISTS channels (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    config_json TEXT NOT NULL DEFAULT '{}',
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    last_triggered INTEGER
+  )
+`);
+db.exec(`
+  CREATE TABLE IF NOT EXISTS connections (
+    provider TEXT PRIMARY KEY,
+    kind TEXT NOT NULL,
+    scopes TEXT NOT NULL DEFAULT '',
+    access_token_enc TEXT NOT NULL DEFAULT '',
+    refresh_token_enc TEXT NOT NULL DEFAULT '',
+    expires_at INTEGER,
+    meta TEXT NOT NULL DEFAULT '{}',
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  )
+`);
+
 // ── Access-control tables (Admin console: tenants / API keys / SSO) ───
 // Created unconditionally (idempotent) so they exist regardless of the DB's
 // migration state. Secrets follow the `devices` model: the raw key/token is
