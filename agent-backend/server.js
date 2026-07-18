@@ -381,11 +381,23 @@ const createLlmGateway = require("./llm-gateway");
 app.use("/llm/v1", createLlmGateway({
   getConfig,
   gatewayKey: GATEWAY_KEY,
-  onUsage: ({ sessionId, tenantId, model, usage }) => {
+  // Paired remote harnesses reach the gateway off-box with a SCOPED per-device
+  // token (never the master key). Resolve it to its device so the gateway can
+  // attribute usage and enforce the device's budget; a revoked device → null.
+  resolveScopedToken: (token) => {
+    const d = db.getDeviceByLlmToken?.(token);
+    return d ? { deviceId: d.id, tenantId: d.tenantId, budget: d.budget, used: d.used } : null;
+  },
+  onUsage: ({ sessionId, tenantId, deviceId, model, usage }) => {
     // Tenant-level metering hook. Kept intentionally light in v1 — per-session
     // budgets are enforced on the harness usage-event path in handleStartTask.
     if (tenantId) {
       try { db.recordTenantUsage?.(tenantId, usage); } catch {}
+    }
+    // Per-device running total → enforces the scoped token's budget on the next
+    // request (see llm-gateway auth) and feeds per-device accounting.
+    if (deviceId) {
+      try { db.recordDeviceLlmUsage?.(deviceId, (usage.input || 0) + (usage.output || 0)); } catch {}
     }
   },
 }));
@@ -1188,7 +1200,7 @@ async function handleStartTask(ws, userPrompt, sessionId, mode, systemPromptType
       };
       let harness;
       if (remoteEntry) {
-        harness = new RemoteHarness({ ...commonOpts, registryEntry: remoteEntry });
+        harness = new RemoteHarness({ ...commonOpts, registryEntry: remoteEntry, db });
       } else if (activeSandbox === "container") {
         harness = new ContainerHarness({ ...commonOpts, binaries: { nodePath, piPath } });
       } else {

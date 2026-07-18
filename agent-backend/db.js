@@ -23,7 +23,7 @@ if (!fs.existsSync(dbPath) && fs.existsSync(legacyDbPath)) {
 const db = new DatabaseSync(dbPath);
 
 // ── Schema Versioning ───────────────────────────────────────────────
-const CURRENT_SCHEMA_VERSION = 14;
+const CURRENT_SCHEMA_VERSION = 15;
 const BACKUP_INTERVAL = 10; // auto-backup every N saves
 let saveCount = 0;
 
@@ -279,6 +279,24 @@ if (currentSchemaVersion < 13) {
   console.log(`[DB] Migrated sessions schema to version ${CURRENT_SCHEMA_VERSION}`);
 }
 
+if (currentSchemaVersion < 15) {
+  // Scoped per-device LLM access (Bring-Your-Own-Harness, remote-agent-connect
+  // plan Phase 1/2). A paired remote harness runs its brain on Orbit's own LLM
+  // gateway by default; to reach it off-box it presents a SCOPED token (see
+  // device_llm_tokens below) with an optional per-device token budget (llm_budget)
+  // and cumulative running total (llm_used), distinct from the device's WS token.
+  // `llm_config` optionally holds a bring-your-own endpoint ({baseURL,apiKey,
+  // model}) chosen per device in the UI.
+  try { db.exec("ALTER TABLE devices ADD COLUMN llm_budget INTEGER"); } catch (e) {}
+  try { db.exec("ALTER TABLE devices ADD COLUMN llm_used INTEGER NOT NULL DEFAULT 0"); } catch (e) {}
+  try { db.exec("ALTER TABLE devices ADD COLUMN llm_config TEXT NOT NULL DEFAULT '{}'"); } catch (e) {}
+  db.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)").run(
+    "schema_version",
+    String(CURRENT_SCHEMA_VERSION)
+  );
+  console.log(`[DB] Migrated sessions schema to version ${CURRENT_SCHEMA_VERSION}`);
+}
+
 // ── Core tables (ensure they ALL exist regardless of schema_version) ──
 // Historically devices/pairing_codes/profiles/channels/connections were created
 // inside version-gated `if (currentSchemaVersion < N)` blocks, and the first
@@ -298,7 +316,23 @@ db.exec(`
     revoked_at INTEGER,
     policy_overrides TEXT NOT NULL DEFAULT '{}',
     scope TEXT NOT NULL DEFAULT 'full',
-    tenant_id TEXT
+    tenant_id TEXT,
+    llm_budget INTEGER,
+    llm_used INTEGER NOT NULL DEFAULT 0,
+    llm_config TEXT NOT NULL DEFAULT '{}'
+  )
+`);
+// Scoped LLM tokens a paired remote harness presents to the /llm/v1 gateway to
+// run on Orbit's own brain (see mintDeviceLlmToken). Keyed by token hash → many
+// live tokens per device (one per concurrent session) so a new session never
+// invalidates a sibling's in-flight token. The device's revoked_at + llm_budget
+// bound them all; deleting the device's rows here revokes every scoped token.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS device_llm_tokens (
+    token_hash TEXT PRIMARY KEY,
+    device_id TEXT NOT NULL,
+    session_id TEXT,
+    created_at INTEGER NOT NULL
   )
 `);
 db.exec(`
@@ -725,7 +759,14 @@ function touchDeviceLastSeen(id) {
 
 function listDevices() {
   const rows = db.prepare("SELECT * FROM devices ORDER BY created_at DESC").all();
-  return rows.map(mapDeviceRow);
+  // Redact the BYO apiKey before it leaves the backend; surface only whether one
+  // is set (so the UI can show "bring-your-own configured" without the secret).
+  return rows.map((row) => {
+    const d = mapDeviceRow(row);
+    const { apiKey, ...rest } = d.llmConfig || {};
+    d.llmConfig = { ...rest, hasApiKey: Boolean(apiKey) };
+    return d;
+  });
 }
 
 function renameDevice(id, label) {
@@ -734,6 +775,9 @@ function renameDevice(id, label) {
 
 function revokeDevice(id) {
   db.prepare("UPDATE devices SET revoked_at = ? WHERE id = ?").run(Date.now(), id);
+  // Kill every scoped LLM token this device holds (getDeviceByLlmToken also
+  // guards on revoked_at, but drop the rows so nothing lingers).
+  try { db.prepare("DELETE FROM device_llm_tokens WHERE device_id = ?").run(id); } catch {}
 }
 
 /** Set a device's per-capability policy overrides (a partial matrix; tighten-only, enforced in policy-engine). */
@@ -742,7 +786,90 @@ function setDevicePolicyOverrides(id, overrides) {
   db.prepare("UPDATE devices SET policy_overrides = ? WHERE id = ?").run(json, id);
 }
 
+// ── Scoped per-device LLM tokens (remote harness → Orbit LLM gateway) ──
+// A paired remote harness runs on Orbit's own LLM by default. To let it reach
+// the gateway off-box WITHOUT ever handing out the master ORBIT_GATEWAY_KEY, we
+// mint a token scoped to one device: the gateway accepts it, attributes usage to
+// the device/tenant, and enforces an optional token budget. Only the sha256 hash
+// is stored; the raw token is returned once (at mint) and rides in the spawn
+// `llm` block. Rotated on every spawn, and dead the instant the device is revoked
+// (getDeviceByLlmToken checks revoked_at).
+
+/**
+ * Mint a fresh scoped LLM token for a device (one per session). Inserts a new
+ * token row rather than rotating a single one, so concurrent sessions on the
+ * same device never invalidate each other. `budget` (tokens) is an optional
+ * per-device cap applied to the CUMULATIVE llm_used total (not reset per mint);
+ * null/undefined leaves the current cap. Prunes this session's prior token and
+ * any stale (>24h) tokens for the device. Returns the raw token, or null if the
+ * device is unknown/revoked.
+ */
+function mintDeviceLlmToken(deviceId, { budget, sessionId } = {}) {
+  const row = db.prepare("SELECT id, revoked_at FROM devices WHERE id = ?").get(deviceId);
+  if (!row || row.revoked_at) return null;
+  const now = Date.now();
+  // Set the cap when one is supplied; never reset the cumulative used total here.
+  if (Number.isFinite(budget) && budget > 0) {
+    db.prepare("UPDATE devices SET llm_budget = ? WHERE id = ?").run(Math.floor(budget), deviceId);
+  }
+  // Replace this session's previous token; prune tokens older than 24h.
+  if (sessionId) db.prepare("DELETE FROM device_llm_tokens WHERE device_id = ? AND session_id = ?").run(deviceId, sessionId);
+  db.prepare("DELETE FROM device_llm_tokens WHERE device_id = ? AND created_at < ?").run(deviceId, now - 24 * 60 * 60 * 1000);
+  const token = crypto.randomBytes(32).toString("hex");
+  db.prepare("INSERT INTO device_llm_tokens (token_hash, device_id, session_id, created_at) VALUES (?, ?, ?, ?)")
+    .run(hashToken(token), deviceId, sessionId || null, now);
+  return token;
+}
+
+/**
+ * Resolve a scoped LLM token to its device. Returns
+ * { id, tenantId, budget, used } for a live (non-revoked) device, or null.
+ */
+function getDeviceByLlmToken(token) {
+  if (!token) return null;
+  const tok = db.prepare("SELECT device_id FROM device_llm_tokens WHERE token_hash = ?").get(hashToken(token));
+  if (!tok) return null;
+  const row = db.prepare("SELECT * FROM devices WHERE id = ?").get(tok.device_id);
+  if (!row || row.revoked_at) return null;
+  return {
+    id: row.id,
+    tenantId: row.tenant_id || null,
+    budget: row.llm_budget == null ? null : Number(row.llm_budget),
+    used: Number(row.llm_used || 0),
+  };
+}
+
+/** Add to a device's running LLM token total (for budget enforcement/accounting). */
+function recordDeviceLlmUsage(deviceId, tokens) {
+  const n = Number(tokens) || 0;
+  if (!deviceId || n <= 0) return;
+  db.prepare("UPDATE devices SET llm_used = llm_used + ? WHERE id = ?").run(n, deviceId);
+}
+
+/**
+ * Set (or clear) a device's brain configuration. Three shapes:
+ *   • `{ baseURL, apiKey, model }` — a bring-your-own endpoint (the remote's own
+ *     provider, configured centrally instead of via env on the box);
+ *   • `{ provider: "orbit", model? }` — the explicit opt-in to borrow Orbit's own
+ *     LLM gateway as this device's brain (off by default);
+ *   • falsy/empty — clear it (DEFAULT: the remote uses its own env-provided
+ *     provider; Orbit supplies only the plan/context, never inference).
+ */
+function setDeviceLlmConfig(id, cfg) {
+  let clean = {};
+  if (cfg && typeof cfg === "object") {
+    if (cfg.provider === "orbit") {
+      clean = { provider: "orbit", model: cfg.model ? String(cfg.model) : "" };
+    } else if (cfg.baseURL) {
+      clean = { baseURL: String(cfg.baseURL), apiKey: cfg.apiKey ? String(cfg.apiKey) : "", model: cfg.model ? String(cfg.model) : "" };
+    }
+  }
+  db.prepare("UPDATE devices SET llm_config = ? WHERE id = ?").run(JSON.stringify(clean), id);
+}
+
 function mapDeviceRow(row) {
+  let llmConfig = {};
+  try { llmConfig = JSON.parse(row.llm_config || "{}"); } catch {}
   return {
     id: row.id,
     label: row.label,
@@ -752,6 +879,12 @@ function mapDeviceRow(row) {
     scope: row.scope || "full",
     tenantId: row.tenant_id || null,
     policyOverrides: JSON.parse(row.policy_overrides || "{}"),
+    // Bring-your-own LLM endpoint for this device (raw, incl. apiKey) — used
+    // internally by RemoteHarness. `listDevices` redacts the key before it
+    // reaches the UI.
+    llmConfig,
+    llmBudget: row.llm_budget == null ? null : Number(row.llm_budget),
+    llmUsed: Number(row.llm_used || 0),
   };
 }
 
@@ -1135,6 +1268,10 @@ module.exports = {
   renameDevice,
   revokeDevice,
   setDevicePolicyOverrides,
+  mintDeviceLlmToken,
+  getDeviceByLlmToken,
+  recordDeviceLlmUsage,
+  setDeviceLlmConfig,
   listProfiles,
   getProfile,
   saveProfile,

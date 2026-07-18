@@ -26,6 +26,20 @@ function createHarnessRegistry() {
     const harnessId = `remote-${device.id.slice(0, 8)}-${++seq}`;
     let entry = null;
 
+    // The PUBLIC origin this harness actually reached us on (honoring an nginx
+    // x-forwarded-proto). This is demonstrably routable from the harness — it
+    // just dialed in over it — so it's what we hand back as the LLM gateway base
+    // URL when the harness runs on Orbit's own LLM (RemoteHarness.connect).
+    const origin = (() => {
+      try {
+        const host = (request.headers["x-forwarded-host"] || request.headers.host || "").split(",")[0].trim();
+        if (!host) return null;
+        const proto = (request.headers["x-forwarded-proto"] || "").split(",")[0].trim()
+          || (request.socket && request.socket.encrypted ? "https" : "http");
+        return { httpOrigin: `${proto === "https" || proto === "wss" ? "https" : "http"}://${host}` };
+      } catch { return null; }
+    })();
+
     ws.on("message", (raw) => {
       let msg;
       try { msg = JSON.parse(raw); } catch { return; }
@@ -41,6 +55,7 @@ function createHarnessRegistry() {
           provider: typeof msg.provider === "string" ? msg.provider : "",
           ws,
           device,
+          origin, // public origin the harness reached us on (for the LLM gateway URL)
           sessions: new Set(),
         };
         harnesses.set(harnessId, entry);

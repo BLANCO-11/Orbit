@@ -24,11 +24,16 @@ const { Router } = require("express");
  * @param {object} deps
  * @param {() => object} deps.getConfig        — resolves { litellm: { baseURL, apiKey } }
  * @param {string}       deps.gatewayKey        — app-local bearer key the child must present
- * @param {(u: {sessionId?: string|null, tenantId?: string|null, model?: string, usage: object}) => void} [deps.onUsage]
+ * @param {(token: string) => ({deviceId: string, tenantId?: string|null, budget?: number|null, used?: number}|null)} [deps.resolveScopedToken]
+ *        — resolve a SCOPED per-device token (presented by an off-box paired
+ *          remote harness instead of the master key) to its device. Return null
+ *          for an unknown/revoked token. When present, the request is attributed
+ *          to that device and its token budget is enforced. Optional.
+ * @param {(u: {sessionId?: string|null, tenantId?: string|null, deviceId?: string|null, model?: string, usage: object}) => void} [deps.onUsage]
  *        — called with real provider usage once a response completes; wire to
- *          per-tenant accounting. Optional, non-fatal.
+ *          per-tenant/per-device accounting. Optional, non-fatal.
  */
-function createLlmGateway({ getConfig, gatewayKey, onUsage } = {}) {
+function createLlmGateway({ getConfig, gatewayKey, resolveScopedToken, onUsage } = {}) {
   const router = Router();
 
   function upstream() {
@@ -42,15 +47,36 @@ function createLlmGateway({ getConfig, gatewayKey, onUsage } = {}) {
     return { baseURL, apiKey };
   }
 
-  // App-local auth. The gateway is bound to loopback with the backend, but we
-  // still require the key so a compromised child can't be trivially impersonated
-  // and so the contract ("child holds only the gateway key") is enforced.
+  // Auth. Two credential classes reach this gateway:
+  //   1. the master gatewayKey — presented only by the app's OWN local harness
+  //      children (never leaves the box); full access, tenant taken from a header.
+  //   2. a SCOPED per-device token — presented by an off-box paired remote
+  //      harness (see resolveScopedToken). Attributed to that device, tenant
+  //      bound to the device (not a client header), and budget-enforced.
+  // The master key is NEVER handed to a remote, so a remote can only ever hold a
+  // scoped token → device revocation / budget caps bound its blast radius.
   router.use((req, res, next) => {
-    if (!gatewayKey) return next(); // no key configured → open (dev only)
     const hdr = req.get("authorization") || "";
     const bearer = hdr.replace(/^Bearer\s+/i, "").trim();
     const alt = req.get("x-api-key") || "";
-    if (bearer === gatewayKey || alt === gatewayKey) return next();
+    const presented = bearer || alt;
+
+    if (gatewayKey && (bearer === gatewayKey || alt === gatewayKey)) {
+      return next(); // trusted local child
+    }
+    // Scoped per-device token (paired remote harness reaching the gateway off-box).
+    if (resolveScopedToken && presented) {
+      let scoped = null;
+      try { scoped = resolveScopedToken(presented); } catch {}
+      if (scoped && scoped.deviceId) {
+        if (scoped.budget != null && (scoped.used || 0) >= scoped.budget) {
+          return res.status(402).json({ error: { message: "device LLM budget exhausted", type: "insufficient_quota" } });
+        }
+        req._orbitDevice = scoped;
+        return next();
+      }
+    }
+    if (!gatewayKey && !resolveScopedToken) return next(); // no auth configured → open (dev only)
     return res.status(401).json({ error: { message: "invalid gateway key", type: "invalid_request_error" } });
   });
 
@@ -86,7 +112,11 @@ function createLlmGateway({ getConfig, gatewayKey, onUsage } = {}) {
       });
     }
     const sessionId = req.get("x-orbit-session") || null;
-    const tenantId = req.get("x-orbit-tenant") || null;
+    // For a scoped device token, trust the token's binding for tenant/device — a
+    // remote can't spoof a tenant via header. Local children keep the header path.
+    const dev = req._orbitDevice || null;
+    const tenantId = dev ? (dev.tenantId || null) : (req.get("x-orbit-tenant") || null);
+    const deviceId = dev ? dev.deviceId : null;
 
     const body = (req.body && typeof req.body === "object") ? { ...req.body } : {};
     const streaming = body.stream === true;
@@ -112,7 +142,7 @@ function createLlmGateway({ getConfig, gatewayKey, onUsage } = {}) {
     if (!upstreamRes.body) {
       const text = await upstreamRes.text().catch(() => "");
       // Non-stream: try to meter usage from the parsed body.
-      try { meter(JSON.parse(text), { sessionId, tenantId, model: body.model }); } catch {}
+      try { meter(JSON.parse(text), { sessionId, tenantId, deviceId, model: body.model }); } catch {}
       return res.send(text);
     }
 
@@ -147,18 +177,18 @@ function createLlmGateway({ getConfig, gatewayKey, onUsage } = {}) {
             if (payload === "[DONE]") continue;
             try {
               const obj = JSON.parse(payload);
-              if (obj && obj.usage) { meter(obj, { sessionId, tenantId, model: body.model }); break; }
+              if (obj && obj.usage) { meter(obj, { sessionId, tenantId, deviceId, model: body.model }); break; }
             } catch {}
           }
         } else {
-          meter(JSON.parse(tail), { sessionId, tenantId, model: body.model });
+          meter(JSON.parse(tail), { sessionId, tenantId, deviceId, model: body.model });
         }
       } catch {}
     }
   }
 
   // Normalize OpenAI usage → the app's usage shape and hand off to onUsage.
-  function meter(obj, { sessionId, tenantId, model }) {
+  function meter(obj, { sessionId, tenantId, deviceId, model }) {
     const u = obj && obj.usage;
     if (!u || !onUsage) return;
     const usage = {
@@ -168,7 +198,7 @@ function createLlmGateway({ getConfig, gatewayKey, onUsage } = {}) {
       cacheRead: u.prompt_tokens_details?.cached_tokens ?? 0,
     };
     if (!usage.input && !usage.output && !usage.reasoning) return;
-    try { onUsage({ sessionId, tenantId, model: obj.model || model, usage }); } catch {}
+    try { onUsage({ sessionId, tenantId, deviceId, model: obj.model || model, usage }); } catch {}
   }
 
   return router;

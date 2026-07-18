@@ -134,6 +134,132 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
 - The SQLite DB + session workspaces persist on the `orbit-data` volume
   (`ORBIT_DB_PATH`, `ORBIT_HOME`).
 
+## Remote harnesses (bring your own agent)
+
+Any machine can join Orbit as a harness. In **Fleet → Pair a device** you get a
+one-liner (`curl -fsSL '<origin>/api/pair/bootstrap?code=…' | node`) — or hand an
+agent the **`agentUrl`** and let it self-connect. A tiny zero-dependency connector
+(`agent-backend/adapter/orbit-connect.js`) pairs, then Orbit drives that machine
+exactly like the local harness (spawn/prompt/cancel, streamed events, central
+policy). Orbit supplies the **plan/context**; the remote runs its **own** agent
+with its **own** model and tools — Orbit never provides inference.
+
+The connector is **agent-agnostic**: it auto-detects an installed agent on `PATH`
+and translates its native protocol to Orbit's events via a per-agent adapter:
+
+| Agent | Mode | Fidelity |
+|---|---|---|
+| **pi** | `pi --mode rpc` (persistent) | rich: text, tool calls, sub-agents, usage |
+| **Claude Code** | `claude -p --output-format stream-json` (persistent) | rich: text, tool calls, usage |
+| **OpenCode / Codex / Gemini CLI / Aider** | headless per-turn | text output streamed back |
+| **custom** | `ORBIT_AGENT_CMD` (+ optional `ORBIT_AGENT_ARGS` with `{prompt}`) | text — drive any other agent |
+| **generic** | built-in OpenAI tool loop | forced only (`ORBIT_CONNECT_AGENT=generic`), needs `OPENAI_*` |
+
+Force a specific one with `ORBIT_CONNECT_AGENT=<pi|claude|opencode|codex|gemini|aider|custom|generic>`.
+A box with no recognized agent won't connect (it isn't a harness). Adapter flags
+for third-party agents are best-effort and version-sensitive — if one drifts, use
+`ORBIT_AGENT_CMD` to point at the exact command.
+
+## Reverse proxy (TLS + WebSocket harness)
+
+Orbit uses **WebSockets** on two paths — `/api/ws` (dashboard) and `/api/harness`
+(remote agent harnesses that pair in via `curl … | node`). Any proxy in front of
+Orbit must therefore:
+
+1. **Upgrade WebSockets** on `/api/` (HTTP/1.1 + `Upgrade`/`Connection` headers).
+2. **Send the public scheme in `X-Forwarded-Proto`.** Orbit builds the harness
+   connection descriptor's URL (`ws://` vs **`wss://`**) from this header. If a
+   TLS-terminating proxy forwards `X-Forwarded-Proto: http` (e.g. it uses its own
+   internal `$scheme`), the harness dials plaintext `ws://`, hits the http→https
+   redirect, and the upgrade fails with **`Received network error or non-101
+   status code`**. This is the #1 cause of "paired but the harness won't connect."
+3. Use **long read timeouts** and **disable response buffering** for streaming.
+
+> **Bulletproof fallback:** if you can't trust the proxy chain to set
+> `X-Forwarded-Proto` correctly (chained proxies, Cloudflare Tunnel, …), pin the
+> public origin on the backend: `ORBIT_PUBLIC_ORIGIN=https://orbit.example.com`.
+> Orbit then always emits `wss://orbit.example.com/api/harness` and ignores the
+> request headers entirely.
+
+**Verify the harness WS path end-to-end** (expect `HTTP/1.1 401` — the upgrade
+reached Orbit and it rejected the fake token; a `200`/`404`/`502`/`301` means the
+proxy isn't upgrading):
+
+```bash
+curl -i -N -H "Connection: Upgrade" -H "Upgrade: websocket" \
+  -H "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==" -H "Sec-WebSocket-Version: 13" \
+  'https://orbit.example.com/api/harness?token=probe'
+```
+
+### nginx
+
+```nginx
+map $http_upgrade $connection_upgrade { default upgrade; '' close; }
+
+server {
+    listen 443 ssl;                       # (or behind another TLS terminator)
+    server_name orbit.example.com;
+    # ssl_certificate / ssl_certificate_key ...
+
+    location /api/ {                      # REST + /api/ws + /api/harness
+        proxy_pass http://127.0.0.1:6800;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;   # ← the public scheme, NOT $scheme
+        proxy_read_timeout 3600s; proxy_send_timeout 3600s; proxy_buffering off;
+    }
+    location / { proxy_pass http://127.0.0.1:6801; }   # dashboard UI
+}
+```
+
+> If Orbit sits behind **another** TLS terminator (so this nginx listens on plain
+> HTTP), hardcoding `X-Forwarded-Proto https` is correct because the *public* entry
+> is https. To instead trust the outer proxy's value:
+> `map $http_x_forwarded_proto $fwd { default $http_x_forwarded_proto; '' $scheme; }`
+> then `proxy_set_header X-Forwarded-Proto $fwd;`.
+
+### Caddy
+
+Caddy proxies WebSockets and sets `X-Forwarded-Proto` correctly out of the box:
+
+```caddy
+orbit.example.com {
+    handle /api/* { reverse_proxy 127.0.0.1:6800 }
+    handle       { reverse_proxy 127.0.0.1:6801 }
+}
+```
+
+### Traefik (labels)
+
+```yaml
+labels:
+  - "traefik.http.routers.orbit-api.rule=Host(`orbit.example.com`) && PathPrefix(`/api`)"
+  - "traefik.http.services.orbit-api.loadbalancer.server.port=6800"
+  - "traefik.http.routers.orbit-ui.rule=Host(`orbit.example.com`)"
+  - "traefik.http.services.orbit-ui.loadbalancer.server.port=6801"
+```
+
+Traefik auto-detects WebSocket upgrades and forwards `X-Forwarded-Proto`; no extra
+config needed.
+
+### Cloudflare
+
+- **Proxied DNS (orange cloud):** WebSockets are on by default and `X-Forwarded-Proto`
+  is set — nothing special beyond pointing at your origin.
+- **Cloudflare Tunnel (`cloudflared`):** WS works, but the origin service is
+  reached over http and the forwarded scheme can be unreliable. Set
+  `ORBIT_PUBLIC_ORIGIN=https://orbit.example.com` on the backend so the descriptor
+  is always `wss://`.
+
+### OpenShift / Kubernetes routes
+
+Routes support WebSockets by default (edge/passthrough TLS). If Orbit is behind an
+in-cluster nginx too, apply the nginx block above and make sure **both** layers
+upgrade WS and preserve the https scheme. When in doubt, set `ORBIT_PUBLIC_ORIGIN`.
+
 ## Branching
 
 - **`main`** — stable, releasable. Protect it; merge via PR.
