@@ -20,6 +20,29 @@ set -euo pipefail
 
 echo "[entrypoint] starting Orbit (NODE_ENV=${NODE_ENV:-production})"
 
+# Container→host reachability. Inside a container `localhost`/`127.0.0.1` means
+# the container itself, so a user-supplied upstream like http://localhost:5000
+# (a LiteLLM/TTS/etc. running on the Docker HOST) is unreachable. So the operator
+# only ever writes the real URL as they'd type it on the host, and we rewrite the
+# host part to the Docker host-gateway (mapped via extra_hosts in compose).
+# Override the gateway name with ORBIT_HOST_GATEWAY if needed. Only upstreams the
+# container DIALS OUT to are rewritten — never DASHBOARD_ORIGIN (its own public
+# origin) or the forced-internal backend bind.
+HOST_GATEWAY="${ORBIT_HOST_GATEWAY:-host.docker.internal}"
+rewrite_host_local() {
+  local name="$1" val="${!1:-}"
+  [ -n "$val" ] || return 0
+  local new="${val//localhost/$HOST_GATEWAY}"
+  new="${new//127.0.0.1/$HOST_GATEWAY}"
+  if [ "$new" != "$val" ]; then
+    export "$name=$new"
+    echo "[entrypoint] $name: rewrote host-local → $HOST_GATEWAY"
+  fi
+}
+for _v in LLM_BASE_URL LITELLM_BASE_URL OPENAI_BASE_URL LOCAL_TTS_URL; do
+  rewrite_host_local "$_v"
+done
+
 # Backend PORT is always forced (both processes read process.env.PORT, so a
 # shared value would collide). HOST is honored from the environment so an
 # EXTERNAL nginx that proxies /api straight to the backend's 6800 can reach it

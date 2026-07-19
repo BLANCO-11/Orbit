@@ -170,6 +170,7 @@ export default function SettingsPanel({
   models,
   voices,
   onSave,
+  saveState,
   onManualCompact,
   onAddConfigItem,
   onRemoveConfigItem,
@@ -273,11 +274,11 @@ export default function SettingsPanel({
                 </p>
               </SectionCard>
 
-              <SectionCard title="Models & Reasoning" desc="Which models run normal turns, deep planning, and how they combine.">
+              <SectionCard title="Models" desc="Two models power every turn. The composer's Effort chip picks which one runs per message.">
                 <div className="flex flex-col gap-4">
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <div>
-                      <FieldLabel>Normal Execution Model</FieldLabel>
+                      <FieldLabel>Response Model</FieldLabel>
                       <Select value={settings.selectedNormalModel} onValueChange={(v) => onSettingsChange({ selectedNormalModel: v })}>
                         <SelectTrigger className="h-9 w-full text-sm"><SelectValue placeholder="Select model" /></SelectTrigger>
                         <SelectContent>
@@ -288,9 +289,12 @@ export default function SettingsPanel({
                           )}
                         </SelectContent>
                       </Select>
+                      <p className="mt-1 text-[11px] leading-relaxed text-faint">
+                        Fast output — chat, Q&amp;A, quick lookups.
+                      </p>
                     </div>
                     <div>
-                      <FieldLabel>Reasoning Planner Model</FieldLabel>
+                      <FieldLabel>Reasoning Model</FieldLabel>
                       <Select value={settings.selectedReasoningModel} onValueChange={(v) => onSettingsChange({ selectedReasoningModel: v })}>
                         <SelectTrigger className="h-9 w-full text-sm"><SelectValue placeholder="Select model" /></SelectTrigger>
                         <SelectContent>
@@ -301,31 +305,21 @@ export default function SettingsPanel({
                           )}
                         </SelectContent>
                       </Select>
+                      <p className="mt-1 text-[11px] leading-relaxed text-faint">
+                        Reasoned output — used when Effort is set to Reasoned.
+                      </p>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                    <div>
-                      <FieldLabel>Agent Thinking Mode</FieldLabel>
-                      <Select value={settings.taskMode} onValueChange={(v) => onSettingsChange({ taskMode: v })}>
-                        <SelectTrigger className="h-9 w-full text-sm"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="normal">Normal Model Only (Fast)</SelectItem>
-                          <SelectItem value="reasoning">Reasoning Model Only (Deep)</SelectItem>
-                          <SelectItem value="hybrid">Hybrid Orchestrator (Plan + Exec)</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <FieldLabel>System Prompt Directives</FieldLabel>
-                      <Select value={systemPromptType} onValueChange={setSystemPromptType}>
-                        <SelectTrigger className="h-9 w-full text-sm"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="standard">Standard PA Prompt</SelectItem>
-                          <SelectItem value="fable-5">Claude Fable 5 Leak Prompt</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
+                  <div className="md:w-1/2 md:pr-2">
+                    <FieldLabel>System Prompt Directives</FieldLabel>
+                    <Select value={systemPromptType} onValueChange={setSystemPromptType}>
+                      <SelectTrigger className="h-9 w-full text-sm"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="standard">Standard PA Prompt</SelectItem>
+                        <SelectItem value="fable-5">Claude Fable 5 Leak Prompt</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
               </SectionCard>
@@ -582,9 +576,37 @@ export default function SettingsPanel({
           {/* ── Save bar — frosted, floats over the cards while scrolling ── */}
           {activeTab !== "devices" && (
             <div className="glass sticky bottom-4 z-10 flex items-center justify-between gap-3 rounded-xl border border-border p-3">
-              <span className="hidden text-[11px] text-faint sm:block">Changes apply after saving.</span>
-              <Button onClick={onSave} className="h-9 w-full px-6 font-bold sm:w-auto">
-                Save Settings &amp; Policies
+              <span
+                className={`text-[11px] ${
+                  saveState?.status === "saved"
+                    ? "text-emerald-500"
+                    : saveState?.status === "error"
+                      ? "text-red-500"
+                      : "text-faint"
+                }`}
+              >
+                {saveState?.status === "saving"
+                  ? "Saving…"
+                  : saveState?.status === "saved"
+                    ? saveState.message || "Settings saved."
+                    : saveState?.status === "error"
+                      ? saveState.message || "Save failed."
+                      : "Changes apply after saving."}
+              </span>
+              <Button
+                onClick={onSave}
+                disabled={saveState?.status === "saving"}
+                className="h-9 w-full px-6 font-bold sm:w-auto"
+              >
+                {saveState?.status === "saving" ? (
+                  "Saving…"
+                ) : saveState?.status === "saved" ? (
+                  <span className="flex items-center gap-1.5">
+                    <Check size={15} /> Saved
+                  </span>
+                ) : (
+                  "Save Settings & Policies"
+                )}
               </Button>
             </div>
           )}

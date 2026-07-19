@@ -8,7 +8,6 @@ const DEFAULT_SETTINGS = {
   selectedNormalModel: '',
   selectedReasoningModel: '',
   selectedVoice: 'alba',
-  taskMode: 'hybrid',
   autoCompactEnabled: true,
   autoCompactThreshold: 70,
   newReadPath: '',
@@ -34,6 +33,8 @@ export function useSettings() {
   // LLM connection status (Workstream F4). configured: has baseURL+key;
   // connected: null (untested) | true | false; error: message when failed.
   const [llmStatus, setLlmStatus] = useState({ configured: null, connected: null, error: null, models: [] });
+  // Save feedback for the Settings save bar: 'idle' | 'saving' | 'saved' | 'error'.
+  const [saveState, setSaveState] = useState({ status: 'idle', message: '' });
 
   const updateSettings = useCallback((patch) => {
     setSettings(prev => ({ ...prev, ...patch }));
@@ -89,7 +90,6 @@ export function useSettings() {
             apiKey: data.litellm.apiKey || '',
             selectedNormalModel: data.litellm.selectedNormalModel || '',
             selectedReasoningModel: data.litellm.selectedReasoningModel || '',
-            taskMode: data.litellm.taskMode || 'hybrid',
             ttsURL: ttsInfo.url || '',
             ttsKey: ttsInfo.apiKey || '',
           });
@@ -116,14 +116,14 @@ export function useSettings() {
         apiKey: settings.apiKey,
         selectedNormalModel: settings.selectedNormalModel,
         selectedReasoningModel: settings.selectedReasoningModel,
-        taskMode: settings.taskMode,
       },
       tts: {
         url: settings.ttsURL,
         apiKey: settings.ttsKey,
       },
     };
-    fetch(`/api/config`, {
+    setSaveState({ status: 'saving', message: '' });
+    return fetch(`/api/config`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updatedConfig),
@@ -134,10 +134,26 @@ export function useSettings() {
           setSecurityConfig(updatedConfig);
           fetchModels();
           testLlm(); // re-test the endpoint on save (Workstream F4)
+          // Surface the backend's descriptive message (e.g. "Configuration
+          // saved. N session(s) restarted...") instead of swallowing it.
+          setSaveState({ status: 'saved', message: data.message || 'Settings saved.' });
+        } else {
+          setSaveState({ status: 'error', message: data.message || 'Save failed.' });
         }
       })
-      .catch(err => console.error('Error saving settings:', err));
+      .catch(err => {
+        console.error('Error saving settings:', err);
+        setSaveState({ status: 'error', message: 'Could not reach the server.' });
+      });
   }, [securityConfig, systemPromptType, settings, fetchModels, testLlm]);
+
+  // Auto-clear the "saved"/"error" banner a few seconds after it appears so the
+  // save bar returns to its resting state without the user having to dismiss it.
+  useEffect(() => {
+    if (saveState.status !== 'saved' && saveState.status !== 'error') return;
+    const t = setTimeout(() => setSaveState({ status: 'idle', message: '' }), 4000);
+    return () => clearTimeout(t);
+  }, [saveState]);
 
   // settingsKey (optional): a `settings` field to clear after a successful add,
   // e.g. the "new path" input that fed this addition.
@@ -166,5 +182,6 @@ export function useSettings() {
     fetchConfig, fetchModels, fetchVoices,
     saveAllSettings, addConfigItem, removeConfigItem,
     llmStatus, testLlm,
+    saveState,
   };
 }

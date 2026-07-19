@@ -27,7 +27,7 @@ const {
   isPathInZones, isPathBlocked, hasPathField, extractCommandPaths,
 } = require("./ws/session-helpers");
 const workspacePaths = require("./workspace-paths");
-const { isMutatingTool, isReadOnlyTool, isMultiStepTask } = require("./harnesses/picode/parser");
+const { isMutatingTool, isReadOnlyTool, isMultiStepTask, classifyQuery } = require("./harnesses/picode/parser");
 const policyEngine = require("./policy-engine");
 const { recordObserved } = require("./tool-catalog");
 
@@ -1028,7 +1028,11 @@ async function persistSessionMetrics(sessionId, subagentTracker) {
 async function handleStartTask(ws, userPrompt, sessionId, mode, systemPromptType, skills, effort, harnessId, excludeTools, sandbox) {
   ws.activeSessionId = sessionId;
   ws.currentPrompt = userPrompt;
-  
+  // Nature of this query — 'conversational' | 'qa' | 'task'. Drives pre-planning
+  // and, at turn end, whether/what TTS speaks. Does NOT change the permission
+  // mode (the user owns that); it's an advisory signal only.
+  ws.queryNature = classifyQuery(userPrompt);
+
   const activeMode = mode || "";
 
   // NOTE: the old keyword-based "chat mode pre-check" was removed. It guessed
@@ -1043,21 +1047,20 @@ async function handleStartTask(ws, userPrompt, sessionId, mode, systemPromptType
   sendLog(ws, `Processing prompt: "${userPrompt}"`, true, sessionId);
 
   // ── Effort profile → model + planning depth ────────────────
-  // fast:     normal model, no pre-planning (chat/QA/quick research)
-  // balanced: normal model, config's taskMode (the default)
-  // deep:     reasoning model + hybrid pre-planning (dense planner/responder)
+  // Two models are configured in Settings › Models: a fast Response model and a
+  // deeper Reasoning model. The composer's per-turn Effort chip is the ONLY knob
+  // that decides which one runs and how much pre-planning happens — there is no
+  // separate persisted "thinking mode".
+  //   fast:     response model,  no pre-planning        (chat / QA / quick lookups)
+  //   balanced: response model,  plans genuine multi-step work   (the default)
+  //   deep:     reasoning model, plans genuine multi-step work   (dense reasoner)
   const litellmConfig = getConfig().litellm || {};
-  const configTaskMode = litellmConfig.taskMode || "normal";
-  let taskMode = configTaskMode;
-  let activeModelName = litellmConfig.selectedNormalModel;
-  if (effort === "deep") {
-    taskMode = "hybrid";
-    activeModelName = litellmConfig.selectedReasoningModel || litellmConfig.selectedNormalModel;
-  } else if (effort === "fast") {
-    taskMode = "normal";
-  } else if (configTaskMode === "reasoning") {
-    activeModelName = litellmConfig.selectedReasoningModel || litellmConfig.selectedNormalModel;
-  }
+  const isReasoned = effort === "deep";
+  const activeModelName = isReasoned
+    ? litellmConfig.selectedReasoningModel || litellmConfig.selectedNormalModel
+    : litellmConfig.selectedNormalModel;
+  // Pre-plan on every lane except the pure "fast" one.
+  const wantsPlan = effort !== "fast";
 
   // ── Hybrid planning ───────────────────────────────────────
   const isChat = !activeMode || activeMode === "chat";
@@ -1067,7 +1070,7 @@ async function handleStartTask(ws, userPrompt, sessionId, mode, systemPromptType
   // plan is reasoning, not "the plan": it feeds the reasoning accordion only, so
   // the Mission board (plan_state) stays the single canonical plan surface
   // (Workstream B2).
-  if (taskMode === "hybrid" && !isChat && isMultiStepTask(userPrompt)) {
+  if (wantsPlan && !isChat && ws.queryNature === "task") {
     sendLog(ws, "Sketching an approach...", true, sessionId);
     const plan = await generatePlan(userPrompt, getConfig);
     if (plan) {
@@ -1810,19 +1813,37 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
     }
     sendWithSession(ws, { type: "message", role: "assistant", content: finalContent }, sessionId);
     
-    // TTS: Only generate final summary or fallback TTS if we did NOT stream any <tts> tags during generation.
+    // TTS fallback. When the model followed the prompt it already emitted a
+    // dedicated <tts> spoken block, which was extracted and voiced sentence-by-
+    // sentence during streaming (see the accumulated_text handler) — nothing to
+    // do here. Only when that block is MISSING do we fall back, and even then we
+    // NEVER speak the full response: we make one separate, short inference that
+    // produces a single spoken sentence. If that fails, we stay silent rather
+    // than reading the entire (often long / code-laden) reply aloud.
+    //
+    // Query-nature gate: voice suits conversation and Q&A, not heavy task output.
+    // For a 'task' query we skip this fallback summary entirely — a task that
+    // wanted a spoken line already got it from its own <tts> block above; without
+    // one, staying silent beats narrating a code/build dump. Conversational and
+    // Q&A turns still get the spoken fallback.
     const ttsMatch = (accumulatedText || "").match(/<tts>([\s\S]*?)<\/tts>/i);
-    if (!ttsMatch) {
-      const ttsText = cleanFinalText;
-      if (ttsText.length > 50 || ttsText.includes("`") || ttsText.includes("\n") || ttsText.includes("*")) {
+    const speakFallback = ws.queryNature !== "task";
+    if (!ttsMatch && cleanFinalText && speakFallback) {
+      // Short, plain, single-line replies are already speakable as-is; anything
+      // longer or formatted gets condensed to one sentence first.
+      const isAlreadySpeakable =
+        cleanFinalText.length <= 50 &&
+        !cleanFinalText.includes("`") &&
+        !cleanFinalText.includes("\n") &&
+        !cleanFinalText.includes("*");
+      if (isAlreadySpeakable) {
+        sendWithSession(ws, { type: "intelligent_speech", content: cleanFinalText }, sessionId);
+      } else {
         const summary = await generateIntelligentSpeech(ws.currentPrompt || "query", cleanFinalText, getConfig);
         if (summary) {
           sendWithSession(ws, { type: "intelligent_speech", content: summary }, sessionId);
-        } else {
-          sendWithSession(ws, { type: "intelligent_speech", content: ttsText }, sessionId);
         }
-      } else if (ttsText) {
-        sendWithSession(ws, { type: "intelligent_speech", content: ttsText }, sessionId);
+        // No summary → no speech. Better silent than reading the whole reply.
       }
     }
 

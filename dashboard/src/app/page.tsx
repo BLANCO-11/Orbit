@@ -1,8 +1,6 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { marked } from 'marked';
-import DOMPurify from 'dompurify';
 import { MessageSquare, List, BarChart3, Cog, Bot, Server, Plug, Library as LibraryIcon, Shield, ShieldUser } from 'lucide-react';
 import BottomNav from '@/components/layout/BottomNav';
 import { ErrorBoundary, ComponentErrorBoundary } from '@/components/ErrorBoundary';
@@ -117,7 +115,7 @@ function DashboardInner({ auth, onLogout }: { auth: AuthIdentity; onLogout: () =
     models, voices,
     systemPromptType, setSystemPromptType,
     saveAllSettings, addConfigItem, removeConfigItem,
-    llmStatus,
+    llmStatus, saveState,
   } = useSettings();
   const { speakText, queueSentence, startSession: startTtsSession, stopSpeaking } = useTTS(settings.selectedVoice);
 
@@ -462,17 +460,6 @@ function DashboardInner({ auth, onLogout }: { auth: AuthIdentity; onLogout: () =
     }
   }, [sendMessage, state.currentSessionId, dispatch]);
 
-  // ── Markdown ──
-  const renderMarkdown = useCallback((text: string) => {
-    try {
-      const raw = marked.parse(text || '', { breaks: true }) as string;
-      const clean = DOMPurify.sanitize(raw);
-      return { __html: clean };
-    } catch {
-      return { __html: text || '' };
-    }
-  }, []);
-
   // ── Tool helpers ──
   const getToolSummary = useCallback((tool) => {
     const args = tool.arguments || {};
@@ -587,6 +574,7 @@ function DashboardInner({ auth, onLogout }: { auth: AuthIdentity; onLogout: () =
           setVoiceResponse={(val) => dispatch(actions.setVoiceState(val ? 'audio' : 'disabled'))}
           models={models} voices={voices}
           onSave={saveAllSettings}
+          saveState={saveState}
           onManualCompact={handleManualCompact}
           onAddConfigItem={addConfigItem} onRemoveConfigItem={removeConfigItem}
           sessionMode={state.sessionMode}
@@ -824,7 +812,6 @@ function DashboardInner({ auth, onLogout }: { auth: AuthIdentity; onLogout: () =
           }
         }}
         status={state.status}
-        renderMarkdown={renderMarkdown}
         expandedTools={state.expandedTools}
         toggleTool={(id) => dispatch(actions.toggleTool(id))}
         getToolSummary={getToolSummary}

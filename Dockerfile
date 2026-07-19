@@ -9,14 +9,20 @@
 #   dev               — full toolchain: runs `next dev` (HMR); use with
 #                       docker-compose.dev.yml (bind-mounts source).
 
-# ── pi base: node + tini + the pi harness & its extensions (shared) ──
+# ── pi base: node + python + tini + the pi harness & its extensions (shared) ──
+# The agent executes in this container (sandbox=host), so its runtime lives here.
+# Node powers the pi harness and JS tooling; Python 3 + uv give agents a
+# first-class Python runtime — the preferred surface for scripts/automation.
 FROM node:22-bookworm-slim AS pi
 ENV PI_VERSION=0.80.7
 RUN apt-get update \
- && apt-get install -y --no-install-recommends tini ca-certificates \
+ && apt-get install -y --no-install-recommends tini ca-certificates python3 python3-venv \
  && rm -rf /var/lib/apt/lists/* \
  && npm install -g @earendil-works/pi-coding-agent@${PI_VERSION} \
  && pi install npm:pi-mcp-extension
+# uv — fast Python package/venv manager & script runner (PEP 723 inline deps).
+# Ideal for agent-authored .py scripts; sidesteps Debian's PEP 668 global-pip lock.
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
 # LLM access uses pi's NATIVE OpenAI-compatible provider (registered per-spawn by
 # agent-backend/harnesses/picode/orbit-provider.mjs, pointed at the app's own LLM
 # gateway) — so the bespoke `pi-provider-litellm` extension is no longer baked in.

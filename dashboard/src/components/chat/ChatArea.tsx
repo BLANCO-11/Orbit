@@ -22,7 +22,6 @@ export default function ChatArea({
   messages,
   reasoningHistory = [],
   status,
-  renderMarkdown,
   expandedTools,
   toggleTool,
   getToolSummary,
@@ -201,10 +200,9 @@ export default function ChatArea({
                 ) || null;
               }
               return (
-                <React.Fragment key={i}>
+                <React.Fragment key={msg.id ?? i}>
                   <ChatMessage
                     message={msg}
-                    renderMarkdown={renderMarkdown}
                     expandedTools={expandedTools}
                     toggleTool={toggleTool}
                     getToolSummary={getToolSummary}

@@ -3,8 +3,7 @@
     "baseURL": "",
     "apiKey": "",
     "selectedNormalModel": "",
-    "selectedReasoningModel": "",
-    "taskMode": "normal"
+    "selectedReasoningModel": ""
   },
   "fileSystem": {
     "allowedReadPaths": ["~"],

@@ -8,6 +8,7 @@ import {
   Shield, Edit3, Zap, Play, FileText, Search, Terminal, Globe, Wrench,
 } from 'lucide-react';
 import Banner from './chat/Banner';
+import MarkdownMessage from './chat/MarkdownMessage';
 import { getMode } from '@/lib/modes';
 
 const TOOL_ICONS = {
@@ -29,7 +30,7 @@ function toolIcon(name = '') {
  * assistant messages as avatar + prose with inline tool-call cards.
  */
 function ChatMessageBase({
-  message, renderMarkdown,
+  message,
   expandedTools, toggleTool,
   getToolSummary, getToolOutput,
   onSetSessionMode, onSetSessionModeAndReRun, sessionMode,
@@ -106,9 +107,9 @@ function ChatMessageBase({
         )}
 
         {message.content && (
-          <div
-            className={`markdown-content ${message.tools && message.tools.length > 0 ? 'mt-3' : ''}`}
-            dangerouslySetInnerHTML={renderMarkdown(message.content)}
+          <MarkdownMessage
+            content={message.content}
+            className={message.tools && message.tools.length > 0 ? 'mt-3' : ''}
           />
         )}
 
@@ -123,9 +124,9 @@ function ChatMessageBase({
 /**
  * While the agent streams, the reducer replaces ONLY the last message object on
  * every token; all earlier message objects keep their reference. Without
- * memoization, React still re-renders the whole list each token — re-running
- * marked.parse + DOMPurify.sanitize on every prior bubble — which is what made
- * the chat flicker and stutter. Skip a bubble's re-render unless something that
+ * memoization, React still re-renders the whole list each token — re-parsing
+ * every prior bubble's markdown — which compounded the streaming stutter. Skip a
+ * bubble's re-render unless something that
  * actually changes its output changed. Function props are intentionally omitted:
  * toggleTool only closes over dispatch, and onSetSessionModeAndReRun is only
  * live on the (always-re-rendered) last message, so their changing identity must
@@ -134,7 +135,6 @@ function ChatMessageBase({
 function chatMessagePropsEqual(prev, next) {
   return (
     prev.message === next.message &&
-    prev.renderMarkdown === next.renderMarkdown &&
     prev.expandedTools === next.expandedTools &&
     prev.sessionMode === next.sessionMode &&
     prev.getToolSummary === next.getToolSummary &&

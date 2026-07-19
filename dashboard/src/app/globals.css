@@ -528,11 +528,15 @@
 
 /* ============================================================
    MARKDOWN RENDERING — the one exception to "Tailwind classes only",
-   since marked.js emits raw HTML we don't control the structure of.
-   Lives in @layer components so utilities can still override it.
+   since the markdown renderer emits semantic HTML (p/ul/pre/code/table/…)
+   we style by tag. Lives in @layer components so utilities can still
+   override it.
+   `contain: layout style` isolates the streaming bubble: as tokens append,
+   its reflow/style recalc stays inside the bubble instead of relaying out
+   the whole scroll column — part of the smooth-streaming fix.
    ============================================================ */
 @layer components {
-.markdown-content { font-size: 0.9rem; line-height: 1.65; }
+.markdown-content { font-size: 0.9rem; line-height: 1.65; contain: layout style; }
 .markdown-content p { margin-bottom: 0.6rem; }
 .markdown-content p:last-child { margin-bottom: 0; }
 .markdown-content pre {

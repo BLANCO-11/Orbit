@@ -52,7 +52,7 @@ app.prepare().then(() => {
     if (event === 'upgrade') {
       const [req, socket, head] = args;
       const parsedUrl = parse(req.url, true);
-      if (parsedUrl.pathname?.startsWith('/api/ws')) {
+      if (parsedUrl.pathname?.startsWith('/api/ws') || parsedUrl.pathname?.startsWith('/api/harness')) {
         proxy.ws(req, socket, head, { target: BACKEND });
         return true; // Handled, prevent propagation to other listeners
       }

@@ -4,6 +4,12 @@ import React, { createContext, useContext, useReducer, useCallback, useEffect } 
 
 const VOICE_STATE_KEY = 'orbit:voiceState';
 
+// Monotonic message id. Used as the React list key so bubbles keep their identity
+// across the windowed slice(-visibleCount) — index keys remounted every visible
+// bubble whenever a new message shifted the window, flashing the list mid-stream.
+let _msgSeq = 0;
+const withId = (msg) => (msg && msg.id != null ? msg : { ...msg, id: `m${++_msgSeq}` });
+
 // ═══════════════════════════════════════════════════════════
 // State Shape
 // ═══════════════════════════════════════════════════════════
@@ -92,7 +98,7 @@ function orbitReducer(state, action) {
       // (belt-and-suspenders for the backend halt guard).
       const last = state.messages[state.messages.length - 1];
       if (action.payload?.isModeSuggestion && last?.isModeSuggestion) return state;
-      return { ...state, messages: [...state.messages, action.payload] };
+      return { ...state, messages: [...state.messages, withId(action.payload)] };
     }
     
     case UPDATE_LAST_MESSAGE: {
@@ -107,13 +113,17 @@ function orbitReducer(state, action) {
       } else {
         return {
           ...state,
-          messages: [...state.messages, { role: 'assistant', ...action.payload }],
+          messages: [...state.messages, withId({ role: 'assistant', ...action.payload })],
         };
       }
     }
-    
+
     case SET_MESSAGES:
-      return { ...state, messages: action.payload, visibleCount: 10 };
+      return {
+        ...state,
+        messages: Array.isArray(action.payload) ? action.payload.map(withId) : [],
+        visibleCount: 10,
+      };
     
     case ADD_LOG:
       return { ...state, logs: [...state.logs, action.payload] };

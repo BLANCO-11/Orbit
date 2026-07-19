@@ -101,4 +101,35 @@ function isMultiStepTask(prompt) {
   return Boolean(multiStep);
 }
 
-module.exports = { stripTuiChars, isMutatingTool, isReadOnlyTool, isConversationalPrompt, isMultiStepTask };
+// Broader small-talk detector: greetings, acknowledgements, and short social
+// chit-chat. A superset of isConversationalPrompt's exact-match phrases, but kept
+// deliberately SHORT-only so a real question ("how do I deploy this?") never
+// gets misread as small talk.
+function isSmallTalk(prompt) {
+  if (!prompt || typeof prompt !== "string") return false;
+  const text = prompt.trim();
+  if (isConversationalPrompt(text)) return true;
+  if (text.length > 40) return false; // small talk is brief
+  const lower = text.toLowerCase();
+  return /^(hey|hi|hello|yo|hiya|ok|okay|k|cool|nice|great|awesome|perfect|thanks|thank\s*you|thx|ty|cheers|lol|haha|good\s+(job|work|one|morning|afternoon|evening|night)|how\s+are\s+you|how'?s\s+it\s+going|what'?s\s+up|whats\s+up|sup|you\s+there|are\s+you\s+there|yes|yep|yeah|no|nope|nvm|never\s*mind|sure|sounds\s+good)\b[\s!.?]*$/i.test(lower);
+}
+
+/**
+ * Classify a user prompt by its NATURE, for behavior + TTS routing:
+ *   'conversational' — greetings / pleasantries / social chit-chat.
+ *   'task'           — genuine build-or-change work (drives pre-planning).
+ *   'qa'             — questions, lookups, explanations, single-step asks, else.
+ * This does NOT decide the permission mode — the user owns that in the composer.
+ * It's a lightweight signal the turn path uses to gate planning and to decide
+ * whether/what to speak (voice suits chat & Q&A; heavy task output stays quiet).
+ */
+function classifyQuery(prompt) {
+  if (!prompt || typeof prompt !== "string") return "qa";
+  const text = prompt.trim();
+  if (!text) return "qa";
+  if (isSmallTalk(text)) return "conversational";
+  if (isMultiStepTask(text)) return "task";
+  return "qa";
+}
+
+module.exports = { stripTuiChars, isMutatingTool, isReadOnlyTool, isConversationalPrompt, isMultiStepTask, isSmallTalk, classifyQuery };

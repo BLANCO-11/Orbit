@@ -10,7 +10,7 @@ const { loadConfig, saveConfig, loadUiConfig, saveUiConfig } = require("../confi
 // getConfig() on every tool call and every turn, so it hot-reloads with no
 // restart. Killing every session on any save was the old, disruptive behavior.
 const SPAWN_TIME_KEYS = {
-  litellm: ["baseURL", "apiKey", "selectedNormalModel", "selectedReasoningModel", "taskMode"],
+  litellm: ["baseURL", "apiKey", "selectedNormalModel", "selectedReasoningModel"],
   systemPromptType: true,
 };
 

@@ -3,10 +3,14 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Check, ChevronDown, Gauge } from 'lucide-react';
 
+// Per-turn thinking mode, sent on start_task. Two models back these lanes
+// (Settings › Models): Fast/Balanced run the Response model; Reasoned swaps to
+// the Reasoning model. Balanced and Reasoned also pre-plan genuine multi-step
+// work — Fast never does.
 const EFFORTS = [
-  { id: 'fast', label: 'Fast', desc: 'chat, QA, quick research' },
-  { id: 'balanced', label: 'Balanced', desc: 'the default' },
-  { id: 'deep', label: 'Deep', desc: 'dense planner, reasoning model' },
+  { id: 'fast', label: 'Fast', desc: 'response model — chat, Q&A, quick lookups' },
+  { id: 'balanced', label: 'Balanced', desc: 'response model + planning (default)' },
+  { id: 'deep', label: 'Reasoned', desc: 'reasoning model + planning' },
 ];
 
 interface EffortSelectorProps {
