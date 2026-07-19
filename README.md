@@ -19,7 +19,7 @@
                                      ~/.orbit/sessions/<id>/         lightpanda (browser),
                                        workspace · artifacts · tmp   search · notify · plan ·
                                                                      transcript · fleet
-   State: SQLite (agent-backend/*.db) · encrypted tokens · per-session file isolation
+   State: PostgreSQL or SQLite (env-selected) · encrypted tokens · per-session file isolation
 ```
 
 **How it fits together:** the backend owns sessions, metrics, and the capability×mode **policy** it enforces on every tool call. Each session spawns a harness with `cwd` = its own isolated workspace. Capabilities the agent reaches for (search, notify, plan, browser) are **MCP servers** Orbit auto-registers. A "lead" chat can delegate subtasks to other agents/devices (**Fleet**), and each delegate's activity streams back into the lead's Trace.
@@ -30,10 +30,11 @@
 
 | Requirement | Why | Notes |
 |---|---|---|
-| **Node.js 22+** | uses the built-in `node:sqlite` | `node --version` ≥ 22 |
+| **Node.js 22+** | SQLite driver uses the built-in `node:sqlite` | `node --version` ≥ 22 |
 | **An OpenAI-compatible LLM endpoint** | the model the agent runs on | e.g. [LiteLLM](https://github.com/BerriAI/litellm) proxy, or any `/v1` endpoint |
 | **`pi` CLI** | the default agent harness | install per pi's docs; auto-discovered on PATH |
-| **Docker** *(recommended)* | the Lightpanda headless browser (web browsing) | auto-started on boot if present |
+| **Docker** *(recommended)* | the Lightpanda headless browser + the bundled PostgreSQL | auto-started on boot if present |
+| **PostgreSQL** *(optional)* | the default DB in Docker; set `DATABASE_URL` | omit it and Orbit uses local SQLite with no config |
 | **OpenCode** *(optional)* | a second harness | `npm i -g opencode-ai` |
 | **A TTS server** *(optional)* | voice output | the voice UI only appears when configured |
 
@@ -67,10 +68,12 @@ For a clean restart on the latest code (kills ports, rebuilds the dashboard, boo
 
 Two layers, and env wins:
 
-- **`.env`** (see [`.env.example`](.env.example)) — LLM endpoint, ports, optional TTS/search/browser/Telegram. Values here override the config file at spawn time.
+- **`.env`** (see [`.env.example`](.env.example)) — LLM endpoint, ports, database, optional TTS/search/browser/Telegram. Values here override the config file at spawn time.
 - **Settings panel** (in-app) — models, TTS voice, security (allowed/blocked paths, approval), web-access extension, budgets — persisted to `agent-backend/security-config.json` (gitignored, holds your key).
 
-**Permissions** are a capability × mode matrix (`chat`/`plan`/`edit`/`yolo` → allow/ask/block) enforced by the backend on every tool call, plus a consent-proof hard blocklist (your `~/.ssh`, Orbit's own source, etc.). Each session writes only inside its own `~/.orbit/sessions/<id>/workspace`; anything outside asks first.
+**Database** — Orbit runs on either **PostgreSQL** or **SQLite**, chosen at boot: set `ORBIT_DB_DRIVER` explicitly, else a `DATABASE_URL` selects Postgres, else it falls back to SQLite (`node:sqlite`) at `ORBIT_DB_PATH`. SQLite is the zero-config default for local/single-box; the Docker stack ships a Postgres service and defaults to it. Migrate an existing SQLite DB with `agent-backend/scripts/migrate-sqlite-to-pg.js` (see `.env.example`). Both drivers share one schema and the same app behavior.
+
+**Permissions** are a capability × mode matrix (`chat`/`plan`/`edit`/`yolo` → allow/ask/block) enforced by the backend on every tool call, plus a consent-proof hard blocklist (your `~/.ssh`, Orbit's own source, etc.). Shell commands are tokenized so a blocklisted path can't slip through via redirects/subshells/unlisted tools. Each session writes only inside its own `~/.orbit/sessions/<id>/workspace`; anything outside asks first. For untrusted execution, set `ORBIT_DEFAULT_SANDBOX=container` to run agents in an ephemeral Docker sandbox by default.
 
 ## Features
 
@@ -89,7 +92,9 @@ Two layers, and env wins:
 ## Project layout
 
 ```
-agent-backend/        Express backend, harnesses, policy engine, MCP registry, SQLite
+agent-backend/        Express backend, harnesses, policy engine, MCP registry
+  db.js  db/adapter.js dual-driver data layer (PostgreSQL / SQLite), async
+  scripts/            migrate-sqlite-to-pg.js (one-time data migration)
   harnesses/          picode (pi), opencode, container, remote — one HarnessInterface
   routes/ ws/         REST + WebSocket
   workspace-paths.js  per-session ~/.orbit/sessions/<id> layout
@@ -107,14 +112,18 @@ npm run dev        # backend + dashboard (hot reload)
 npm run build      # build the dashboard
 npm start          # build + run both (production)
 npm run verify     # typecheck + production build
-npm test           # security-guard tests
+npm test           # policy-hardening + DB-adapter tests
+
+# DB layer test — SQLite by default; add DATABASE_URL to test Postgres:
+node tests/test_db_layer.js
+DATABASE_URL=postgres://orbit:orbit@localhost:5432/orbit_test node tests/test_db_layer.js
 ```
 
 ## Docker
 
 One image runs the backend + dashboard; `pi` (the agent harness) and its extensions
-are **baked into the image** — no host mount needed. Lightpanda runs as a sibling
-service. Copy `.env.example` → `.env` and fill it in first.
+are **baked into the image** — no host mount needed. Lightpanda (browser) and
+**PostgreSQL** run as sibling services. Copy `.env.example` → `.env` and fill it in first.
 
 ```bash
 # prod (slim built image)
@@ -131,8 +140,16 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
   `PORT`/`HOST` from `.env` are ignored there.
 - `docker compose` `env_file` does **not** strip inline `# comments` — keep comments
   on their own lines in `.env`.
-- The SQLite DB + session workspaces persist on the `orbit-data` volume
-  (`ORBIT_DB_PATH`, `ORBIT_HOME`).
+- **PostgreSQL** is the default DB: the `postgres` service holds the data (on the
+  `orbit-pgdata` volume) and the app waits for it via a healthcheck. To use SQLite
+  instead, comment out `DATABASE_URL` on the `orbit` service (or set
+  `ORBIT_DB_DRIVER=sqlite`); it then persists at `ORBIT_DB_PATH` on `orbit-data`.
+  Override `POSTGRES_USER`/`POSTGRES_PASSWORD`/`POSTGRES_DB` in `.env` for a real
+  deploy (and keep `DATABASE_URL` in sync).
+- Session workspaces persist on the `orbit-data` volume (`ORBIT_HOME`).
+- The container reaches **host-run services** (a host LiteLLM, TTS, etc.) via
+  `host.docker.internal` (mapped through `extra_hosts`) — e.g.
+  `LLM_BASE_URL=http://host.docker.internal:5000`.
 
 ## Remote harnesses (bring your own agent)
 

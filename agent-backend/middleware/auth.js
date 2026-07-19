@@ -40,7 +40,7 @@ function getSharedApiKey() {
 
 // Resolve the presented credential to an identity, or null if unauthenticated.
 // Attaches nothing itself — the caller sets req.auth from the return value.
-function resolveIdentity(req, db) {
+async function resolveIdentity(req, db) {
   const provided =
     req.headers["x-api-key"] ||
     (req.headers["authorization"] || "").replace("Bearer ", "");
@@ -54,9 +54,9 @@ function resolveIdentity(req, db) {
 
   if (db && provided) {
     // 2. Paired device token.
-    const device = db.getDeviceByToken(provided);
+    const device = await db.getDeviceByToken(provided);
     if (device) {
-      db.touchDeviceLastSeen(device.id);
+      await db.touchDeviceLastSeen(device.id);
       return {
         role: roleForDeviceScope(device.scope),
         tenantId: device.tenantId || null,
@@ -66,9 +66,9 @@ function resolveIdentity(req, db) {
     }
 
     // 3. Tenant API key.
-    const apiKey = db.getApiKeyByToken(provided);
+    const apiKey = await db.getApiKeyByToken(provided);
     if (apiKey) {
-      db.touchApiKeyUsed(apiKey.id);
+      await db.touchApiKeyUsed(apiKey.id);
       return {
         role: apiKey.role,
         tenantId: apiKey.tenantId || null,
@@ -78,7 +78,7 @@ function resolveIdentity(req, db) {
     }
 
     // 4. SSO browser session token.
-    const sso = db.getSsoSessionByToken(provided);
+    const sso = await db.getSsoSessionByToken(provided);
     if (sso && sso.user) {
       return {
         role: sso.user.role,
@@ -101,13 +101,20 @@ function resolveIdentity(req, db) {
 }
 
 // Back-compat boolean check used by a couple of call sites (WS handshake).
-function checkApiKey(req, db) {
-  return resolveIdentity(req, db) !== null;
+async function checkApiKey(req, db) {
+  return (await resolveIdentity(req, db)) !== null;
 }
 
 function createAuthMiddleware(db) {
-  return function authMiddleware(req, res, next) {
-    const identity = resolveIdentity(req, db);
+  return async function authMiddleware(req, res, next) {
+    let identity;
+    try {
+      identity = await resolveIdentity(req, db);
+    } catch (e) {
+      // A DB error while authenticating fails CLOSED (never silently allow).
+      console.error("[auth] resolveIdentity failed:", e.message);
+      return res.status(500).json({ success: false, message: "Authentication backend error." });
+    }
     if (!identity) {
       res.setHeader("WWW-Authenticate", 'Bearer realm="Orbit"');
       return res.status(401).json({ success: false, message: "Unauthorized: invalid or missing API key." });

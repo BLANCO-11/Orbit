@@ -46,36 +46,36 @@ function createAdminRouter(db, { getOrigin } = {}) {
   };
 
   // ── Tenants (superadmin only) ──────────────────────────────────────
-  router.get("/tenants", requireRole("superadmin"), (req, res) => {
-    res.json({ success: true, tenants: db.listTenants() });
+  router.get("/tenants", requireRole("superadmin"), async (req, res) => {
+    res.json({ success: true, tenants: await db.listTenants() });
   });
 
-  router.post("/tenants", requireRole("superadmin"), (req, res) => {
+  router.post("/tenants", requireRole("superadmin"), async (req, res) => {
     const name = (req.body && req.body.name || "").trim();
     if (!name) return res.status(400).json({ success: false, message: "Tenant name is required." });
-    res.json({ success: true, tenant: db.createTenant(name) });
+    res.json({ success: true, tenant: await db.createTenant(name) });
   });
 
-  router.patch("/tenants/:id", requireRole("superadmin"), (req, res) => {
-    const t = db.getTenant(req.params.id);
+  router.patch("/tenants/:id", requireRole("superadmin"), async (req, res) => {
+    const t = await db.getTenant(req.params.id);
     if (!t) return res.status(404).json({ success: false, message: "Tenant not found." });
     const { name, status, ssoEnabled } = req.body || {};
-    const updated = db.updateTenant(req.params.id, { name, status, ssoEnabled });
+    const updated = await db.updateTenant(req.params.id, { name, status, ssoEnabled });
     res.json({ success: true, tenant: updated });
   });
 
-  router.delete("/tenants/:id", requireRole("superadmin"), (req, res) => {
-    db.deleteTenant(req.params.id);
+  router.delete("/tenants/:id", requireRole("superadmin"), async (req, res) => {
+    await db.deleteTenant(req.params.id);
     res.json({ success: true });
   });
 
   // ── API keys (admin+) ──────────────────────────────────────────────
-  router.get("/keys", requireRole("admin"), (req, res) => {
+  router.get("/keys", requireRole("admin"), async (req, res) => {
     const tenantId = scopeTenant(req, req.query.tenantId);
-    res.json({ success: true, keys: db.listApiKeys(tenantId || undefined) });
+    res.json({ success: true, keys: await db.listApiKeys(tenantId || undefined) });
   });
 
-  router.post("/keys", requireRole("admin"), (req, res) => {
+  router.post("/keys", requireRole("admin"), async (req, res) => {
     const { label, role, scope } = req.body || {};
     const requestedRole = (role || "member").toLowerCase();
     if (!ASSIGNABLE_ROLES.has(requestedRole)) {
@@ -87,7 +87,7 @@ function createAdminRouter(db, { getOrigin } = {}) {
     if (req.auth.role !== "superadmin" && requestedRole === "admin" && req.auth.role !== "admin") {
       return res.status(403).json({ success: false, message: "Insufficient role to mint an admin key." });
     }
-    const created = db.createApiKey({
+    const created = await db.createApiKey({
       tenantId: tenantId || null,
       label,
       role: requestedRole,
@@ -99,44 +99,44 @@ function createAdminRouter(db, { getOrigin } = {}) {
     res.json({ success: true, key: created });
   });
 
-  router.delete("/keys/:id", requireRole("admin"), (req, res) => {
-    const key = db.getApiKey(req.params.id);
+  router.delete("/keys/:id", requireRole("admin"), async (req, res) => {
+    const key = await db.getApiKey(req.params.id);
     if (!key) return res.status(404).json({ success: false, message: "Key not found." });
     if (req.auth.role !== "superadmin" && key.tenantId !== req.auth.tenantId) {
       return res.status(403).json({ success: false, message: "Cannot revoke a key outside your tenant." });
     }
-    db.revokeApiKey(req.params.id);
+    await db.revokeApiKey(req.params.id);
     res.json({ success: true });
   });
 
   // ── Members & roles (admin+) ───────────────────────────────────────
-  router.get("/users", requireRole("admin"), (req, res) => {
+  router.get("/users", requireRole("admin"), async (req, res) => {
     const tenantId = scopeTenant(req, req.query.tenantId);
-    res.json({ success: true, users: db.listUsers(tenantId || undefined) });
+    res.json({ success: true, users: await db.listUsers(tenantId || undefined) });
   });
 
-  router.patch("/users/:id", requireRole("admin"), (req, res) => {
+  router.patch("/users/:id", requireRole("admin"), async (req, res) => {
     const role = (req.body && req.body.role || "").toLowerCase();
     if (!ASSIGNABLE_ROLES.has(role)) {
       return res.status(400).json({ success: false, message: `role must be one of: ${[...ASSIGNABLE_ROLES].join(", ")}.` });
     }
-    const user = db.getUser(req.params.id);
+    const user = await db.getUser(req.params.id);
     if (!user) return res.status(404).json({ success: false, message: "User not found." });
     if (req.auth.role !== "superadmin" && user.tenantId !== req.auth.tenantId) {
       return res.status(403).json({ success: false, message: "Cannot modify a user outside your tenant." });
     }
-    db.setUserRole(req.params.id, role);
-    res.json({ success: true, user: db.getUser(req.params.id) });
+    await db.setUserRole(req.params.id, role);
+    res.json({ success: true, user: await db.getUser(req.params.id) });
   });
 
   // ── Observability (admin+) ─────────────────────────────────────────
   // Aggregate usage from persisted session metrics, bucketed by tenant. Foundation
   // pass: sessions are tagged with tenant_id but not isolated, so untagged
   // sessions land in the "untagged" bucket. Superadmin sees all; admin its own.
-  router.get("/observability", requireRole("admin"), (req, res) => {
+  router.get("/observability", requireRole("admin"), async (req, res) => {
     const scope = req.auth.role === "superadmin" ? null : (req.auth.tenantId || null);
     let sessions = [];
-    try { sessions = db.getAllSessions(); } catch { sessions = []; }
+    try { sessions = await db.getAllSessions(); } catch { sessions = []; }
 
     const buckets = new Map(); // tenantId|"untagged" → aggregate
     const bucketFor = (tid) => {
@@ -158,9 +158,9 @@ function createAdminRouter(db, { getOrigin } = {}) {
     }
 
     // Key & tenant inventory (scoped) rounds out the picture.
-    const tenants = req.auth.role === "superadmin" ? db.listTenants() : [];
-    const keys = db.listApiKeys(scope || undefined);
-    const devices = (db.listDevices && db.listDevices()) || [];
+    const tenants = req.auth.role === "superadmin" ? await db.listTenants() : [];
+    const keys = await db.listApiKeys(scope || undefined);
+    const devices = (db.listDevices && await db.listDevices()) || [];
 
     res.json({
       success: true,

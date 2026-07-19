@@ -10,7 +10,7 @@ function createHealthRouter({ db, mcpRegistry, getConfig, activeSessions }) {
   router.get("/", async (req, res) => {
     let dbStatus = "ok";
     try {
-      db.getAllSessions();
+      await db.getAllSessions();
     } catch (e) {
       dbStatus = "error: " + e.message;
     }

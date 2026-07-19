@@ -130,24 +130,24 @@ function createDevicesRouter(db, authMiddleware, getDashboardOrigin) {
   // Generic connection descriptor for ANY harness (Orbit's adapter or a custom
   // third-party one). Redeems the code single-use, then hands back everything
   // needed to connect and stay connected as plain JSON.
-  router.get("/pair/connect", pairRateLimit, (req, res) => {
+  router.get("/pair/connect", pairRateLimit, async (req, res) => {
     const { code, label } = req.query || {};
     if (!code || typeof code !== "string") {
       return res.status(400).json({ error: "missing_code", message: "Missing pairing code." });
     }
-    const device = db.redeemPairingCode(code.toUpperCase().trim(), label);
+    const device = await db.redeemPairingCode(code.toUpperCase().trim(), label);
     if (!device) {
       return res.status(410).json({ error: "code_expired", message: "Invalid, expired, or already-used pairing code. Ask the operator for a fresh code." });
     }
     res.json(buildDescriptor(req, device));
   });
 
-  router.get("/pair/bootstrap", pairRateLimit, (req, res) => {
+  router.get("/pair/bootstrap", pairRateLimit, async (req, res) => {
     const { code, label } = req.query || {};
     if (!code || typeof code !== "string") {
       return res.status(400).send("// Error: Missing pairing code.");
     }
-    const device = db.redeemPairingCode(code.toUpperCase().trim(), label);
+    const device = await db.redeemPairingCode(code.toUpperCase().trim(), label);
     if (!device) {
       return res.status(410).send("// Error: Invalid, expired, or already-used pairing code. Ask the operator for a fresh code.");
     }
@@ -290,10 +290,10 @@ schtasks /Create /TN OrbitConnect /SC ONLOGON /RL LIMITED /F ^
     res.sendFile(adapterPath);
   });
 
-  router.post("/pair/start", authMiddleware, (req, res) => {
+  router.post("/pair/start", authMiddleware, async (req, res) => {
     const label = (req.body && req.body.label) || "New device";
     const scope = (req.body && req.body.scope) || "full";
-    const { code, expiresAt, scope: grantedScope } = db.createPairingCode(String(label).slice(0, 100), scope);
+    const { code, expiresAt, scope: grantedScope } = await db.createPairingCode(String(label).slice(0, 100), scope);
 
     // The dashboard page link uses the configured dashboard origin. The
     // harness-facing links (connect + bootstrap) MUST use the PUBLIC origin of
@@ -320,40 +320,40 @@ schtasks /Create /TN OrbitConnect /SC ONLOGON /RL LIMITED /F ^
     });
   });
 
-  router.post("/pair/redeem", pairRateLimit, (req, res) => {
+  router.post("/pair/redeem", pairRateLimit, async (req, res) => {
     const { code, label } = req.body || {};
     if (!code || typeof code !== "string") {
       return res.status(400).json({ success: false, message: "Missing pairing code." });
     }
-    const device = db.redeemPairingCode(code.toUpperCase().trim(), label);
+    const device = await db.redeemPairingCode(code.toUpperCase().trim(), label);
     if (!device) {
       return res.status(410).json({ success: false, error: "code_expired", message: "Invalid, expired, or already-used pairing code." });
     }
     res.json({ success: true, device });
   });
 
-  router.get("/devices", authMiddleware, (req, res) => {
-    res.json({ success: true, devices: db.listDevices() });
+  router.get("/devices", authMiddleware, async (req, res) => {
+    res.json({ success: true, devices: await db.listDevices() });
   });
 
-  router.patch("/devices/:id", authMiddleware, (req, res) => {
+  router.patch("/devices/:id", authMiddleware, async (req, res) => {
     const { label } = req.body || {};
     if (!label || typeof label !== "string") {
       return res.status(400).json({ success: false, message: "Missing label." });
     }
-    db.renameDevice(req.params.id, label.slice(0, 100));
+    await db.renameDevice(req.params.id, label.slice(0, 100));
     res.json({ success: true });
   });
 
   // Set per-device policy overrides (a partial capability × mode matrix). The
   // engine applies these tighten-only, so this can only further restrict a
   // device, never grant it more than the global matrix.
-  router.patch("/devices/:id/policy", authMiddleware, (req, res) => {
+  router.patch("/devices/:id/policy", authMiddleware, async (req, res) => {
     const { policyOverrides } = req.body || {};
     if (policyOverrides && typeof policyOverrides !== "object") {
       return res.status(400).json({ success: false, message: "policyOverrides must be an object." });
     }
-    db.setDevicePolicyOverrides(req.params.id, policyOverrides || {});
+    await db.setDevicePolicyOverrides(req.params.id, policyOverrides || {});
     res.json({ success: true });
   });
 
@@ -366,7 +366,7 @@ schtasks /Create /TN OrbitConnect /SC ONLOGON /RL LIMITED /F ^
   //                                    gateway as this device's brain (off by default);
   //   • `null` / `{}`               — clear it (back to the box's own env provider).
   // The apiKey is stored but never returned by GET /devices (redacted to `hasApiKey`).
-  router.patch("/devices/:id/llm", authMiddleware, (req, res) => {
+  router.patch("/devices/:id/llm", authMiddleware, async (req, res) => {
     const cfg = req.body && req.body.llmConfig;
     if (cfg && typeof cfg !== "object") {
       return res.status(400).json({ success: false, message: "llmConfig must be an object or null." });
@@ -377,12 +377,12 @@ schtasks /Create /TN OrbitConnect /SC ONLOGON /RL LIMITED /F ^
     if (cfg && cfg.baseURL && !/^https?:\/\//i.test(String(cfg.baseURL))) {
       return res.status(400).json({ success: false, message: "llmConfig.baseURL must be an http(s) URL." });
     }
-    db.setDeviceLlmConfig(req.params.id, cfg || {});
+    await db.setDeviceLlmConfig(req.params.id, cfg || {});
     res.json({ success: true });
   });
 
-  router.delete("/devices/:id", authMiddleware, (req, res) => {
-    db.revokeDevice(req.params.id);
+  router.delete("/devices/:id", authMiddleware, async (req, res) => {
+    await db.revokeDevice(req.params.id);
     res.json({ success: true });
   });
 

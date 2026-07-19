@@ -8,35 +8,35 @@ function createSessionsRouter() {
   const router = Router();
   
   // List all sessions
-  router.get("/", (req, res, next) => {
+  router.get("/", async (req, res, next) => {
     try {
-      const list = db.getAllSessions();
+      const list = await db.getAllSessions();
       res.json({ success: true, sessions: list });
     } catch (err) { next(err); }
   });
-  
+
   // Search sessions (must be before /:id)
-  router.get("/search", (req, res, next) => {
+  router.get("/search", async (req, res, next) => {
     try {
       const q = req.query.q;
-      if (!q) return res.json({ success: true, sessions: db.getAllSessions() });
-      const results = db.searchSessions(q);
+      if (!q) return res.json({ success: true, sessions: await db.getAllSessions() });
+      const results = await db.searchSessions(q);
       res.json({ success: true, sessions: results });
     } catch (err) { next(err); }
   });
-  
+
   // Export all sessions
-  router.get("/export/all", (req, res, next) => {
+  router.get("/export/all", async (req, res, next) => {
     try {
-      const all = db.getAllSessions();
+      const all = await db.getAllSessions();
       res.setHeader("Content-Type", "application/json");
       res.setHeader("Content-Disposition", "attachment; filename=orbit-sessions-export.json");
       res.json(all);
     } catch (err) { next(err); }
   });
-  
+
   // Import sessions
-  router.post("/import", (req, res, next) => {
+  router.post("/import", async (req, res, next) => {
     try {
       const sessions = req.body;
       if (!Array.isArray(sessions)) {
@@ -45,14 +45,14 @@ function createSessionsRouter() {
       let imported = 0;
       for (const session of sessions) {
         if (session.id && session.title !== undefined) {
-          db.saveSession(session);
+          await db.saveSession(session);
           imported++;
         }
       }
       res.json({ success: true, imported });
     } catch (err) { next(err); }
   });
-  
+
   // List backups
   router.get("/backups", (req, res, next) => {
     try {
@@ -60,20 +60,20 @@ function createSessionsRouter() {
       res.json({ success: true, backups });
     } catch (err) { next(err); }
   });
-  
+
   // Get single session
-  router.get("/:id", (req, res, next) => {
+  router.get("/:id", async (req, res, next) => {
     try {
-      const session = db.getSession(req.params.id);
+      const session = await db.getSession(req.params.id);
       if (!session) {
         return res.status(404).json({ success: false, message: "Session not found" });
       }
       res.json({ success: true, session });
     } catch (err) { next(err); }
   });
-  
+
   // Create or update session
-  router.post("/", (req, res, next) => {
+  router.post("/", async (req, res, next) => {
     try {
       const incoming = req.body || {};
       // `metrics` and `subagentTree` are OWNED by the backend: metricsManager
@@ -83,7 +83,7 @@ function createSessionsRouter() {
       // here wiped the real counts, which is the "metrics reset on reload /
       // session switch" bug. For an existing session, keep the persisted
       // metrics/tree; a brand-new session (no row yet) keeps whatever it sends.
-      const existing = incoming.id ? db.getSession(incoming.id) : null;
+      const existing = incoming.id ? await db.getSession(incoming.id) : null;
       if (existing) {
         incoming.metrics = existing.metrics;
         if (!incoming.subagentTree || Object.keys(incoming.subagentTree).length === 0) {
@@ -95,29 +95,29 @@ function createSessionsRouter() {
           incoming.activePlanId = existing.activePlanId;
         }
       }
-      db.saveSession(incoming);
+      await db.saveSession(incoming);
       res.json({ success: true });
     } catch (err) { next(err); }
   });
-  
+
   // Rename session (PATCH)
-  router.patch("/:id", (req, res, next) => {
+  router.patch("/:id", async (req, res, next) => {
     try {
-      const session = db.getSession(req.params.id);
+      const session = await db.getSession(req.params.id);
       if (!session) {
         return res.status(404).json({ success: false, message: "Session not found" });
       }
       if (req.body.title !== undefined) session.title = req.body.title;
       if (req.body.mode !== undefined) session.mode = req.body.mode;
-      db.saveSession(session);
+      await db.saveSession(session);
       res.json({ success: true, session });
     } catch (err) { next(err); }
   });
-  
+
   // Delete session
-  router.delete("/:id", (req, res, next) => {
+  router.delete("/:id", async (req, res, next) => {
     try {
-      db.deleteSession(req.params.id);
+      await db.deleteSession(req.params.id);
       res.json({ success: true });
     } catch (err) { next(err); }
   });

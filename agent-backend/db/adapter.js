@@ -112,7 +112,15 @@ function createSqliteAdapter() {
 
 // ── Postgres adapter (pg Pool) ───────────────────────────────────────
 function createPgAdapter() {
-  const { Pool } = require("pg");
+  const pg = require("pg");
+  const { Pool } = pg;
+  // BIGINT (int8, OID 20) defaults to a STRING in node-postgres to avoid
+  // precision loss. Every epoch-ms column is BIGINT here (INTEGER=int4 is too
+  // small for Date.now()), and the app does numeric comparisons/arithmetic on
+  // them — so parse int8 as a JS number. Safe: our values (~1.7e12) are far
+  // below Number.MAX_SAFE_INTEGER (9e15). Matches node:sqlite, which returns
+  // integers as numbers, so db.js stays dialect-agnostic on types.
+  pg.types.setTypeParser(20, (v) => (v == null ? null : Number(v)));
   const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
     max: Number(process.env.ORBIT_PG_POOL_MAX || 10),

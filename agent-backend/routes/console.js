@@ -60,10 +60,10 @@ function blockedReason(command) {
 // console targets the AGENT'S RUNTIME (that machine), not the Orbit host. Route
 // exec/cwd over the connector socket. Id from ?harnessId else the session's
 // persisted composer.harnessId; null → run locally on the Orbit host.
-function remoteHarnessFor(reqLike, harnessRegistry) {
+async function remoteHarnessFor(reqLike, harnessRegistry) {
   if (!harnessRegistry || !harnessRegistry.get) return null;
   let hid = reqLike.harnessId;
-  if (!hid && reqLike.session) { try { hid = db.getSession(reqLike.session)?.harnessId; } catch {} }
+  if (!hid && reqLike.session) { try { hid = (await db.getSession(reqLike.session))?.harnessId; } catch {} }
   if (!hid || hid === "local") return null;
   return harnessRegistry.get(hid) ? hid : null;
 }
@@ -73,7 +73,7 @@ function createConsoleRouter(harnessRegistry) {
 
   router.get("/cwd", async (req, res) => {
     const session = (req.query.session || "").trim();
-    const remoteId = remoteHarnessFor({ session, harnessId: req.query.harnessId }, harnessRegistry);
+    const remoteId = await remoteHarnessFor({ session, harnessId: req.query.harnessId }, harnessRegistry);
     if (remoteId) {
       const r = await harnessRegistry.requestConsole(remoteId, { op: "cwd", sessionId: session });
       if (r && r.ok) return res.json({ success: true, cwd: r.cwd, remote: true, machine: r.machine });
@@ -93,7 +93,7 @@ function createConsoleRouter(harnessRegistry) {
     }
 
     // Remote agent → exec on its machine over the connector socket.
-    const remoteId = remoteHarnessFor({ session, harnessId: req.body && req.body.harnessId }, harnessRegistry);
+    const remoteId = await remoteHarnessFor({ session, harnessId: req.body && req.body.harnessId }, harnessRegistry);
     if (remoteId) {
       const r = await harnessRegistry.requestConsole(remoteId, { op: "exec", sessionId: session, command });
       if (!r || !r.ok) {

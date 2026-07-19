@@ -82,41 +82,41 @@ function publicView(c, origin) {
 function createChannelsRouter({ db, runProfileHeadless, getOrigin }) {
   const router = Router();
 
-  router.get("/", (_req, res) => {
+  router.get("/", async (_req, res) => {
     const origin = getOrigin();
-    res.json({ success: true, channels: db.listChannels().map((c) => publicView(c, origin)) });
+    res.json({ success: true, channels: (await db.listChannels()).map((c) => publicView(c, origin)) });
   });
 
-  router.post("/", (req, res) => {
+  router.post("/", async (req, res) => {
     try {
-      const saved = db.saveChannel(sanitize(req.body || {}));
+      const saved = await db.saveChannel(sanitize(req.body || {}));
       const origin = getOrigin();
-      res.json({ success: true, channel: publicView(saved, origin), channels: db.listChannels().map((c) => publicView(c, origin)) });
+      res.json({ success: true, channel: publicView(saved, origin), channels: (await db.listChannels()).map((c) => publicView(c, origin)) });
     } catch (e) {
       res.status(400).json({ success: false, error: e.message });
     }
   });
 
-  router.delete("/:id", (req, res) => {
-    db.deleteChannel(req.params.id);
+  router.delete("/:id", async (req, res) => {
+    await db.deleteChannel(req.params.id);
     const origin = getOrigin();
-    res.json({ success: true, channels: db.listChannels().map((c) => publicView(c, origin)) });
+    res.json({ success: true, channels: (await db.listChannels()).map((c) => publicView(c, origin)) });
   });
 
   // Manual test-fire (authenticated via the same middleware as other routes).
   router.post("/:id/test", async (req, res) => {
-    const channel = db.getChannel(req.params.id);
+    const channel = await db.getChannel(req.params.id);
     if (!channel) return res.status(404).json({ success: false, error: "channel not found" });
     const prompt = renderTemplate(channel.promptTemplate, req.body?.payload || {}) || channel.promptTemplate || "Run.";
     const { sessionId } = await runProfileHeadless({ profileId: channel.profileId, prompt, title: `${channel.name} (test)`, source: `channel:${channel.id}` });
-    db.touchChannelTriggered(channel.id);
+    await db.touchChannelTriggered(channel.id);
     res.json({ success: true, sessionId });
   });
 
   // Public webhook receiver — NOT behind auth middleware (external senders).
   // Mounted separately in server.js so it can skip auth. Verified per-channel.
   router.post("/:id/webhook", async (req, res) => {
-    const channel = db.getChannel(req.params.id);
+    const channel = await db.getChannel(req.params.id);
     if (!channel || channel.type !== "webhook" || !channel.enabled) {
       return res.status(404).json({ success: false, error: "no such active webhook channel" });
     }
@@ -125,7 +125,7 @@ function createChannelsRouter({ db, runProfileHeadless, getOrigin }) {
     }
     const prompt = renderTemplate(channel.promptTemplate, req.body || {}) || "Handle the incoming event.";
     const { sessionId } = await runProfileHeadless({ profileId: channel.profileId, prompt, title: channel.name, source: `channel:${channel.id}` });
-    db.touchChannelTriggered(channel.id);
+    await db.touchChannelTriggered(channel.id);
     res.json({ success: true, sessionId });
   });
 

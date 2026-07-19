@@ -348,10 +348,11 @@ A **harness** is any process that runs agent turns for the console (the local pi
     "scope": "full",
     "pairingUrl": "https://<dashboard-origin>/pair?code=ABC123",
     "connectUrl": "https://<public-origin>/api/pair/connect?code=ABC123",
-    "bootstrapCommand": "curl -fsSL 'https://<public-origin>/api/pair/bootstrap?code=ABC123' | node"
+    "bootstrapCommand": "curl -fsSL 'https://<public-origin>/api/pair/bootstrap?code=ABC123' | node",
+    "security": { "uncontained": true, "level": "warning", "title": "…", "detail": "…" }
   }
   ```
-  The code is **6 chars, 5-minute TTL, single-use, scoped**. `connectUrl` / `bootstrapCommand` are built from the **public origin of the request** (honoring `x-forwarded-proto`), so they work off-box behind nginx.
+  The code is **6 chars, 5-minute TTL, single-use, scoped**. `connectUrl` / `bootstrapCommand` are built from the **public origin of the request** (honoring `x-forwarded-proto`), so they work off-box behind nginx. `security` is a **host-trust advisory** — non-null only for `full` scope — flagging that a paired remote runs arbitrary shell on **its own machine**, where Orbit's container isolation does not reach; surface it before the operator confirms pairing (`null` for the non-shell scopes).
 
 ### B. Redeeming a code (open, code-gated, rate-limited)
 Each of these redeems the code **atomically and single-use** — a second consumer of the same code gets `410 { error: "code_expired" }`. All three are rate-limited per IP (20/min).
@@ -363,12 +364,14 @@ Each of these redeems the code **atomically and single-use** — a second consum
     "wsUrl": "wss://<public-origin>/api/harness",
     "token": "…64-hex, returned once…",
     "device": { "id": "…", "label": "My workstation", "scope": "full" },
+    "security": { "uncontained": true, "level": "warning", "title": "…", "detail": "…" },
     "register": { "type": "register", "required": ["name", "machine", "capabilities"],
                   "capabilitiesExample": ["chat","plan","edit","yolo","subagents","tools"] },
     "heartbeat": { "intervalMs": 30000, "type": "ping" },
     "reconnect": { "backoffMs": [1000, 2000, 5000, 15000], "maxJitterMs": 500 }
   }
   ```
+  (`security` is the same host-trust advisory as `/pair/start` — non-null only for `full` scope.)
 - **`GET /api/pair/bootstrap?code=CODE`** → a runnable Node installer (Orbit adapter): it persists the descriptor to `~/.orbit/adapter-credentials.json`, downloads the adapter, and launches it. Intended for `… | node`.
 - **`POST /api/pair/redeem`** (body `{ code, label? }`) → `{ success, device: { id, label, token, scope } }`. The bare-token path for a harness that builds its own WS URL.
 

@@ -45,7 +45,7 @@ function cap(configured, connected, detail) {
  * @param {object} [deps.db]               — .listConnections(), .listDevices()
  * @returns {{ generatedAt: string, capabilities: object }}
  */
-function buildCapabilities(deps = {}) {
+async function buildCapabilities(deps = {}) {
   const { getConfig, mcpRegistry, telegramBridge, db } = deps;
   let config = {};
   try { config = (getConfig && getConfig()) || {}; } catch { config = {}; }
@@ -115,7 +115,7 @@ function buildCapabilities(deps = {}) {
   try {
     const all = providers.listProviders();
     let connectedIds = new Set();
-    try { connectedIds = new Set((db && db.listConnections && db.listConnections() || []).map((c) => c.provider)); } catch {}
+    try { connectedIds = new Set(((db && db.listConnections && await db.listConnections()) || []).map((c) => c.provider)); } catch {}
     capabilities.connections = {
       configured: all.some((p) => p.configured),
       connected: connectedIds.size > 0,
@@ -126,7 +126,7 @@ function buildCapabilities(deps = {}) {
 
   // ── Telegram ─────────────────────────────────────────────────────
   try {
-    const s = (telegramBridge && telegramBridge.status && telegramBridge.status()) || {};
+    const s = (telegramBridge && telegramBridge.status && await telegramBridge.status()) || {};
     capabilities.telegram = cap(!!s.configured, s.running ? true : (s.configured ? null : false),
       s.configured ? `bot ${s.botUsername || "?"} · ${(s.allowedChats || []).length} chat(s)` : "no bot token");
   } catch { capabilities.telegram = cap(false, false, "unknown"); }
@@ -153,7 +153,7 @@ function buildCapabilities(deps = {}) {
 
   // ── Fleet devices ────────────────────────────────────────────────
   try {
-    const devices = (db && db.listDevices && db.listDevices()) || [];
+    const devices = (db && db.listDevices && await db.listDevices()) || [];
     capabilities.fleet = {
       configured: devices.length > 0,
       connected: devices.some((d) => d.status === "online" || d.online),

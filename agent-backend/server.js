@@ -130,12 +130,12 @@ function withReady(steps) {
 
 // Load a session's plan bucket from memory or rehydrate from the DB, handling
 // both the new multi-plan shape and the legacy single-plan (planSteps) shape.
-function loadPlanBucket(sessionId) {
+async function loadPlanBucket(sessionId) {
   const cached = sessionPlans.get(sessionId);
   if (cached) return cached;
   let bucket = { activePlanId: "default", plans: {} };
   try {
-    const row = db.getSession(sessionId);
+    const row = await db.getSession(sessionId);
     if (row && Array.isArray(row.plans) && row.plans.length) {
       for (const p of row.plans) bucket.plans[p.planId] = p;
       bucket.activePlanId = row.activePlanId || row.plans[0].planId;
@@ -231,7 +231,7 @@ function parseMarkdownPlan(content, filename = "plan.md") {
   };
 }
 
-function syncPlansFromWorkspace(sessionId) {
+async function syncPlansFromWorkspace(sessionId) {
   try {
     const fsx = require("fs");
     const dirs = workspacePaths.sessionDirs(sessionId);
@@ -242,7 +242,7 @@ function syncPlansFromWorkspace(sessionId) {
     const mdFiles = files.filter(f => f.endsWith(".md"));
     if (mdFiles.length === 0) return null;
 
-    const bucket = loadPlanBucket(sessionId);
+    const bucket = await loadPlanBucket(sessionId);
     let changed = false;
 
     for (const file of mdFiles) {
@@ -266,9 +266,9 @@ function syncPlansFromWorkspace(sessionId) {
       const payload = bucketToPayload(bucket);
       
       try {
-        const existing = db.getSession(sessionId);
+        const existing = await db.getSession(sessionId);
         if (existing) {
-          db.saveSession({
+          await db.saveSession({
             ...existing,
             planSteps: payload.steps,
             plans: payload.plans,
@@ -384,20 +384,20 @@ app.use("/llm/v1", createLlmGateway({
   // Paired remote harnesses reach the gateway off-box with a SCOPED per-device
   // token (never the master key). Resolve it to its device so the gateway can
   // attribute usage and enforce the device's budget; a revoked device → null.
-  resolveScopedToken: (token) => {
-    const d = db.getDeviceByLlmToken?.(token);
+  resolveScopedToken: async (token) => {
+    const d = await db.getDeviceByLlmToken?.(token);
     return d ? { deviceId: d.id, tenantId: d.tenantId, budget: d.budget, used: d.used } : null;
   },
-  onUsage: ({ sessionId, tenantId, deviceId, model, usage }) => {
+  onUsage: async ({ sessionId, tenantId, deviceId, model, usage }) => {
     // Tenant-level metering hook. Kept intentionally light in v1 — per-session
     // budgets are enforced on the harness usage-event path in handleStartTask.
     if (tenantId) {
-      try { db.recordTenantUsage?.(tenantId, usage); } catch {}
+      try { await db.recordTenantUsage?.(tenantId, usage); } catch {}
     }
     // Per-device running total → enforces the scoped token's budget on the next
     // request (see llm-gateway auth) and feeds per-device accounting.
     if (deviceId) {
-      try { db.recordDeviceLlmUsage?.(deviceId, (usage.input || 0) + (usage.output || 0)); } catch {}
+      try { await db.recordDeviceLlmUsage?.(deviceId, (usage.input || 0) + (usage.output || 0)); } catch {}
     }
   },
 }));
@@ -446,23 +446,33 @@ if (!authEnforced) {
 // for programmatic API access). Only relevant when auth is enforced or a
 // password is explicitly configured; skipped in pure dev-mode (no login shown).
 if (authEnforced || process.env.ORBIT_SUPERADMIN_PASSWORD) {
-  const saUser = process.env.ORBIT_SUPERADMIN_USERNAME || "admin";
-  let saPass = process.env.ORBIT_SUPERADMIN_PASSWORD || "";
-  try {
-    if (!db.getUserByUsername(saUser) && !saPass) {
-      // No account yet and no password configured — generate one and print it
-      // once so the operator can sign in. Set ORBIT_SUPERADMIN_PASSWORD to control it.
-      saPass = require("crypto").randomBytes(9).toString("base64url");
-      db.ensureSuperadminAccount({ username: saUser, password: saPass });
-      console.warn(`[Auth] Seeded superadmin account "${saUser}" with a GENERATED password: ${saPass}`);
-      console.warn(`[Auth] Change it after login, or set ORBIT_SUPERADMIN_PASSWORD to manage it.`);
-    } else {
-      db.ensureSuperadminAccount({ username: saUser, password: saPass || undefined });
-      console.log(`[Auth] Superadmin login account "${saUser}" ready${saPass ? " (password from env)" : ""}.`);
+  // Runs the schema init first, then seeds the account. Fire-and-forget: it
+  // completes well before a human can hit the login form, and db calls await
+  // init() internally regardless.
+  (async () => {
+    const saUser = process.env.ORBIT_SUPERADMIN_USERNAME || "admin";
+    let saPass = process.env.ORBIT_SUPERADMIN_PASSWORD || "";
+    try {
+      await db.init();
+      if (!(await db.getUserByUsername(saUser)) && !saPass) {
+        // No account yet and no password configured — generate one and print it
+        // once so the operator can sign in. Set ORBIT_SUPERADMIN_PASSWORD to control it.
+        saPass = require("crypto").randomBytes(9).toString("base64url");
+        await db.ensureSuperadminAccount({ username: saUser, password: saPass });
+        console.warn(`[Auth] Seeded superadmin account "${saUser}" with a GENERATED password: ${saPass}`);
+        console.warn(`[Auth] Change it after login, or set ORBIT_SUPERADMIN_PASSWORD to manage it.`);
+      } else {
+        await db.ensureSuperadminAccount({ username: saUser, password: saPass || undefined });
+        console.log(`[Auth] Superadmin login account "${saUser}" ready${saPass ? " (password from env)" : ""}.`);
+      }
+    } catch (e) {
+      console.error("[Auth] Failed to seed superadmin account:", e.message);
     }
-  } catch (e) {
-    console.error("[Auth] Failed to seed superadmin account:", e.message);
-  }
+  })();
+} else {
+  // Ensure schema init runs at boot even when no superadmin seed is needed, so
+  // migration errors surface early rather than on the first request.
+  db.init().catch((e) => console.error("[DB] init failed:", e.message));
 }
 
 // ── Mount Routes ────────────────────────────────────────────────────
@@ -519,24 +529,24 @@ const createFleetRouter = require("./routes/fleet");
 const fleet = createFleet({
   db, harnessRegistry, handleStartTask,
   // Lets fleet dispatch inherit a delegate's rights from the LEAD session's mode.
-  getSessionMode: (sid) => activeSessions.get(sid)?.mode || db.getSession(sid)?.mode || null,
+  getSessionMode: async (sid) => activeSessions.get(sid)?.mode || (await db.getSession(sid))?.mode || null,
   // After a delegate finishes, credit the lead's sub-agent lane with the tool
   // calls + tokens the delegate racked up in ITS own session (else the lane
   // shows 0 even though the delegate did the work).
-  creditLeadSubagent: (leadSessionId, device, delegateSessionId) => {
+  creditLeadSubagent: async (leadSessionId, device, delegateSessionId) => {
     const lead = activeSessions.get(leadSessionId);
     if (!lead?.subagentTracker) return;
     let toolCalls = 0, tokens = 0;
     try {
-      const p = metricsManager.toPersistable(delegateSessionId) || db.getSession(delegateSessionId)?.metrics || {};
+      const p = metricsManager.toPersistable(delegateSessionId) || (await db.getSession(delegateSessionId))?.metrics || {};
       toolCalls = p.toolCalls?.total || 0;
       tokens = (p.tokens?.reported && !p.tokens.estimated ? p.tokens.reported.total : p.tokens?.total) || 0;
     } catch {}
     lead.subagentTracker.creditDelegate(device, { toolCalls, tokens, childSessionId: delegateSessionId });
     try {
-      const existing = db.getSession(leadSessionId);
+      const existing = await db.getSession(leadSessionId);
       if (existing) {
-        db.saveSession({
+        await db.saveSession({
           ...existing,
           subagentTree: lead.subagentTracker.toJSON()
         });
@@ -547,15 +557,15 @@ const fleet = createFleet({
     try { sendWithSession(lead.ws, { type: "subagent_metrics", ...subagentFields(lead.subagentTracker) }, leadSessionId); } catch {}
     try { sendWithSession(lead.ws, { type: "refresh_sessions" }, leadSessionId); } catch {}
   },
-  notifySessionCreated: (leadSessionId, delegateSessionId, device) => {
+  notifySessionCreated: async (leadSessionId, delegateSessionId, device) => {
     const lead = activeSessions.get(leadSessionId);
     if (lead) {
       if (lead.subagentTracker && device) {
         lead.subagentTracker.linkChildSession(device, delegateSessionId);
         try {
-          const existing = db.getSession(leadSessionId);
+          const existing = await db.getSession(leadSessionId);
           if (existing) {
-            db.saveSession({
+            await db.saveSession({
               ...existing,
               subagentTree: lead.subagentTracker.toJSON()
             });
@@ -578,8 +588,8 @@ app.use("/api/fleet", authMiddleware, createFleetRouter({ fleet }));
 // dispatch fleet uses); outbound alerts are pushed from the notification bus.
 const createTelegramBridge = require("./telegram-bridge");
 const telegramBridge = createTelegramBridge({ db, decrypt, dispatch: fleet.dispatchToDevice });
-app.get("/api/telegram/status", authMiddleware, (req, res) => {
-  res.json({ success: true, ...telegramBridge.status() });
+app.get("/api/telegram/status", authMiddleware, async (req, res) => {
+  res.json({ success: true, ...(await telegramBridge.status()) });
 });
 
 // Capability manifest — the single source of truth for "what can Orbit do right
@@ -588,8 +598,8 @@ app.get("/api/telegram/status", authMiddleware, (req, res) => {
 // clients that want to hydrate the full app state (Workstreams D2/E/J).
 const { buildCapabilities } = require("./capabilities");
 const getCapabilities = () => buildCapabilities({ getConfig, mcpRegistry, telegramBridge, db });
-app.get("/api/capabilities", authMiddleware, (req, res) => {
-  try { res.json({ success: true, ...getCapabilities() }); }
+app.get("/api/capabilities", authMiddleware, async (req, res) => {
+  try { res.json({ success: true, ...(await getCapabilities()) }); }
   catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
@@ -598,7 +608,7 @@ app.get("/api/capabilities", authMiddleware, (req, res) => {
 // notifications never pollute each other.
 notifyBus.registerSink("channel", ({ title, body, severity }) => {
   const line = `${severity === "error" || severity === "warning" ? "⚠️ " : ""}${title}${body ? `\n${body}` : ""}`;
-  try { telegramBridge.notify(line); } catch (e) { console.error("[Notify] telegram sink failed:", e.message); }
+  try { Promise.resolve(telegramBridge.notify(line)).catch((e) => console.error("[Notify] telegram sink failed:", e.message)); } catch (e) { console.error("[Notify] telegram sink failed:", e.message); }
   const config = getConfig();
   const tag = `[${String(severity || "info").toUpperCase()}]`;
   if (config?.notifications?.discordWebhook) {
@@ -729,7 +739,7 @@ wss.on("connection", (ws) => {
         // overrides). Also lets event channels (Phase 3) run a profile with no
         // UI. `??` so an explicit override wins but omitted fields fall back.
         if (profileId) {
-          const profile = db.getProfile(profileId);
+          const profile = await db.getProfile(profileId);
           if (profile) {
             mode = mode ?? profile.mode;
             effort = effort ?? profile.effort;
@@ -851,7 +861,7 @@ wss.on("connection", (ws) => {
           
           // Send the current plan state immediately if it exists
           try {
-            const planState = loadPlanBucket(sessionId);
+            const planState = await loadPlanBucket(sessionId);
             if (planState) {
               sendWithSession(ws, {
                 type: "plan_state",
@@ -877,9 +887,9 @@ wss.on("connection", (ws) => {
         activeSessions.delete(sid);
         
         try {
-          const existing = db.getSession(sid);
+          const existing = await db.getSession(sid);
           if (existing) {
-            db.saveSession({ ...existing, mode });
+            await db.saveSession({ ...existing, mode });
           }
         } catch (e) {
           console.error("[DB] Failed to update session mode on switch:", e.message);
@@ -903,7 +913,7 @@ wss.on("connection", (ws) => {
       // respawn and re-issue the prompt that was in flight.
       else if (data.type === "resume") {
         const sid = data.sessionId;
-        const session = db.getSession(sid);
+        const session = await db.getSession(sid);
         const rs = session?.runState;
         if (rs?.running && rs.activePrompt) {
           ws.activeSessionId = sid;
@@ -941,9 +951,9 @@ wss.on("connection", (ws) => {
         activeSessions.delete(sid);
 
         try {
-          const existing = db.getSession(sid);
+          const existing = await db.getSession(sid);
           if (existing) {
-            db.saveSession({ ...existing, mode });
+            await db.saveSession({ ...existing, mode });
           }
         } catch (e) {
           console.error("[DB] Failed to update session mode on rerun:", e.message);
@@ -993,9 +1003,11 @@ wss.on("connection", (ws) => {
 // re-save zeros over the real turn-end numbers — the "metrics show 0 after
 // reload" bug. Only write metrics when they're still live; otherwise keep the
 // DB copy. subagentTree is written from the (non-released) tracker when given.
-function persistSessionMetrics(sessionId, subagentTracker) {
+// Async, but call sites treat it as fire-and-forget best-effort bookkeeping
+// (never rejects — errors are swallowed here).
+async function persistSessionMetrics(sessionId, subagentTracker) {
   try {
-    const existing = db.getSession(sessionId);
+    const existing = await db.getSession(sessionId);
     if (!existing) return;
     const live = metricsManager.getMetrics(sessionId);
     let metrics = existing.metrics;
@@ -1003,7 +1015,7 @@ function persistSessionMetrics(sessionId, subagentTracker) {
       metrics = metricsManager.toPersistable(sessionId);
       if (subagentTracker) metrics.subagents = subagentTracker.toFrontendSummary();
     }
-    db.saveSession({
+    await db.saveSession({
       ...existing,
       metrics,
       subagentTree: subagentTracker ? subagentTracker.toJSON() : existing.subagentTree,
@@ -1072,7 +1084,7 @@ async function handleStartTask(ws, userPrompt, sessionId, mode, systemPromptType
   // per-session observability cumulative across turns and reloads.
   if (!metricsManager.getMetrics(sessionId)) {
     try {
-      const prior = db.getSession(sessionId);
+      const prior = await db.getSession(sessionId);
       if (prior && prior.metrics && Object.keys(prior.metrics).length) {
         metricsManager.loadSession(sessionId, prior.metrics);
       }
@@ -1116,7 +1128,7 @@ async function handleStartTask(ws, userPrompt, sessionId, mode, systemPromptType
   // silently drops all previously-tracked sub-agent activity.
   const subagentTracker = new SubagentTracker(sessionId);
   try {
-    const priorSession = db.getSession(sessionId);
+    const priorSession = await db.getSession(sessionId);
     if (priorSession && priorSession.subagentTree && priorSession.subagentTree.agents) {
       subagentTracker.fromJSON(priorSession.subagentTree);
     }
@@ -1133,13 +1145,13 @@ async function handleStartTask(ws, userPrompt, sessionId, mode, systemPromptType
     
     const mdFiles = fsx.existsSync(plansDir) ? fsx.readdirSync(plansDir).filter(f => f.endsWith(".md")) : [];
     if (mdFiles.length === 0) {
-      const bucket = loadPlanBucket(sessionId);
+      const bucket = await loadPlanBucket(sessionId);
       if (bucket && bucket.plans && Object.keys(bucket.plans).length > 0) {
         persistPlanFiles(sessionId, bucket);
         sendLog(ws, `Rehydrated ${Object.keys(bucket.plans).length} plan(s) to workspace/plans/`, false, sessionId);
       }
     } else {
-      const planState = syncPlansFromWorkspace(sessionId);
+      const planState = await syncPlansFromWorkspace(sessionId);
       if (planState) {
         sendWithSession(ws, {
           type: "plan_state",
@@ -1242,10 +1254,10 @@ async function handleStartTask(ws, userPrompt, sessionId, mode, systemPromptType
   // Mark the session as running so an interrupted turn (harness death / server
   // restart) is detectable and resumable. Cleared on agent_end / close.
   try {
-    db.setSessionRunning(sessionId, { activePrompt: userPrompt, mode: activeMode });
-    const existing = db.getSession(sessionId);
+    await db.setSessionRunning(sessionId, { activePrompt: userPrompt, mode: activeMode });
+    const existing = await db.getSession(sessionId);
     if (existing) {
-      db.saveSession({ ...existing, mode: activeMode });
+      await db.saveSession({ ...existing, mode: activeMode });
     }
   } catch {}
 
@@ -1259,11 +1271,11 @@ async function handleStartTask(ws, userPrompt, sessionId, mode, systemPromptType
 // list and replays in the timeline. Used by event channels (routes/channels).
 async function runProfileHeadless({ profileId, prompt, title, source }) {
   const sessionId = `channel-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-  const profile = profileId ? db.getProfile(profileId) : null;
+  const profile = profileId ? await db.getProfile(profileId) : null;
 
   // Persist an initial row so the session is visible immediately.
   try {
-    db.saveSession({
+    await db.saveSession({
       id: sessionId,
       title: title || (prompt || "Channel run").slice(0, 60),
       messages: [{ role: "user", content: prompt }],
@@ -1380,11 +1392,13 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
     sendWithSession(ws, { type: "reasoning_update", content: text }, sessionId);
   });
   
-  function saveSubagentTree(sid, tracker) {
+  // Async, but call sites treat it as fire-and-forget best-effort bookkeeping
+  // (never rejects — errors are swallowed here).
+  async function saveSubagentTree(sid, tracker) {
     try {
-      const existing = db.getSession(sid);
+      const existing = await db.getSession(sid);
       if (existing) {
-        db.saveSession({
+        await db.saveSession({
           ...existing,
           subagentTree: tracker.toJSON()
         });
@@ -1643,7 +1657,7 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
     }
   });
   
-  events.on("tool_call_end", ({ id, name, result, isError, subagentId }) => {
+  events.on("tool_call_end", async ({ id, name, result, isError, subagentId }) => {
     sendLog(ws, `[Tool Done] Finished ${name}`);
 
     const resultStr = typeof result === "string" ? result : JSON.stringify(result || "");
@@ -1652,7 +1666,7 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
     sendWithSession(ws, { type: "tool_end", toolCallId: id, name, result, latencyMs }, sessionId);
 
     // Sync plans from workspace in case file tools modified any plans
-    const planState = syncPlansFromWorkspace(sessionId);
+    const planState = await syncPlansFromWorkspace(sessionId);
     if (planState) {
       sendWithSession(ws, {
         type: "plan_state",
@@ -1778,8 +1792,23 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
     const cleanFinalText = (accumulatedText || "")
       .replace(/<tts>[\s\S]*?<\/tts>/gi, "")
       .trim();
-    
-    sendWithSession(ws, { type: "message", role: "assistant", content: cleanFinalText }, sessionId);
+
+    // Never end a turn with a blank assistant bubble. If the model produced no
+    // final text, substitute a graceful fallback so the user always gets a
+    // response — UNLESS the turn was deliberately halted (policy block / anti-
+    // flail), which already surfaced its own explanation.
+    let finalContent = cleanFinalText;
+    if (!finalContent) {
+      const g = turnGuards.get(sessionId);
+      if (g && g.halted) {
+        finalContent = ""; // already messaged by the policy/anti-flail path
+      } else if (g && g.calls > 0) {
+        finalContent = "Done — the actions above are the result of this turn. Let me know if you'd like anything else.";
+      } else {
+        finalContent = "I couldn't produce a response for that. It may have been declined, or it needs a capability the current mode blocks — try rephrasing, or switch modes and retry.";
+      }
+    }
+    sendWithSession(ws, { type: "message", role: "assistant", content: finalContent }, sessionId);
     
     // TTS: Only generate final summary or fallback TTS if we did NOT stream any <tts> tags during generation.
     const ttsMatch = (accumulatedText || "").match(/<tts>([\s\S]*?)<\/tts>/i);
@@ -1806,7 +1835,7 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
     persistSessionMetrics(sessionId, subagentTracker);
 
     // Sync plans from workspace at turn end
-    const planState = syncPlansFromWorkspace(sessionId);
+    const planState = await syncPlansFromWorkspace(sessionId);
     if (planState) {
       sendWithSession(ws, {
         type: "plan_state",
@@ -1856,6 +1885,20 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
   events.on("error", ({ message }) => {
     const ses = activeSessions.get(sessionId);
     if (ses) ses.status = "error";
+    // Surface a graceful assistant message in the CHAT (not just the Logs tab) so
+    // a provider/content-policy/API failure is never a silent empty turn. Map the
+    // common causes to a readable hint; full detail stays in the logs.
+    const raw = String(message || "");
+    let hint = "something went wrong running that turn";
+    if (/content|policy|safety|moderation|filtered|refus/i.test(raw)) hint = "the model or provider declined that request on content-policy grounds";
+    else if (/429|rate.?limit|quota|insufficient_quota/i.test(raw)) hint = "the model provider is rate-limiting or out of quota";
+    else if (/401|403|unauthor|api[_ ]?key|invalid.*key/i.test(raw)) hint = "the model endpoint rejected the credentials (check LLM_API_KEY)";
+    else if (/timeout|ETIMEDOUT|ECONNREFUSED|ENOTFOUND|network|fetch failed|unreachable|socket hang/i.test(raw)) hint = "the model endpoint was unreachable";
+    sendWithSession(ws, {
+      type: "message",
+      role: "assistant",
+      content: `⚠️ I couldn't complete that — ${hint}. You can rephrase and try again; full details are in the Logs tab.`,
+    }, sessionId);
     sendStatus(ws, "error", sessionId);
     sendLog(ws, `Fatal error: ${message}`, false, sessionId);
   });
@@ -1961,7 +2004,7 @@ function ensureOrbitMcpServersRegistered() {
   }
 }
 
-server.listen(PORT, HOST, () => {
+server.listen(PORT, HOST, async () => {
   const exposed = HOST !== "127.0.0.1" && HOST !== "localhost";
   console.log(`Orbit Backend Server listening on ${HOST}:${PORT}${exposed ? " (EXPOSED off-loopback)" : " (internal only)"}`);
   if (exposed && !process.env.ORBIT_API_KEY) {
@@ -1974,7 +2017,7 @@ server.listen(PORT, HOST, () => {
     console.error("[Lightpanda] ensure failed:", e.message));
   // Start the Telegram bridge (no-ops cleanly if no bot token is set). Guard it:
   // a boot-time failure here must not take the whole server down / crash-loop.
-  try { telegramBridge.start(); } catch (e) { console.error("[Telegram] start failed:", e.message); }
+  try { Promise.resolve(telegramBridge.start()).catch((e) => console.error("[Telegram] start failed:", e.message)); } catch (e) { console.error("[Telegram] start failed:", e.message); }
   // Test the LLM endpoint once at boot so capabilities.llm.connected reflects
   // reality immediately and the UI can show "connection failed" vs "not
   // configured" without waiting for the first prompt (Workstream F3).
@@ -1986,7 +2029,7 @@ server.listen(PORT, HOST, () => {
   // Any session still marked running at startup was interrupted (this process
   // replaced the one that owned it). The dashboard offers to resume them.
   try {
-    const interrupted = db.listInterruptedSessions();
+    const interrupted = await db.listInterruptedSessions();
     if (interrupted.length) {
       console.log(`[Resume] ${interrupted.length} interrupted session(s) detected — resumable from the console.`);
     }

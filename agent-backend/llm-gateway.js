@@ -55,7 +55,7 @@ function createLlmGateway({ getConfig, gatewayKey, resolveScopedToken, onUsage }
   //      bound to the device (not a client header), and budget-enforced.
   // The master key is NEVER handed to a remote, so a remote can only ever hold a
   // scoped token → device revocation / budget caps bound its blast radius.
-  router.use((req, res, next) => {
+  router.use(async (req, res, next) => {
     const hdr = req.get("authorization") || "";
     const bearer = hdr.replace(/^Bearer\s+/i, "").trim();
     const alt = req.get("x-api-key") || "";
@@ -67,7 +67,7 @@ function createLlmGateway({ getConfig, gatewayKey, resolveScopedToken, onUsage }
     // Scoped per-device token (paired remote harness reaching the gateway off-box).
     if (resolveScopedToken && presented) {
       let scoped = null;
-      try { scoped = resolveScopedToken(presented); } catch {}
+      try { scoped = await resolveScopedToken(presented); } catch {}
       if (scoped && scoped.deviceId) {
         if (scoped.budget != null && (scoped.used || 0) >= scoped.budget) {
           return res.status(402).json({ error: { message: "device LLM budget exhausted", type: "insufficient_quota" } });
@@ -198,7 +198,7 @@ function createLlmGateway({ getConfig, gatewayKey, resolveScopedToken, onUsage }
       cacheRead: u.prompt_tokens_details?.cached_tokens ?? 0,
     };
     if (!usage.input && !usage.output && !usage.reasoning) return;
-    try { onUsage({ sessionId, tenantId, deviceId, model: obj.model || model, usage }); } catch {}
+    try { Promise.resolve(onUsage({ sessionId, tenantId, deviceId, model: obj.model || model, usage })).catch(() => {}); } catch {}
   }
 
   return router;

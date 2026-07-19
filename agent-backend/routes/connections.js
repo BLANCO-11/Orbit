@@ -42,8 +42,8 @@ function createConnectionsRouters({ db, mcpRegistry, encrypt, decrypt, getOrigin
   // ── Authed API ────────────────────────────────────────────────────
   const connectionsRouter = Router();
 
-  connectionsRouter.get("/", (_req, res) => {
-    const connected = new Set(db.listConnections().map((c) => c.provider));
+  connectionsRouter.get("/", async (_req, res) => {
+    const connected = new Set((await db.listConnections()).map((c) => c.provider));
     const providers = listProviders().map((p) => ({ ...p, connected: connected.has(p.id) }));
     res.json({ success: true, providers });
   });
@@ -54,14 +54,14 @@ function createConnectionsRouters({ db, mcpRegistry, encrypt, decrypt, getOrigin
     if (!p || p.kind !== "token") return res.status(400).json({ success: false, error: "not a token provider" });
     const token = (req.body && req.body.token || "").trim();
     if (!token) return res.status(400).json({ success: false, error: "token required" });
-    db.saveConnection({ provider: p.id, kind: "token", scopes: [], accessTokenEnc: encrypt(token), meta: {} });
+    await db.saveConnection({ provider: p.id, kind: "token", scopes: [], accessTokenEnc: encrypt(token), meta: {} });
     await wireMcp(p, token);
     res.json({ success: true });
   });
 
   connectionsRouter.delete("/:provider", async (req, res) => {
     const p = getProvider(req.params.provider);
-    db.deleteConnection(req.params.provider);
+    await db.deleteConnection(req.params.provider);
     if (p?.mcp) { try { await mcpRegistry.remove(p.mcp.name); } catch {} }
     res.json({ success: true });
   });
@@ -125,7 +125,7 @@ function createConnectionsRouters({ db, mcpRegistry, encrypt, decrypt, getOrigin
       const accessToken = data.access_token || data.accessToken;
       if (!accessToken) throw new Error(data.error_description || data.error || "no access_token in response");
 
-      db.saveConnection({
+      await db.saveConnection({
         provider: p.id, kind: "oauth",
         scopes: (data.scope ? String(data.scope).split(/[ ,]/).filter(Boolean) : p.scopes) || [],
         accessTokenEnc: encrypt(accessToken),

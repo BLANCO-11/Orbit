@@ -59,11 +59,11 @@ function ssoEnabled() {
 // Map an authenticated email → RBAC role. Admin if listed in OIDC_ADMIN_EMAILS,
 // or if this is the very first user (bootstrap). Otherwise leave undefined so
 // upsertUser preserves an existing role / defaults new users to 'member'.
-function roleForEmail(db, email) {
+async function roleForEmail(db, email) {
   const admins = (oidcEnv().adminEmails || "")
     .split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
   if (admins.includes(String(email).toLowerCase())) return "admin";
-  try { if (db.countUsers() === 0) return "admin"; } catch {}
+  try { if ((await db.countUsers()) === 0) return "admin"; } catch {}
   return undefined;
 }
 
@@ -96,15 +96,15 @@ function createAuthSsoRouter({ db, getOrigin, authMiddleware }) {
   // credential for programmatic API access). On success we mint a session token
   // and return it; the client stores THAT (never the password) as its request
   // credential, resolved via getSsoSessionByToken in middleware/auth.js.
-  router.post("/local", (req, res) => {
+  router.post("/local", async (req, res) => {
     const username = (req.body && req.body.username) || "";
     const password = (req.body && req.body.password) || "";
     if (!username || !password) {
       return res.status(400).json({ success: false, message: "Username and password are required." });
     }
-    const user = db.verifyLocalLogin(username, password);
+    const user = await db.verifyLocalLogin(username, password);
     if (!user) return res.status(401).json({ success: false, message: "Invalid username or password." });
-    const { token, expiresAt } = db.createSsoSession(user.id);
+    const { token, expiresAt } = await db.createSsoSession(user.id);
     res.json({ success: true, token, expiresAt, role: user.role });
   });
 
@@ -181,8 +181,8 @@ function createAuthSsoRouter({ db, getOrigin, authMiddleware }) {
       if (!domainAllowed(email)) throw new Error(`domain not allowed for ${email}`);
 
       // 3. Provision/refresh the user and mint an Orbit session token.
-      const user = db.upsertUser({ email, sub: payload.sub, role: roleForEmail(db, email) });
-      const { token } = db.createSsoSession(user.id);
+      const user = await db.upsertUser({ email, sub: payload.sub, role: await roleForEmail(db, email) });
+      const { token } = await db.createSsoSession(user.id);
 
       // 4. Hand the session token to the SPA via a query param — page.tsx stores
       //    it in the shared credential slot and strips the param. No new route.
@@ -194,20 +194,20 @@ function createAuthSsoRouter({ db, getOrigin, authMiddleware }) {
   });
 
   // ── POST /logout ────────────────────────────────────────────────
-  router.post("/logout", (req, res) => {
+  router.post("/logout", async (req, res) => {
     const token =
       req.headers["x-api-key"] ||
       (req.headers["authorization"] || "").replace("Bearer ", "") ||
       (req.body && req.body.token) || "";
-    try { db.revokeSsoSession(token); } catch {}
+    try { await db.revokeSsoSession(token); } catch {}
     res.json({ success: true });
   });
 
   // ── GET /whoami (authed) ────────────────────────────────────────
-  router.get("/whoami", authMiddleware, (req, res) => {
+  router.get("/whoami", authMiddleware, async (req, res) => {
     const a = req.auth || {};
     let tenantName = null;
-    if (a.tenantId) { try { tenantName = db.getTenant(a.tenantId)?.name || null; } catch {} }
+    if (a.tenantId) { try { tenantName = (await db.getTenant(a.tenantId))?.name || null; } catch {} }
     res.json({
       success: true,
       role: a.role || "member",

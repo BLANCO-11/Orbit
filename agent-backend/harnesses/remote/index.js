@@ -104,7 +104,7 @@ class RemoteHarness extends HarnessInterface {
       // the container pi) via a scoped per-device token — zero config on the box.
       // A per-device bring-your-own endpoint overrides it. `null` → the connector
       // falls back to whatever OPENAI_*/LLM_* env it has locally.
-      llm: this._resolveLlm(),
+      llm: await this._resolveLlm(),
       excludeTools: this.excludeTools,
       // Kept for older/pi-based adapters that build their own prompt from parts.
       capabilitiesBlock: this.capabilitiesBlock,
@@ -132,7 +132,7 @@ class RemoteHarness extends HarnessInterface {
    *     Only used when the operator deliberately turns it on for a device that
    *     has no provider of its own; never the default.
    */
-  _resolveLlm() {
+  async _resolveLlm() {
     const entry = this.registryEntry;
     const device = entry && entry.device;
     try {
@@ -147,7 +147,7 @@ class RemoteHarness extends HarnessInterface {
         const httpOrigin = entry && entry.origin && entry.origin.httpOrigin;
         if (this.db && device && device.id && httpOrigin) {
           const budget = Number(process.env.ORBIT_DEVICE_LLM_BUDGET) || undefined;
-          const token = this.db.mintDeviceLlmToken(device.id, { budget, sessionId: this.sessionId });
+          const token = await this.db.mintDeviceLlmToken(device.id, { budget, sessionId: this.sessionId });
           if (token) {
             const model = byo.model || this.model || (this.config && this.config.litellm && this.config.litellm.selectedNormalModel) || "";
             return { provider: "orbit", baseURL: `${httpOrigin}/llm/v1`, apiKey: token, model };

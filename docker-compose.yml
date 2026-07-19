@@ -23,12 +23,25 @@ services:
       # interfaces) + ORBIT_SUPERADMIN_KEY set; firewall this port to the proxy
       # host. If nginx instead sends /api to :6801, you can remove this line.
       - "6800:6800"
+    # Let the container reach services running on the HOST (e.g. a host-run
+    # LiteLLM :5000, local TTS :6767, or any other localhost service) via the
+    # hostname `host.docker.internal`. On Linux this mapping isn't built in, so
+    # point it at the docker bridge gateway explicitly. Use it in .env values
+    # like LLM_BASE_URL=http://host.docker.internal:5000. (Sibling services in
+    # this compose — postgres, lightpanda — are reached by their service name.)
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     env_file:
       - .env
     environment:
       # Reach the sibling browser service (overrides the .env / default).
       LIGHTPANDA_WS: "ws://lightpanda:9222"
-      # Persist the SQLite DB + session workspaces on the named volume below.
+      # ── Database ──────────────────────────────────────────────────────
+      # DEFAULT: PostgreSQL (the `postgres` service below). DATABASE_URL selects
+      # the pg driver automatically (see agent-backend/db/adapter.js). To fall
+      # back to the bundled SQLite instead, comment DATABASE_URL out (or set
+      # ORBIT_DB_DRIVER=sqlite) — ORBIT_DB_PATH then persists it on the volume.
+      DATABASE_URL: "postgres://orbit:orbit@postgres:5432/orbit"
       ORBIT_DB_PATH: "/data/orbit.db"
       ORBIT_HOME: "/data/orbit-home"
       # pi (@earendil-works/pi-coding-agent) is baked into the image and on PATH,
@@ -37,7 +50,10 @@ services:
     volumes:
       - orbit-data:/data
     depends_on:
-      - lightpanda
+      lightpanda:
+        condition: service_started
+      postgres:
+        condition: service_healthy
 
   lightpanda:
     image: lightpanda/browser:nightly
@@ -45,5 +61,27 @@ services:
     expose:
       - "9222"                 # internal only; orbit connects via LIGHTPANDA_WS
 
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      # Match the credentials in the orbit service's DATABASE_URL above. Override
+      # all three via .env for a real deployment (and change the password!).
+      POSTGRES_USER: "${POSTGRES_USER:-orbit}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-orbit}"
+      POSTGRES_DB: "${POSTGRES_DB:-orbit}"
+    volumes:
+      - orbit-pgdata:/var/lib/postgresql/data
+    # Gates the orbit service's `depends_on: condition: service_healthy` so the
+    # app never boots before the DB is accepting connections.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-orbit} -d ${POSTGRES_DB:-orbit}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    expose:
+      - "5432"                 # internal only; orbit connects via DATABASE_URL
+
 volumes:
   orbit-data:
+  orbit-pgdata:

@@ -53,31 +53,33 @@ function sanitize(body) {
 function createProfilesRouter(db) {
   const router = Router();
 
-  // Seed defaults once, lazily.
-  try {
-    if (db.countProfiles() === 0) {
-      for (const p of DEFAULT_PROFILES) db.saveProfile(p);
+  // Seed defaults once, lazily (fire-and-forget; db calls await init() internally).
+  (async () => {
+    try {
+      if ((await db.countProfiles()) === 0) {
+        for (const p of DEFAULT_PROFILES) await db.saveProfile(p);
+      }
+    } catch (e) {
+      console.error("[Profiles] seed failed:", e.message);
     }
-  } catch (e) {
-    console.error("[Profiles] seed failed:", e.message);
-  }
+  })();
 
-  router.get("/", (_req, res) => {
-    res.json({ success: true, profiles: db.listProfiles() });
+  router.get("/", async (_req, res) => {
+    res.json({ success: true, profiles: await db.listProfiles() });
   });
 
-  router.post("/", (req, res) => {
+  router.post("/", async (req, res) => {
     try {
-      const saved = db.saveProfile(sanitize(req.body || {}));
-      res.json({ success: true, profile: saved, profiles: db.listProfiles() });
+      const saved = await db.saveProfile(sanitize(req.body || {}));
+      res.json({ success: true, profile: saved, profiles: await db.listProfiles() });
     } catch (e) {
       res.status(400).json({ success: false, error: e.message });
     }
   });
 
-  router.delete("/:id", (req, res) => {
-    db.deleteProfile(req.params.id);
-    res.json({ success: true, profiles: db.listProfiles() });
+  router.delete("/:id", async (req, res) => {
+    await db.deleteProfile(req.params.id);
+    res.json({ success: true, profiles: await db.listProfiles() });
   });
 
   return router;

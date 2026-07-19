@@ -7,7 +7,8 @@ const { resolveIdentity } = require("../middleware/auth");
 function createWebSocketServer(httpServer, db, harnessRegistry) {
   const wss = new WebSocket.Server({ noServer: true });
 
-  httpServer.on("upgrade", (request, socket, head) => {
+  httpServer.on("upgrade", async (request, socket, head) => {
+   try {
     const url = new URL(request.url, "http://internal");
     const isDashboard = url.pathname === "/api/ws";
     const isHarness = url.pathname === "/api/harness";
@@ -29,9 +30,9 @@ function createWebSocketServer(httpServer, db, harnessRegistry) {
       // A harness adapter MUST present a valid device token — no shared-secret,
       // tenant-key, or dev-mode fallback for the harness lane.
       if (!deviceToken) return reject();
-      device = db.getDeviceByToken(deviceToken);
+      device = await db.getDeviceByToken(deviceToken);
       if (!device) return reject();
-      db.touchDeviceLastSeen(device.id);
+      await db.touchDeviceLastSeen(device.id);
     } else {
       // Dashboard lane: accept ANY recognized credential — a paired device
       // token, a tenant API key, an SSO session token, or the superadmin shared
@@ -39,13 +40,13 @@ function createWebSocketServer(httpServer, db, harnessRegistry) {
       // Browsers can't set headers on a WS upgrade, so the credential rides as a
       // query param (`deviceToken` or `key`); adapt it into a header for reuse.
       const cred = deviceToken || url.searchParams.get("key") || "";
-      const identity = resolveIdentity({ headers: { "x-api-key": cred } }, db);
+      const identity = await resolveIdentity({ headers: { "x-api-key": cred } }, db);
       if (!identity) return reject();
       // Keep the device binding when a device token was used, so per-device
       // scope enforcement (server.js start_task) still applies.
       if (deviceToken) {
-        device = db.getDeviceByToken(deviceToken);
-        if (device) db.touchDeviceLastSeen(device.id);
+        device = await db.getDeviceByToken(deviceToken);
+        if (device) await db.touchDeviceLastSeen(device.id);
       }
     }
 
@@ -60,6 +61,10 @@ function createWebSocketServer(httpServer, db, harnessRegistry) {
       ws.device = device; // null when authenticated via the shared-secret stopgap
       wss.emit("connection", ws, request);
     });
+   } catch (e) {
+    console.error("[ws upgrade] auth failed:", e.message);
+    try { socket.write("HTTP/1.1 500 Internal Server Error\r\n\r\n"); socket.destroy(); } catch {}
+   }
   });
 
   return wss;

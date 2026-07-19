@@ -9,7 +9,7 @@ function startScheduler({ db, runProfileHeadless }) {
 
   const tick = async () => {
     let channels;
-    try { channels = db.listChannels(); } catch { return; }
+    try { channels = await db.listChannels(); } catch { return; }
     const now = Date.now();
     const d = new Date();
     const hhmm = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
@@ -28,7 +28,7 @@ function startScheduler({ db, runProfileHeadless }) {
       }
       if (!due) continue;
       try {
-        db.touchChannelTriggered(ch.id);
+        await db.touchChannelTriggered(ch.id);
         const prompt = ch.promptTemplate || "Run the scheduled task.";
         await runProfileHeadless({ profileId: ch.profileId, prompt, title: ch.name, source: `channel:${ch.id}` });
         console.log(`[Scheduler] Fired channel "${ch.name}" (${ch.id}).`);

@@ -26,23 +26,24 @@ function createTelegramBridge({ db, decrypt, dispatch, log = console }) {
   let lastTokenSig = null;
 
   // ── connection meta (authorized chats, pairing code, offset) ──
-  function meta() {
-    const c = db.getConnection("telegram");
+  // The db layer is async, so all of these are async too.
+  async function meta() {
+    const c = await db.getConnection("telegram");
     return c ? { conn: c, meta: c.meta || {} } : null;
   }
-  function saveMeta(patch) {
-    const cur = db.getConnection("telegram");
+  async function saveMeta(patch) {
+    const cur = await db.getConnection("telegram");
     if (!cur) return;
-    db.saveConnection({ ...cur, meta: { ...(cur.meta || {}), ...patch } });
+    await db.saveConnection({ ...cur, meta: { ...(cur.meta || {}), ...patch } });
   }
-  function token() {
-    const m = meta();
+  async function token() {
+    const m = await meta();
     if (!m || !m.conn.accessTokenEnc) return null;
     try { return decrypt(m.conn.accessTokenEnc); } catch { return null; }
   }
   // A 6-digit code the operator reads from the console to authorize a chat.
-  function pairingCode() {
-    const m = meta();
+  async function pairingCode() {
+    const m = await meta();
     if (!m) return null;
     if (m.meta.pairingCode) return m.meta.pairingCode;
     // Derive deterministically from the secret-encrypted token so it's stable
@@ -51,22 +52,22 @@ function createTelegramBridge({ db, decrypt, dispatch, log = console }) {
     let h = 0;
     for (let i = 0; i < enc.length; i++) h = (h * 31 + enc.charCodeAt(i)) % 1000000;
     const code = String(h).padStart(6, "0");
-    saveMeta({ pairingCode: code });
+    await saveMeta({ pairingCode: code });
     return code;
   }
-  function allowedChats() {
-    const m = meta();
+  async function allowedChats() {
+    const m = await meta();
     return new Set((m?.meta.allowedChats || []).map(String));
   }
-  function authorize(chatId) {
-    const set = allowedChats();
+  async function authorize(chatId) {
+    const set = await allowedChats();
     set.add(String(chatId));
-    saveMeta({ allowedChats: [...set] });
+    await saveMeta({ allowedChats: [...set] });
   }
 
   // ── Telegram API ──
   async function tg(method, body) {
-    const t = token();
+    const t = await token();
     if (!t) throw new Error("no telegram token");
     const res = await fetch(`${API}/bot${t}/${method}`, {
       method: "POST",
@@ -87,8 +88,8 @@ function createTelegramBridge({ db, decrypt, dispatch, log = console }) {
 
   // Push to every authorized chat (outbound alerts).
   async function notify(text) {
-    if (!token()) return;
-    for (const chatId of allowedChats()) await sendMessage(chatId, text);
+    if (!(await token())) return;
+    for (const chatId of await allowedChats()) await sendMessage(chatId, text);
   }
 
   // ── inbound message handling (pure-ish: pass sink for testing) ──
@@ -98,11 +99,11 @@ function createTelegramBridge({ db, decrypt, dispatch, log = console }) {
     const chatId = msg.chat.id;
     const text = msg.text.trim();
 
-    if (!allowedChats().has(String(chatId))) {
+    if (!(await allowedChats()).has(String(chatId))) {
       if (text.startsWith("/pair")) {
         const given = text.split(/\s+/)[1];
-        if (given && given === pairingCode()) {
-          authorize(chatId);
+        if (given && given === (await pairingCode())) {
+          await authorize(chatId);
           await sink.send(chatId, "✅ Paired. You can now chat with Orbit from here.");
         } else {
           await sink.send(chatId, "❌ Wrong or missing code. Open the Orbit console to get your pairing code, then send: /pair <code>");
@@ -130,15 +131,16 @@ function createTelegramBridge({ db, decrypt, dispatch, log = console }) {
   // token first appears or changes, so setting it in the UI is picked up with
   // no restart.
   async function pollLoop() {
-    let offset = Number(meta()?.meta.pollOffset || 0) || 0;
+    let offset = Number((await meta())?.meta.pollOffset || 0) || 0;
     while (!stopped) {
-      const t = token();
+      const t = await token();
       if (!t) { botUsername = null; lastTokenSig = null; await sleep(4000); continue; }
       if (t !== lastTokenSig) {
         try {
           await getMe();
           lastTokenSig = t;
-          log.log?.(`[Telegram] bridge online as @${botUsername}. Pairing code: ${pairingCode()} — send "/pair ${pairingCode()}" from your Telegram to authorize.`);
+          const pc = await pairingCode();
+          log.log?.(`[Telegram] bridge online as @${botUsername}. Pairing code: ${pc} — send "/pair ${pc}" from your Telegram to authorize.`);
         } catch (e) {
           log.error?.(`[Telegram] token invalid or unreachable: ${e.message}`);
           await sleep(5000);
@@ -151,7 +153,7 @@ function createTelegramBridge({ db, decrypt, dispatch, log = console }) {
           offset = u.update_id + 1;
           try { await handleUpdate(u); } catch (e) { log.error?.(`[Telegram] handle failed: ${e.message}`); }
         }
-        if (updates.length) saveMeta({ pollOffset: offset });
+        if (updates.length) await saveMeta({ pollOffset: offset });
       } catch (e) {
         log.error?.(`[Telegram] poll error: ${e.message}`);
         await sleep(5000); // back off on transient/network errors
@@ -174,20 +176,20 @@ function createTelegramBridge({ db, decrypt, dispatch, log = console }) {
     if (process.env.TELEGRAM_DISABLE === "1") { log.log?.("[Telegram] bridge disabled via TELEGRAM_DISABLE=1."); return; }
     stopped = false;
     running = true;
-    if (!token()) log.log?.("[Telegram] no bot token set yet — bridge idle, will pick up when you add one.");
+    if (!(await token())) log.log?.("[Telegram] no bot token set yet — bridge idle, will pick up when you add one.");
     pollLoop();
   }
 
   function stop() { stopped = true; }
 
-  function status() {
-    const m = meta();
+  async function status() {
+    const m = await meta();
     return {
-      configured: Boolean(token()),
+      configured: Boolean(await token()),
       running,
       botUsername,
-      pairingCode: m ? pairingCode() : null,
-      allowedChats: [...allowedChats()],
+      pairingCode: m ? await pairingCode() : null,
+      allowedChats: [...(await allowedChats())],
     };
   }
 

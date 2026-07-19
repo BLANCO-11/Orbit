@@ -62,12 +62,12 @@ const LANGUAGE_MAP = {
 // immediately), else from the session's persisted composer.harnessId — so the
 // explorer follows the session's primary agent with no client plumbing. Returns
 // the remote harness id to route to, or null for the local filesystem path.
-function remoteHarnessFor(req, harnessRegistry) {
+async function remoteHarnessFor(req, harnessRegistry) {
   if (!harnessRegistry || !harnessRegistry.get) return null;
   const session = req.query.session || (req.body && req.body.session);
   let hid = req.query.harnessId || (req.body && req.body.harnessId);
   if (!hid && session) {
-    try { hid = db.getSession(session)?.harnessId; } catch {}
+    try { hid = (await db.getSession(session))?.harnessId; } catch {}
   }
   if (!hid || hid === "local") return null;
   return harnessRegistry.get(hid) ? hid : null;
@@ -80,7 +80,7 @@ function createWorkspaceRouter(harnessRegistry) {
   router.get("/tree", async (req, res, next) => {
     try {
       // Remote agent → list over the connector socket (its workspace, its machine).
-      const remoteId = remoteHarnessFor(req, harnessRegistry);
+      const remoteId = await remoteHarnessFor(req, harnessRegistry);
       if (remoteId) {
         const rel = relFromQueryPath(req.query.path);
         const r = await harnessRegistry.requestFs(remoteId, { op: "list", sessionId: req.query.session, path: rel });
@@ -142,7 +142,7 @@ function createWorkspaceRouter(harnessRegistry) {
     try {
       // Remote agent → read over the connector socket. (Text only; the connector
       // returns utf8, so raw/binary — e.g. images — isn't supported remotely yet.)
-      const remoteId = remoteHarnessFor(req, harnessRegistry);
+      const remoteId = await remoteHarnessFor(req, harnessRegistry);
       if (remoteId) {
         if (req.query.raw) return res.status(415).json({ success: false, message: "Raw/binary preview isn't supported for remote agents." });
         const rel = relFromQueryPath(req.query.path);

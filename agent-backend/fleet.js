@@ -64,7 +64,7 @@ function createFleet({ db, harnessRegistry, handleStartTask, getSessionMode, cre
     // Delegate execution rights: inherit the LEAD's mode by default; if the lead
     // passed an explicit `mode`, honor it but CAP at the lead's own rights so a
     // delegate can never escalate beyond what the lead itself may do.
-    const leadMode = (getSessionMode && leadSessionId && getSessionMode(leadSessionId)) || "edit";
+    const leadMode = (getSessionMode && leadSessionId && await getSessionMode(leadSessionId)) || "edit";
     const resolvedMode = capMode(mode, leadMode);
     const isLocalAgent = Object.prototype.hasOwnProperty.call(LOCAL_AGENTS, harnessId);
     if (!isLocalAgent && !harnessRegistry.get(harnessId)) {
@@ -75,7 +75,7 @@ function createFleet({ db, harnessRegistry, handleStartTask, getSessionMode, cre
     const sessionId = `${source}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     const title = `${titlePrefix} ${harnessId}: ${prompt.slice(0, 48)}${prompt.length > 48 ? "…" : ""}`;
     try {
-      db.saveSession({
+      await db.saveSession({
         id: sessionId,
         title,
         messages: [{ role: "user", content: prompt }],
@@ -87,7 +87,7 @@ function createFleet({ db, harnessRegistry, handleStartTask, getSessionMode, cre
         timestamp: Date.now(),
       });
       if (notifySessionCreated && leadSessionId) {
-        try { notifySessionCreated(leadSessionId, sessionId, harnessId); } catch {}
+        try { await notifySessionCreated(leadSessionId, sessionId, harnessId); } catch {}
       }
     } catch (e) {
       console.error("[Fleet] initial save failed:", e.message);
@@ -122,7 +122,7 @@ function createFleet({ db, harnessRegistry, handleStartTask, getSessionMode, cre
     // Credit the lead's sub-agent lane with what the delegate actually did
     // (its tool calls + tokens live in ITS session), so the lane doesn't show 0.
     if (creditLeadSubagent && leadSessionId) {
-      try { creditLeadSubagent(leadSessionId, harnessId, sessionId); } catch {}
+      try { await creditLeadSubagent(leadSessionId, harnessId, sessionId); } catch {}
     }
 
     return {
