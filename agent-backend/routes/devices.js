@@ -55,6 +55,25 @@ function detectOrigins(req) {
   };
 }
 
+// Explicit host-trust advisory for a full-scope pairing. A paired remote runs
+// agent tool calls — including arbitrary shell — on its OWN machine, where
+// Orbit's container isolation does NOT reach (the policy gate still evaluates
+// calls, but containment is host-local only). Surfaced so the UI and the human
+// pairing the device see the trust decision they're making. `null` for the
+// narrower scopes (read_only / chat_voice) that can't run shell.
+function remoteTrustNotice(scope) {
+  if (scope !== "full") return null;
+  return {
+    uncontained: true,
+    level: "warning",
+    title: "This machine will run agent commands on itself",
+    detail:
+      "A full-scope remote harness executes agent tool calls — including arbitrary shell — on its own OS. " +
+      "Orbit's container sandbox does not apply to remote machines; the policy gate still evaluates each call, " +
+      "but pairing a remote is a host-trust decision. Pair only machines you control and trust.",
+  };
+}
+
 // The single source of truth a harness needs to connect and stay connected.
 // The raw device token rides in here (returned exactly once), so this is only
 // safe over TLS off-loopback — see the security note in the pairing plan.
@@ -65,6 +84,7 @@ function buildDescriptor(req, device) {
     wsUrl: `${wsOrigin}/api/harness`,
     token: device.token,
     device: { id: device.id, label: device.label, scope: device.scope },
+    security: remoteTrustNotice(device.scope),
     register: {
       type: "register",
       required: ["name", "machine", "capabilities"],
@@ -286,6 +306,8 @@ schtasks /Create /TN OrbitConnect /SC ONLOGON /RL LIMITED /F ^
       code,
       expiresAt,
       scope: grantedScope,
+      // Host-trust advisory for the operator (null for non-shell scopes).
+      security: remoteTrustNotice(grantedScope),
       pairingUrl: `${dashOrigin}/pair?code=${code}`,
       // For a custom/third-party harness: fetch this for the JSON descriptor.
       connectUrl: `${httpOrigin}/api/pair/connect?code=${code}`,

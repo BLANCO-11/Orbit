@@ -10,9 +10,20 @@
 // writes outside the mounted workspace stay in the throwaway container and
 // vanish when it exits (--rm).
 //
-// Honest limitations (surfaced to the user): uses --network host so the agent
-// can reach LiteLLM (so network isn't isolated yet); MCP servers with
-// host-absolute paths may not resolve inside the container. Requires Docker.
+// Isolation levers (env-gated; DEFAULTS preserve the original behavior exactly,
+// so an existing container run is byte-identical unless an operator opts in):
+//   • ORBIT_SANDBOX_PI_CONFIG_RO=1  — mount the host ~/.pi READ-ONLY instead of
+//     rw. Tightens the review-flagged hole (a container agent could otherwise
+//     write/tamper with the host's pi auth/config). Leave OFF if your pi build
+//     writes lock/session files under ~/.pi and errors on a read-only mount.
+//   • ORBIT_SANDBOX_NETWORK=<mode>  — docker --network mode (default "host").
+//     Set to e.g. "bridge" to stop re-exposing the host network; when non-host,
+//     we add --add-host=host.docker.internal:host-gateway and rewrite a loopback
+//     ORBIT_LLM_BASE_URL to host.docker.internal so the child still reaches the
+//     app's LLM gateway. NOTE: the non-host path needs a Docker-equipped test on
+//     your platform before relying on it.
+// Honest limitation that remains: MCP servers with host-absolute paths may not
+// resolve inside the container. Requires Docker.
 
 const { execSync } = require("child_process");
 const os = require("os");
@@ -22,6 +33,8 @@ const PiCodeHarness = require("../picode");
 const IMAGE = process.env.ORBIT_SANDBOX_IMAGE || "node:22-slim";
 const PI_RUNTIME_DIR = path.join(os.homedir(), ".local", "share", "pi-node");
 const PI_CONFIG_DIR = path.join(os.homedir(), ".pi");
+
+const truthy = (v) => ["1", "true", "yes", "on"].includes(String(v || "").toLowerCase());
 
 class ContainerHarness extends PiCodeHarness {
   getMetadata() {
@@ -40,10 +53,11 @@ class ContainerHarness extends PiCodeHarness {
     // container is filesystem-isolated from the host and from other sessions.
     const sessionRoot = require("../../workspace-paths").sessionRoot(this.sessionId);
     const workspace = this._workspaceDir || sessionRoot;
+    const piConfigMode = truthy(process.env.ORBIT_SANDBOX_PI_CONFIG_RO) ? "ro" : "rw";
     const mounts = [
-      "-v", `${PI_RUNTIME_DIR}:${PI_RUNTIME_DIR}:ro`,       // pi/node binaries (immutable)
-      "-v", `${PI_CONFIG_DIR}:${home}/.pi:rw`,              // pi settings/auth + session/lock files (pi writes here)
-      "-v", `${sessionRoot}:${sessionRoot}:rw`,             // this session's tree (workspace/artifacts/tmp)
+      "-v", `${PI_RUNTIME_DIR}:${PI_RUNTIME_DIR}:ro`,        // pi/node binaries (immutable)
+      "-v", `${PI_CONFIG_DIR}:${home}/.pi:${piConfigMode}`,  // pi settings/auth (rw by default; ro via ORBIT_SANDBOX_PI_CONFIG_RO)
+      "-v", `${sessionRoot}:${sessionRoot}:rw`,              // this session's tree (workspace/artifacts/tmp)
     ];
     // The `orbit` provider extension (`-e <path>`) lives in the backend source,
     // outside every other mount — bind-mount its dir read-only at the same
@@ -52,16 +66,28 @@ class ContainerHarness extends PiCodeHarness {
       const extDir = path.dirname(this._providerExtPath);
       mounts.push("-v", `${extDir}:${extDir}:ro`);
     }
-    // Forward only the gateway-provider env + mode the agent needs. The child
-    // reaches the app's LLM gateway on the host loopback via --network host, so
-    // the real upstream key stays in the app (never entering this container).
+    // Network mode: "host" (default) lets the child reach the app's LLM gateway
+    // on loopback. A non-host mode isolates the network; we then publish the host
+    // gateway as host.docker.internal and rewrite a loopback base URL to match.
+    const network = process.env.ORBIT_SANDBOX_NETWORK || "host";
+    const useHostNet = network === "host";
+    // Forward only the gateway-provider env + mode the agent needs. The real
+    // upstream key stays in the app (never entering this container).
     const envArgs = [];
     for (const k of ["ORBIT_MODE", "ORBIT_LLM_BASE_URL", "ORBIT_LLM_KEY", "ORBIT_LLM_MODEL"]) {
-      if (childEnv[k]) envArgs.push("-e", `${k}=${childEnv[k]}`);
+      if (!childEnv[k]) continue;
+      let v = childEnv[k];
+      if (!useHostNet && k === "ORBIT_LLM_BASE_URL") {
+        v = v.replace(/\/\/(127\.0\.0\.1|localhost)(?=[:\/]|$)/, "//host.docker.internal");
+      }
+      envArgs.push("-e", `${k}=${v}`);
     }
+    const netArgs = useHostNet
+      ? ["--network", "host"]                                              // reach the gateway on loopback
+      : ["--network", network, "--add-host", "host.docker.internal:host-gateway"];
     const dockerArgs = [
       "run", "--rm", "-i",
-      "--network", "host",              // reach the app's LLM gateway on loopback
+      ...netArgs,
       "--pull", "never",
       ...mounts,
       "-w", workspace,

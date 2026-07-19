@@ -1159,7 +1159,13 @@ async function handleStartTask(ws, userPrompt, sessionId, mode, systemPromptType
   // that id, via RemoteHarness. Both implement the same interface downstream.
   let sessionItem = activeSessions.get(sessionId);
   if (!sessionItem || !sessionItem.harness) {
-    const activeSandbox = sandbox || "host";
+    // Per-request sandbox wins; otherwise the deployment default (ORBIT_DEFAULT_
+    // SANDBOX = host | container | remote), else "host". Unset env → "host", so
+    // existing deploys are unchanged; operators harden by setting it to
+    // "container". An unavailable choice (e.g. container w/o Docker) is caught by
+    // the guards just below and surfaces a clear error rather than silently
+    // downgrading.
+    const activeSandbox = sandbox || process.env.ORBIT_DEFAULT_SANDBOX || "host";
     // Local harness types run on THIS host (a child process). Anything else is a
     // remote harness id (a paired orbit-adapter).
     const LOCAL_HARNESSES = { local: "picode", "pi-code": "picode", picode: "picode", opencode: "opencode" };
