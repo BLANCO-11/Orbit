@@ -158,7 +158,35 @@ and translates its native protocol to Orbit's events via a per-agent adapter:
 Force a specific one with `ORBIT_CONNECT_AGENT=<pi|claude|opencode|codex|gemini|aider|custom|generic>`.
 A box with no recognized agent won't connect (it isn't a harness). Adapter flags
 for third-party agents are best-effort and version-sensitive — if one drifts, use
-`ORBIT_AGENT_CMD` to point at the exact command.
+`ORBIT_AGENT_CMD` to point at the exact command. The connector probes `pi --help`
+and only uses flags that version supports, and passes large system prompts via a
+file (`--append-system-prompt`) so it doesn't overflow the Windows command line.
+
+**A remote agent is a full first-class harness — on its own machine:**
+
+- **Isolated workspace, on the remote.** Each session runs in
+  `~/.orbit/workspaces/<sessionId>` on the *remote* box; the local host's sessions
+  live in `~/.orbit/sessions/<sessionId>/`. Both keyed by session id.
+- **File explorer (read-only).** The dashboard Explorer shows the *selected*
+  agent's workspace — local reads the host FS, remote fetches over the connector
+  socket on demand (list/read, sandboxed), VS-Code-style, no sync.
+- **Operator console → the agent's runtime.** The Console runs your commands where
+  the agent runs — the Orbit host for a local agent, the remote machine for a
+  remote one (routed over the connector, correct shell per OS). It shows the
+  machine + OS it's on.
+- **OS + LLM in Fleet.** Fleet groups agents under their paired **device** (one
+  laptop = one device, even with several agents) and shows each device's OS
+  (Linux/Windows/macOS), online state, and each agent's model/provider.
+- **Orbit MCP tools work.** The connector hands the agent `ORBIT_API` +
+  `ORBIT_API_KEY` (the device token) + `ORBIT_SESSION_ID`, so the agent's Orbit
+  MCP tools (fleet/notify) authenticate back to Orbit as that device.
+
+**Keep it running (it's a daemon).** The connection lives only while the connector
+process is alive; a dropped socket auto-reconnects (backoff + the persisted device
+token — no new code). Run it **detached** (see `…/api/pair/agent` for the exact
+per-OS commands), and for reboot survival install it as a service that runs the
+saved `node ~/.orbit/orbit-connect.js` (the single-use bootstrap code can't be the
+restart command). The token is durable until the operator **revokes** the device.
 
 ## Reverse proxy (TLS + WebSocket harness)
 

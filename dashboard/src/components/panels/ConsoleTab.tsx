@@ -12,21 +12,26 @@ interface Entry { command: string; stdout: string; stderr: string; code: number;
  * shows the output. Non-streaming for v1; each command returns when it finishes
  * (20s cap). This is the operator's shell, not the agent's — not policy-gated.
  */
-export default function ConsoleTab() {
+export default function ConsoleTab({ harnessId }: { harnessId?: string }) {
   const { currentSessionId } = useOrbitState();
   const [cmd, setCmd] = useState('');
   const [history, setHistory] = useState<Entry[]>([]);
   const [busy, setBusy] = useState(false);
   const [cwd, setCwd] = useState('');
+  const [machine, setMachine] = useState('');
   const endRef = useRef<HTMLDivElement>(null);
   const inputHist = useRef<string[]>([]);
   const histIdx = useRef(-1);
 
-  // Console runs in the CURRENT session's workspace dir; re-fetch cwd on switch.
-  const sessionQ = currentSessionId ? `?session=${encodeURIComponent(currentSessionId)}` : '';
+  // Console runs in the CURRENT session's workspace on the SELECTED agent's
+  // runtime — the Orbit host for a local agent, the remote machine for a remote
+  // one (backend routes over the connector). Re-fetch cwd on session/agent change.
+  const remoteQ = harnessId && harnessId !== 'local' ? `harnessId=${encodeURIComponent(harnessId)}` : '';
+  const scopeQ = [currentSessionId ? `session=${encodeURIComponent(currentSessionId)}` : '', remoteQ].filter(Boolean).join('&');
+  const queryStr = scopeQ ? `?${scopeQ}` : '';
   useEffect(() => {
-    fetch(`/api/console/cwd${sessionQ}`).then((r) => r.json()).then((d) => d.success && setCwd(d.cwd)).catch(() => {});
-  }, [sessionQ]);
+    fetch(`/api/console/cwd${queryStr}`).then((r) => r.json()).then((d) => { if (d.success) { setCwd(d.cwd); setMachine(d.remote ? (d.machine || 'remote') : ''); } }).catch(() => {});
+  }, [queryStr]);
   useEffect(() => { endRef.current?.scrollIntoView({ block: 'end' }); }, [history, busy]);
 
   const run = useCallback(async () => {
@@ -37,9 +42,10 @@ export default function ConsoleTab() {
     try {
       const res = await fetch('/api/console/exec', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ command, session: currentSessionId || undefined }),
+        body: JSON.stringify({ command, session: currentSessionId || undefined, harnessId: harnessId && harnessId !== 'local' ? harnessId : undefined }),
       });
       const d = await res.json();
+      if (d.remote && d.machine) setMachine(d.machine);
       setHistory((h) => [...h, {
         command,
         stdout: d.stdout || '', stderr: d.stderr || '',
@@ -50,7 +56,7 @@ export default function ConsoleTab() {
       setHistory((h) => [...h, { command, stdout: '', stderr: 'Request failed.', code: 1, timedOut: false }]);
     }
     setBusy(false);
-  }, [cmd, busy, currentSessionId]);
+  }, [cmd, busy, currentSessionId, harnessId]);
 
   const onKey = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') { e.preventDefault(); run(); return; }
@@ -63,6 +69,11 @@ export default function ConsoleTab() {
     <div className="flex h-full flex-col bg-[var(--card)]">
       <div className="flex shrink-0 items-center gap-2 border-b border-border-soft px-3 py-2 text-[11px] text-faint">
         <TerminalSquare size={13} />
+        {machine && (
+          <span className="shrink-0 rounded border border-primary/40 bg-primary/10 px-1.5 py-px text-[10px] font-semibold text-primary" title={`Running on remote agent: ${machine}`}>
+            {machine}
+          </span>
+        )}
         <span className="truncate font-mono">{cwd || 'agent runtime'}</span>
       </div>
 

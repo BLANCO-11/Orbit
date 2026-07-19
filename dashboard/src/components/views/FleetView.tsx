@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Terminal, Globe, Laptop, Smartphone, Tablet, RefreshCw, Copy, Check, Unplug } from 'lucide-react';
 import { useDevices } from '@/hooks/useDevices';
 import { getDeviceToken } from '@/lib/device-auth';
@@ -76,6 +76,22 @@ export default function FleetView() {
   const refreshHarnesses = useCallback(() => {
     fetch('/api/harnesses').then((r) => r.json()).then((d) => { if (d.success) setHarnesses(d.harnesses); }).catch(() => {});
   }, []);
+
+  // A paired DEVICE is the durable identity; the live AGENTS on it are connected
+  // harnesses (a laptop can run pi + claude at once — same device token, so same
+  // deviceId). Group connected remote agents under their paired device, and keep
+  // the local host's agent(s) separate.
+  const agentsByDevice = useMemo(() => {
+    const m = new Map<string, any[]>();
+    for (const h of harnesses) {
+      if (h.transport !== 'remote') continue;
+      const key = h.deviceId || h.machine || h.id;
+      if (!m.has(key)) m.set(key, []);
+      m.get(key)!.push(h);
+    }
+    return m;
+  }, [harnesses]);
+  const localHarnesses = useMemo(() => harnesses.filter((h) => h.transport !== 'remote'), [harnesses]);
   const [disconnecting, setDisconnecting] = useState<string | null>(null);
   const disconnectHarness = useCallback((h: any) => {
     if (!confirm(`Disconnect "${h.name}"? Any sessions running on it will be cancelled.`)) return;
@@ -226,103 +242,108 @@ export default function FleetView() {
             )}
           </div>
 
-          {/* ── Harnesses + devices ── */}
+          {/* ── Devices: paired identities + the live agents on each ── */}
           <div>
             <SectionHead>
-              Harnesses · {harnesses.length}
-              <button onClick={refreshHarnesses} aria-label="Refresh harnesses" className="ml-2 align-middle text-faint hover:text-muted-foreground">
+              Devices · {devices.filter((d: any) => !d.revoked).length}
+              <button onClick={() => { refreshHarnesses(); refreshDevices(); }} aria-label="Refresh" className="ml-2 align-middle text-faint hover:text-muted-foreground">
                 <RefreshCw size={11} />
               </button>
             </SectionHead>
             <div className="flex flex-col gap-2">
-              {harnesses.map((h) => (
-                <div key={h.id} className="flex items-center gap-3 rounded-xl border border-border-soft bg-card px-4 py-3">
-                  <div className="grid size-9 shrink-0 place-items-center rounded-[10px] border border-border bg-muted text-muted-foreground">
-                    {h.transport === 'remote' ? <Globe size={16} /> : <Terminal size={16} />}
+              {/* This host — the local agent runtime (no pairing/revoke). */}
+              {localHarnesses.map((h) => (
+                <div key={h.id} className="rounded-xl border border-border-soft bg-card px-4 py-3">
+                  <div className="flex items-center gap-3">
+                    <div className="grid size-9 shrink-0 place-items-center rounded-[10px] border border-border bg-muted text-muted-foreground">
+                      <Terminal size={16} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 text-[13px] font-semibold">
+                        This host
+                        <span className="inline-flex items-center gap-1 text-[11px] font-medium text-success"><i className="size-[7px] rounded-full bg-success" /> local</span>
+                      </div>
+                      <div className="mt-0.5 truncate font-mono text-[11px] text-faint">
+                        {h.name}{h.model ? ` · ${h.model}` : ''}{h.provider ? ` · ${h.provider}` : ''}
+                        {typeof h.activeSessions === 'number' && h.activeSessions > 0 ? ` · ${h.activeSessions} active` : ''}
+                      </div>
+                    </div>
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 text-[13px] font-semibold">
-                      {h.name}
-                      <span className="inline-flex items-center gap-1 text-[11px] font-medium text-success">
-                        <i className="size-[7px] rounded-full bg-success" /> {h.transport}
-                      </span>
+                </div>
+              ))}
+
+              {devices.filter((d: any) => !d.revoked).length === 0 && (
+                <div className="rounded-xl border border-dashed border-border px-4 py-4 text-center text-xs text-faint">
+                  No paired devices yet — {pairing && secondsLeft > 0 ? 'run the connect command on the device.' : 'generate a pairing code to add one.'}
+                </div>
+              )}
+
+              {devices.filter((d: any) => !d.revoked).map((d: any) => {
+                const agents = agentsByDevice.get(d.id) || [];
+                const online = agents.length > 0;
+                const osName = agents.find((a) => a.osName)?.osName || '';
+                const totalSessions = agents.reduce((n, a) => n + (typeof a.activeSessions === 'number' ? a.activeSessions : 0), 0);
+                return (
+                  <div key={d.id} className="rounded-xl border border-border-soft bg-card px-4 py-3">
+                    {/* Paired device header */}
+                    <div className="flex items-center gap-3">
+                      <div className="grid size-9 shrink-0 place-items-center rounded-[10px] border border-border bg-muted text-muted-foreground">
+                        <DeviceIcon label={d.label} />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2 text-[13px] font-semibold">
+                          {d.label || 'Unnamed device'}
+                          <span className={`inline-flex items-center gap-1 text-[11px] font-medium ${online ? 'text-success' : 'text-faint'}`}>
+                            <i className={`size-[7px] rounded-full ${online ? 'bg-success' : 'bg-border'}`} /> {online ? `online · ${agents.length} agent${agents.length === 1 ? '' : 's'}` : 'offline'}
+                          </span>
+                          {osName && <span className="rounded-full border border-border px-2 py-px text-[10px] font-medium text-muted-foreground">{osName}</span>}
+                          <span className="rounded-full border border-border px-2 py-px text-[10px] font-medium text-muted-foreground">
+                            {SCOPES.find((s) => s.id === (d.scope || 'full'))?.label || d.scope}
+                          </span>
+                        </div>
+                        <div className="mt-0.5 font-mono text-[11px] text-faint">
+                          {agents[0]?.machine ? `${agents[0].machine} · ` : ''}paired {d.createdAt ? new Date(d.createdAt).toLocaleDateString() : '—'}
+                          {d.lastSeen ? ` · last seen ${new Date(d.lastSeen).toLocaleString()}` : ''}
+                          {totalSessions > 0 ? ` · ${totalSessions} active session${totalSessions === 1 ? '' : 's'}` : ''}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => revokeDevice(d.id)}
+                        className="shrink-0 rounded-md px-2 py-1 text-[11.5px] text-faint hover:bg-muted hover:text-destructive"
+                        title="Revoke this device (kills its token; it must re-pair)"
+                      >
+                        revoke
+                      </button>
                     </div>
-                    <div className="mt-0.5 font-mono text-[11px] text-faint">
-                      {h.transport === 'remote' ? `${h.machine} · via adapter` : 'child process'}
-                      {typeof h.activeSessions === 'number' ? ` · ${h.activeSessions} active session${h.activeSessions === 1 ? '' : 's'}` : ''}
-                    </div>
-                    {/* Read-only LLM the harness is using: app-owned gateway for
-                        local, bring-your-own for remotes. Display only. */}
-                    {h.model && (
-                      <div className="mt-0.5 font-mono text-[11px] text-faint">
-                        <span className="text-muted-foreground">{h.model}</span>
-                        {h.provider ? ` · ${h.provider}` : ''}
+
+                    {/* Live agents on this device (a laptop can run pi + claude + …). */}
+                    {online && (
+                      <div className="mt-2 flex flex-col gap-1.5 border-t border-border-soft pt-2">
+                        {agents.map((h) => (
+                          <div key={h.id} className="flex items-center gap-2.5">
+                            <Globe size={13} className="shrink-0 text-faint" />
+                            <div className="min-w-0 flex-1">
+                              <div className="truncate text-[12px] font-medium">{h.agent || h.name}</div>
+                              <div className="truncate font-mono text-[10.5px] text-faint">
+                                {h.model ? `${h.model}${h.provider ? ` · ${h.provider}` : ''}` : (h.provider || 'via adapter')}
+                                {typeof h.activeSessions === 'number' && h.activeSessions > 0 ? ` · ${h.activeSessions} active` : ''}
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => disconnectHarness(h)}
+                              disabled={disconnecting === h.id}
+                              title="Disconnect this agent"
+                              className="flex shrink-0 items-center gap-1 rounded-lg border border-border px-2 py-1 text-[10.5px] font-medium text-muted-foreground hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 disabled:opacity-50"
+                            >
+                              <Unplug size={11} /> {disconnecting === h.id ? '…' : 'Disconnect'}
+                            </button>
+                          </div>
+                        ))}
                       </div>
                     )}
                   </div>
-                  {/* Remote harnesses can be disconnected; local ones are this host. */}
-                  {h.transport === 'remote' && (
-                    <button
-                      onClick={() => disconnectHarness(h)}
-                      disabled={disconnecting === h.id}
-                      title="Disconnect this harness"
-                      className="flex shrink-0 items-center gap-1 rounded-lg border border-border px-2 py-1 text-[11px] font-medium text-muted-foreground hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 disabled:opacity-50"
-                    >
-                      <Unplug size={12} /> {disconnecting === h.id ? 'Disconnecting…' : 'Disconnect'}
-                    </button>
-                  )}
-                </div>
-              ))}
-              <div className="rounded-xl border border-dashed border-border px-4 py-4 text-center text-xs text-faint">
-                {pairing && secondsLeft > 0 ? (
-                  <span className="text-muted-foreground">
-                    Copy the command from the <span className="font-semibold">Pair a harness</span> card and run it on the harness machine.
-                  </span>
-                ) : (
-                  <span className="text-muted-foreground">
-                    Click <span className="font-semibold">Generate pairing code</span> to get the one-line connect command.
-                  </span>
-                )}
-              </div>
-            </div>
-
-            <SectionHead>
-              Devices · {devices.filter((d: any) => !d.revoked).length}
-              <button onClick={refreshDevices} aria-label="Refresh devices" className="ml-2 align-middle text-faint hover:text-muted-foreground">
-                <RefreshCw size={11} />
-              </button>
-            </SectionHead>
-            <div className="flex flex-col gap-2">
-              {devices.filter((d: any) => !d.revoked).length === 0 && (
-                <div className="rounded-xl border border-dashed border-border px-4 py-4 text-center text-xs text-faint">
-                  No paired devices yet{isThisDevice ? '' : ' — this browser is using the local dev connection'}.
-                </div>
-              )}
-              {devices.filter((d: any) => !d.revoked).map((d: any) => (
-                <div key={d.id} className="flex items-center gap-3 rounded-xl border border-border-soft bg-card px-4 py-3">
-                  <div className="grid size-9 shrink-0 place-items-center rounded-[10px] border border-border bg-muted text-muted-foreground">
-                    <DeviceIcon label={d.label} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 text-[13px] font-semibold">
-                      {d.label || 'Unnamed device'}
-                      <span className="rounded-full border border-border px-2 py-px text-[10px] font-medium text-muted-foreground">
-                        {SCOPES.find((s) => s.id === (d.scope || 'full'))?.label || d.scope}
-                      </span>
-                    </div>
-                    <div className="mt-0.5 font-mono text-[11px] text-faint">
-                      paired {d.createdAt ? new Date(d.createdAt).toLocaleDateString() : '—'}
-                      {d.lastSeen ? ` · last seen ${new Date(d.lastSeen).toLocaleString()}` : ''}
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => revokeDevice(d.id)}
-                    className="shrink-0 rounded-md px-2 py-1 text-[11.5px] text-faint hover:bg-muted hover:text-destructive"
-                  >
-                    revoke
-                  </button>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>

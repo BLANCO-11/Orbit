@@ -171,53 +171,92 @@ function createDevicesRouter(db, authMiddleware, getDashboardOrigin) {
     const { httpOrigin } = detectOrigins(req);
     const bootstrap = `curl -fsSL '${httpOrigin}/api/pair/bootstrap?code=${safeCode}' | node`;
     const md =
-`# Connect this machine to Orbit (start a persistent connector)
+`# Connect this machine to Orbit (run a persistent connector)
 
 You are asked to connect **this machine** to an Orbit control plane as a *harness*.
-Orbit will send tasks; you carry them out with your own agent (its own tools and
-model), and results stream back. A small **connector process holds the live
-connection** — it auto-detects your installed agent (pi, Claude Code, OpenCode,
-Codex, Gemini CLI, Aider, …) and drives it, **no API keys needed**.
+Orbit sends tasks; you carry them out with your own agent (its own tools + model)
+and results stream back. A small **connector process holds the live connection** —
+it auto-detects your installed agent (pi, Claude Code, OpenCode, Codex, Gemini CLI,
+Aider, …) and drives it. **No API keys needed.**
 
-> ⚠️ **This is a long-running background service, not a one-off command.** The
-> connection stays up only while the connector process is alive. You MUST start it
-> **detached in the background**, verify it registered, then continue with your
-> other work — do **not** run it in the foreground and block, and do **not** stop
-> it when your current task ends. If it isn't running, Orbit can't reach this
-> machine.
+> ⚠️ **This is a long-running daemon, not a one-off command.** The connection lives
+> only while the connector process is alive. **Spawn it detached / in the
+> background so it runs indefinitely**, and do NOT stop it when your current task
+> ends. Never run it foreground-and-wait.
 
-## Do this
-1. Confirm Node.js 20+: \`node --version\` (need v20 or newer).
-2. Start the connector **detached** so it survives after you move on:
+## How reconnection works (so you don't over-engineer it)
+- **Network drop → automatic.** The connector reconnects on its own (backoff +
+  heartbeat). You don't do anything, and you never need a new code for this.
+- **The durable credential is a token, not the code.** Pairing exchanges the
+  single-use code for a device token saved to \`~/.orbit\`. Every reconnect/restart
+  reuses that token — re-pair ONLY if the operator revokes this device.
+- **What the connector can't do itself: come back after its process is killed or
+  the box reboots.** That needs a supervisor/service (below).
 
+## Tier 1 — get connected now (survives your session)
+1. Node.js 20+: \`node --version\`.
+2. Start it detached:
    \`\`\`bash
    nohup sh -c "${bootstrap}" > "$HOME/orbit-connect.log" 2>&1 &
    disown 2>/dev/null || true
    \`\`\`
-
-3. Verify it registered (do NOT skip — this confirms the daemon is up):
-
+3. Verify (don't skip):
    \`\`\`bash
    sleep 3 && grep -m1 "Registered as harness" "$HOME/orbit-connect.log" \\
-     && echo "OK: connected to Orbit — leave this process running" \\
-     || (echo "NOT connected — see the log:"; tail -n 20 "$HOME/orbit-connect.log")
+     && echo "OK — connected. Leave this running." \\
+     || (echo "NOT connected:"; tail -n 20 "$HOME/orbit-connect.log")
    \`\`\`
+This step also saves the connector to \`~/.orbit/orbit-connect.js\` for Tier 2.
 
-4. Leave it running. For a reboot-proof setup, install it as a service (systemd
-   user unit, pm2, tmux, or a launchd/Task-Scheduler entry) that runs the command
-   in step 2 on boot. Credentials persist to \`~/.orbit\`, so it reconnects with no
-   re-pairing.
+## Tier 2 — durable (survives crashes + reboots) — RECOMMENDED
+The restart command must be the **saved connector run from the persisted token** —
+NOT the bootstrap curl (its code is single-use). After Tier 1 has paired once:
+
+**Linux (systemd user service):**
+\`\`\`bash
+mkdir -p ~/.config/systemd/user
+cat > ~/.config/systemd/user/orbit-connect.service <<'EOF'
+[Unit]
+Description=Orbit connector
+After=network-online.target
+[Service]
+ExecStart=/usr/bin/env node %h/.orbit/orbit-connect.js
+Restart=always
+RestartSec=3
+[Install]
+WantedBy=default.target
+EOF
+systemctl --user daemon-reload && systemctl --user enable --now orbit-connect
+loginctl enable-linger "$USER"   # keep running with no active login
+\`\`\`
+
+**macOS (launchd):**
+\`\`\`bash
+cat > ~/Library/LaunchAgents/ai.orbit.connect.plist <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>ai.orbit.connect</string>
+  <key>ProgramArguments</key><array><string>/usr/bin/env</string><string>node</string><string>$HOME/.orbit/orbit-connect.js</string></array>
+  <key>RunAtLoad</key><true/><key>KeepAlive</key><true/>
+</dict></plist>
+EOF
+launchctl load ~/Library/LaunchAgents/ai.orbit.connect.plist
+\`\`\`
+
+**Windows (Task Scheduler, run at logon + restart):** pair once, then:
+\`\`\`powershell
+schtasks /Create /TN OrbitConnect /SC ONLOGON /RL LIMITED /F ^
+  /TR "node %USERPROFILE%\\.orbit\\orbit-connect.js"
+\`\`\`
 
 ## Notes
-- Do NOT foreground-and-wait; that ties the connection to your current session.
-- The pairing code is **single-use** and **expires in 5 minutes**. If step 2 prints
-  \`code_expired\`, ask the operator for a fresh link and retry.
-- No supported agent installed? Either install one, or run the built-in generic
-  loop: export \`OPENAI_BASE_URL\`, \`OPENAI_API_KEY\`, \`OPENAI_MODEL\` and prefix the
-  command with \`ORBIT_CONNECT_AGENT=generic\`. To force a specific agent, prefix
+- The pairing code is **single-use** and **expires in 5 minutes**. \`code_expired\`
+  → ask the operator for a fresh link.
+- No supported agent installed? Install one, or run the built-in generic loop:
+  export \`OPENAI_BASE_URL\`/\`OPENAI_API_KEY\`/\`OPENAI_MODEL\` and prefix
+  \`ORBIT_CONNECT_AGENT=generic\`. Force a specific agent with
   \`ORBIT_CONNECT_AGENT=<pi|claude|opencode|codex|gemini|aider>\`.
-- Windows (PowerShell), run detached:
-  \`Start-Process -WindowStyle Hidden node -ArgumentList '-e',(iwr -useb '${httpOrigin}/api/pair/bootstrap?code=${safeCode}').Content\`
 `;
     res.type("text/markdown").send(md);
   });

@@ -19,6 +19,7 @@ const { exec } = require("child_process");
 const path = require("path");
 const workspacePaths = require("../workspace-paths");
 const { loadConfig } = require("../config");
+const db = require("../db");
 
 const PROJECT_ROOT = path.resolve(__dirname, "../..");
 const TIMEOUT_MS = 20000;
@@ -55,15 +56,33 @@ function blockedReason(command) {
   return null;
 }
 
-function createConsoleRouter() {
+// When the session's selected agent is a connected REMOTE harness, the operator
+// console targets the AGENT'S RUNTIME (that machine), not the Orbit host. Route
+// exec/cwd over the connector socket. Id from ?harnessId else the session's
+// persisted composer.harnessId; null → run locally on the Orbit host.
+function remoteHarnessFor(reqLike, harnessRegistry) {
+  if (!harnessRegistry || !harnessRegistry.get) return null;
+  let hid = reqLike.harnessId;
+  if (!hid && reqLike.session) { try { hid = db.getSession(reqLike.session)?.harnessId; } catch {} }
+  if (!hid || hid === "local") return null;
+  return harnessRegistry.get(hid) ? hid : null;
+}
+
+function createConsoleRouter(harnessRegistry) {
   const router = Router();
 
-  router.get("/cwd", (req, res) => {
+  router.get("/cwd", async (req, res) => {
     const session = (req.query.session || "").trim();
+    const remoteId = remoteHarnessFor({ session, harnessId: req.query.harnessId }, harnessRegistry);
+    if (remoteId) {
+      const r = await harnessRegistry.requestConsole(remoteId, { op: "cwd", sessionId: session });
+      if (r && r.ok) return res.json({ success: true, cwd: r.cwd, remote: true, machine: r.machine });
+      return res.json({ success: true, cwd: "(remote agent)", remote: true, error: r && r.error });
+    }
     res.json({ success: true, cwd: cwdFor(session) });
   });
 
-  router.post("/exec", (req, res) => {
+  router.post("/exec", async (req, res) => {
     const command = (req.body && req.body.command || "").trim();
     const session = (req.body && req.body.session || "").trim();
     if (!command) return res.status(400).json({ success: false, error: "command required" });
@@ -71,6 +90,16 @@ function createConsoleRouter() {
     const reason = blockedReason(command);
     if (reason) {
       return res.json({ success: true, command, stdout: "", stderr: reason, code: 126, timedOut: false });
+    }
+
+    // Remote agent → exec on its machine over the connector socket.
+    const remoteId = remoteHarnessFor({ session, harnessId: req.body && req.body.harnessId }, harnessRegistry);
+    if (remoteId) {
+      const r = await harnessRegistry.requestConsole(remoteId, { op: "exec", sessionId: session, command });
+      if (!r || !r.ok) {
+        return res.json({ success: true, command, stdout: "", stderr: (r && r.error) || "remote exec failed", code: 1, timedOut: false, remote: true });
+      }
+      return res.json({ success: true, command, stdout: String(r.stdout || "").slice(0, MAX_OUTPUT), stderr: String(r.stderr || "").slice(0, MAX_OUTPUT), code: r.code ?? 0, timedOut: Boolean(r.timedOut), remote: true });
     }
 
     const cwd = cwdFor(session);

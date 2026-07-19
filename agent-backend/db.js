@@ -46,6 +46,7 @@ db.exec(`
     metrics TEXT NOT NULL,
     mode TEXT NOT NULL DEFAULT '',
     subagent_tree TEXT NOT NULL DEFAULT '{}',
+    composer TEXT NOT NULL DEFAULT '{}',
     timestamp INTEGER NOT NULL
   )
 `);
@@ -73,6 +74,12 @@ try {
   if (!columnSet.has("tenant_id")) {
     // Nullable per-tenant TAG (see schema v13); not enforced isolation.
     try { db.exec("ALTER TABLE sessions ADD COLUMN tenant_id TEXT"); } catch (e) {}
+  }
+  if (!columnSet.has("composer")) {
+    // Per-session composer settings (harnessId/systemPromptType/skills/
+    // excludeTools/profileId/effort) so the picked agent + options persist and
+    // restore on switch/reload. Stored as one JSON blob.
+    try { db.exec("ALTER TABLE sessions ADD COLUMN composer TEXT NOT NULL DEFAULT '{}'"); } catch (e) {}
   }
 } catch (e) {
   console.error("[DB] Self-healing check failed:", e.message);
@@ -509,7 +516,12 @@ function getBackups() {
 
 // ── Row mapping helper ──────────────────────────────────────────────
 function mapRow(row) {
+  let composer = {};
+  try { composer = JSON.parse(row.composer || "{}"); } catch {}
   return {
+    // Composer settings (harnessId/systemPromptType/skills/excludeTools/profileId/
+    // effort) spread flat so the client reads e.g. session.harnessId directly.
+    ...composer,
     id: row.id,
     title: row.title,
     messages: JSON.parse(row.messages || "[]"),
@@ -558,9 +570,22 @@ function enforceTTL() {
 // ── Public API ──────────────────────────────────────────────────────
 
 function saveSession(session) {
+  // Composer settings persist per session. MERGE (don't clobber): partial saves
+  // (e.g. a messages-only flush) must preserve the previously-saved agent/options.
+  // Overlay only fields actually present on the incoming session object.
+  let composerObj = {};
+  try {
+    const existing = db.prepare("SELECT composer FROM sessions WHERE id = ?").get(session.id);
+    if (existing && existing.composer) composerObj = JSON.parse(existing.composer) || {};
+  } catch {}
+  for (const k of ["harnessId", "systemPromptType", "skills", "excludeTools", "profileId", "effort"]) {
+    if (session[k] !== undefined) composerObj[k] = session[k];
+  }
+  const composerJson = JSON.stringify(composerObj);
+
   const stmt = db.prepare(`
-    INSERT INTO sessions (id, title, messages, logs, execution_plan, metrics, mode, subagent_tree, plan_steps, plans, active_plan_id, tenant_id, timestamp)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO sessions (id, title, messages, logs, execution_plan, metrics, mode, subagent_tree, plan_steps, plans, active_plan_id, tenant_id, composer, timestamp)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       title = excluded.title,
       messages = excluded.messages,
@@ -573,6 +598,7 @@ function saveSession(session) {
       plans = excluded.plans,
       active_plan_id = excluded.active_plan_id,
       tenant_id = excluded.tenant_id,
+      composer = excluded.composer,
       timestamp = excluded.timestamp
   `);
   stmt.run(
@@ -588,6 +614,7 @@ function saveSession(session) {
     JSON.stringify(session.plans || []),
     session.activePlanId || "",
     session.tenantId || null,
+    composerJson,
     session.timestamp || Date.now()
   );
 

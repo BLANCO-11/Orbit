@@ -194,11 +194,17 @@ function DashboardInner({ auth, onLogout }: { auth: AuthIdentity; onLogout: () =
   // Agent runtimes (local pi child + remote paired devices via the adapter).
   // Used to show WHICH device the console is driving, in the header.
   const [harnesses, setHarnesses] = useState<any[]>([{ id: 'local', name: 'pi-code', transport: 'local', machine: 'local' }]);
+  // Poll so a remote agent that connects (or leaves) after load is reflected —
+  // otherwise the header's active-agent indicator resolves against a stale list
+  // and falls back to local pi-code even when a remote harness is selected.
   useEffect(() => {
-    fetch('/api/harnesses')
+    const load = () => fetch('/api/harnesses')
       .then((r) => r.json())
       .then((d) => { if (d.success && Array.isArray(d.harnesses) && d.harnesses.length) setHarnesses(d.harnesses); })
       .catch(() => {});
+    load();
+    const t = setInterval(load, 5000);
+    return () => clearInterval(t);
   }, []);
   const activeDevice = harnesses.find((h) => h.id === harnessId) || harnesses[0];
   // TTS is optional — only surface the voice UI when a TTS backend is configured
@@ -210,6 +216,37 @@ function DashboardInner({ auth, onLogout }: { auth: AuthIdentity; onLogout: () =
   const [activeProfileId, setActiveProfileId] = useState<string | null>(null);
   const [excludeTools, setExcludeTools] = useState<string[]>([]);
   const [centerView, setCenterView] = useState('timeline'); // timeline | mission
+
+  // ── Restore composer settings per session ──
+  // The picked agent (harnessId) + options are saved onto each session (backend
+  // `composer` blob). switchSession only restores reducer state (messages/mode/…),
+  // so restore the composer here whenever the current session changes — otherwise
+  // the selection reverts to defaults on switch/reload and looks unsaved. Guarded
+  // by a ref so it fires ONCE per session (never clobbering a live in-session edit).
+  const restoredComposerFor = useRef<string | null>(null);
+  useEffect(() => {
+    const sid = state.currentSessionId;
+    if (!sid || restoredComposerFor.current === sid) return;
+    const s = sessions.find((x) => x.id === sid);
+    if (!s) return; // list not loaded yet → retry when `sessions` populates
+    restoredComposerFor.current = sid;
+    if (typeof s.harnessId === 'string') setHarnessId(s.harnessId);
+    if (typeof s.systemPromptType === 'string') setSystemPromptType(s.systemPromptType);
+    if (Array.isArray(s.skills)) setAttachedSkills(s.skills);
+    if (Array.isArray(s.excludeTools)) setExcludeTools(s.excludeTools);
+    if (typeof s.effort === 'string') setEffort(s.effort);
+    if (s.profileId !== undefined) setActiveProfileId(s.profileId ?? null);
+  }, [state.currentSessionId, sessions, setSystemPromptType]);
+
+  // Persist composer changes to the current session as they happen (not only on
+  // send) so a picked agent sticks even before the first message. Gated on the
+  // restore above having run for this session, so the pre-restore default value
+  // never clobbers the saved one.
+  useEffect(() => {
+    const sid = state.currentSessionId;
+    if (!sid || restoredComposerFor.current !== sid) return;
+    updateCurrentSession({ harnessId, systemPromptType, skills: attachedSkills, excludeTools, profileId: activeProfileId, effort });
+  }, [harnessId, systemPromptType, attachedSkills, excludeTools, activeProfileId, effort, state.currentSessionId, updateCurrentSession]);
 
   // Applying a profile sets the chips to its values; they stay editable after
   // (per-session overrides). Picking "None" clears the active profile marker
@@ -662,6 +699,7 @@ function DashboardInner({ auth, onLogout }: { auth: AuthIdentity; onLogout: () =
             parentToChildren={parentToChildren}
             sessionsLength={sessions.length}
             onFileSelect={handleFileSelect}
+            harnessId={harnessId}
           />
         </ComponentErrorBoundary>
       }
@@ -698,7 +736,7 @@ function DashboardInner({ auth, onLogout }: { auth: AuthIdentity; onLogout: () =
           {rightPanelTab === 'console' && (
             <div className="h-full w-full animate-fade-in">
               <ComponentErrorBoundary label="Console panel">
-                <ConsoleTab />
+                <ConsoleTab harnessId={harnessId} />
               </ComponentErrorBoundary>
             </div>
           )}

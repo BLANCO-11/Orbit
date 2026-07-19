@@ -31,8 +31,9 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { spawn } = require('child_process');
+const { spawn, execFileSync } = require('child_process');
 
+const OS_NAMES = { linux: 'Linux', win32: 'Windows', darwin: 'macOS' };
 const DEFAULT_RECONNECT = { backoffMs: [1000, 2000, 5000, 15000], maxJitterMs: 500 };
 const DEFAULT_HEARTBEAT = { intervalMs: 30000 };
 const MAX_TOOL_ITERATIONS = 30;   // per turn, anti-runaway
@@ -120,6 +121,25 @@ async function resolveDescriptor(args, credsPath, label) {
     return { protocolVersion: '1', wsUrl: stored.wsUrl, token: stored.token, device: { id: stored.deviceId, label: stored.label, scope: stored.scope }, heartbeat: DEFAULT_HEARTBEAT, reconnect: DEFAULT_RECONNECT };
   }
   throw new Error('No credentials. Provide --connect <url>, or --server <url> with --code <code> or --token <token>.');
+}
+
+// Save this connector's source to disk so a service/supervisor can RELAUNCH it
+// with the persisted token (`node ~/.orbit/orbit-connect.js`) — the durable
+// restart must NOT re-run the single-use bootstrap. Only relevant when we came in
+// via `curl … | node` (source piped over stdin, no file on disk). Best-effort.
+async function saveConnectorSource(descriptor) {
+  try {
+    const u = new URL(descriptor.wsUrl);
+    const origin = `${u.protocol === 'wss:' ? 'https:' : 'http:'}//${u.host}`;
+    const res = await fetch(`${origin}/api/pair/adapter`);
+    if (!res.ok) return null;
+    const src = await res.text();
+    const home = process.env.ORBIT_ADAPTER_HOME || path.join(os.homedir(), '.orbit');
+    fs.mkdirSync(home, { recursive: true });
+    const dest = path.join(home, 'orbit-connect.js');
+    fs.writeFileSync(dest, src);
+    return dest;
+  } catch { return null; }
 }
 
 // ── LLM config (bring-your-own; spawn-provided is a fallback) ────────────────
@@ -354,12 +374,13 @@ function commandExists(cmd) { return !!whichCommand(cmd); }
 //     whole tool subtree; Windows: no detach (killTree uses taskkill /T), hide
 //     the console, and run .cmd/.bat shims (npm installs) through a shell.
 // Returns { child, resolvedBin }.
-function spawnNativeAgent(binName, args, { cwd } = {}) {
+function spawnNativeAgent(binName, args, { cwd, env } = {}) {
   const isWin = process.platform === 'win32';
   const abs = whichCommand(binName) || binName; // bare name → let spawn surface ENOENT
   const isCmd = isWin && /\.(cmd|bat)$/i.test(abs);
   const child = spawn(abs, args, {
     cwd,
+    env: env ? { ...process.env, ...env } : process.env, // merge, don't replace
     stdio: ['pipe', 'pipe', 'pipe'],
     detached: !isWin,
     windowsHide: true,
@@ -375,6 +396,76 @@ function sessionWorkspace(sessionId) {
   const workspace = path.join(home, 'workspaces', sessionId);
   fs.mkdirSync(workspace, { recursive: true });
   return workspace;
+}
+
+// ── read-only workspace file RPC (the "remote server" half of Orbit's explorer)
+// Orbit's dashboard asks the connector to list/read files in a session's
+// workspace ON THIS machine — on demand, VS-Code-style, no sync. Strictly
+// sandboxed to the session workspace root; read-only; text + a size cap.
+const FS_HIDDEN = new Set(['.git', 'node_modules', '.DS_Store']);
+const FS_MAX_READ = 500 * 1024;
+function fsWorkspaceRoot(sessionId) {
+  // Don't mkdir here — browsing must have no side effects.
+  const home = process.env.ORBIT_ADAPTER_HOME || path.join(os.homedir(), '.orbit');
+  return path.resolve(path.join(home, 'workspaces', String(sessionId || '')));
+}
+function fsResolveWithin(root, rel) {
+  const target = path.resolve(root, rel || '.');
+  if (target !== root && !target.startsWith(root + path.sep)) return null; // escape attempt
+  return target;
+}
+function handleFsRequest(msg, send) {
+  const reply = (o) => send({ type: 'fs_result', reqId: msg.reqId, ...o });
+  try {
+    const root = fsWorkspaceRoot(msg.sessionId);
+    const target = fsResolveWithin(root, msg.path);
+    if (target === null) return reply({ ok: false, error: 'path outside workspace' });
+    if (msg.op === 'list') {
+      if (!fs.existsSync(target)) return reply({ ok: true, entries: [] }); // session never ran here yet
+      if (!fs.statSync(target).isDirectory()) return reply({ ok: false, error: 'not a directory' });
+      const entries = fs.readdirSync(target, { withFileTypes: true })
+        .filter((e) => !FS_HIDDEN.has(e.name))
+        .map((e) => {
+          const full = path.join(target, e.name);
+          let size, modified;
+          try { const s = fs.statSync(full); size = s.size; modified = s.mtime.toISOString(); } catch {}
+          return { name: e.name, type: e.isDirectory() ? 'directory' : 'file', size, modified };
+        });
+      return reply({ ok: true, entries });
+    }
+    if (msg.op === 'read') {
+      if (!fs.existsSync(target) || fs.statSync(target).isDirectory()) return reply({ ok: false, error: 'file not found' });
+      const st = fs.statSync(target);
+      if (st.size > FS_MAX_READ) return reply({ ok: false, error: 'file too large for preview (>500KB)', size: st.size });
+      return reply({ ok: true, content: fs.readFileSync(target, 'utf8'), size: st.size, modified: st.mtime.toISOString() });
+    }
+    return reply({ ok: false, error: `unknown fs op: ${msg.op}` });
+  } catch (e) { reply({ ok: false, error: e.message }); }
+}
+
+// ── operator console RPC — run a command in a session's workspace ON THIS box.
+// This is the OPERATOR's shell into the agent's runtime (not the agent's own
+// gated tools). Authed at Orbit; the remote is a paired, trusted device.
+const CONSOLE_TIMEOUT_MS = 20000;
+const CONSOLE_MAX_OUTPUT = 200 * 1024;
+function handleConsole(msg, send) {
+  const reply = (o) => send({ type: 'console_result', reqId: msg.reqId, ...o });
+  try {
+    const cwd = fsWorkspaceRoot(msg.sessionId);
+    if (msg.op === 'cwd') return reply({ ok: true, cwd, machine: os.hostname() });
+    try { fs.mkdirSync(cwd, { recursive: true }); } catch {}
+    const isWin = process.platform === 'win32';
+    const shell = isWin ? 'cmd' : (fs.existsSync('/bin/bash') ? '/bin/bash' : '/bin/sh');
+    const shellArgs = isWin ? ['/c', msg.command] : ['-c', msg.command];
+    let out = '', err = '', done = false;
+    const child = spawn(shell, shellArgs, { cwd, detached: !isWin, windowsHide: true });
+    const finish = (o) => { if (done) return; done = true; clearTimeout(timer); reply({ ok: true, cwd, ...o }); };
+    const timer = setTimeout(() => { killTree(child, 'SIGKILL'); finish({ stdout: out.slice(0, CONSOLE_MAX_OUTPUT), stderr: err.slice(0, CONSOLE_MAX_OUTPUT), code: 124, timedOut: true }); }, CONSOLE_TIMEOUT_MS);
+    child.stdout.on('data', (d) => { out += d.toString(); });
+    child.stderr.on('data', (d) => { err += d.toString(); });
+    child.on('close', (code) => finish({ stdout: out.slice(0, CONSOLE_MAX_OUTPUT), stderr: err.slice(0, CONSOLE_MAX_OUTPUT), code: code || 0, timedOut: false }));
+    child.on('error', (e) => { if (done) return; done = true; clearTimeout(timer); reply({ ok: false, error: e.message }); });
+  } catch (e) { reply({ ok: false, error: e.message }); }
 }
 
 function workspaceNote(workspace) {
@@ -393,7 +484,10 @@ function createJsonlSession(sessionId, spawnMsg, emit, scope, cfg) {
   const system = (spawnMsg.systemPrompt || 'You are a capable coding agent.') + workspaceNote(workspace);
   const excluded = computeExcluded(scope, spawnMsg.excludeTools);
   const args = cfg.buildArgs({ sessionId, system, excluded, workspace });
-  const { child } = spawnNativeAgent(cfg.bin, args, { cwd: workspace });
+  // ORBIT_SESSION_ID lets the agent's Orbit MCP tools (fleet/notify) identify the
+  // lead session; ORBIT_API + ORBIT_API_KEY (set process-wide at connect from the
+  // pairing descriptor) let them authenticate back to Orbit as this device.
+  const { child } = spawnNativeAgent(cfg.bin, args, { cwd: workspace, env: { ORBIT_SESSION_ID: sessionId, ...(cfg.env || {}) } });
   const st = { acc: '', accThinking: '', buf: '', turnActive: false };
 
   child.stdout.on('data', (d) => {
@@ -428,7 +522,7 @@ function createTextSession(sessionId, spawnMsg, emit, scope, cfg) {
     prompt: (text) => new Promise((resolve) => {
       let acc = '', done = false, child;
       const end = () => { if (done) return; done = true; current = null; emit('agent_end', { accumulatedText: acc }); resolve(); };
-      try { ({ child } = spawnNativeAgent(cfg.bin, cfg.buildArgs({ prompt: text, system, workspace, excluded, sessionId }), { cwd: workspace })); }
+      try { ({ child } = spawnNativeAgent(cfg.bin, cfg.buildArgs({ prompt: text, system, workspace, excluded, sessionId }), { cwd: workspace, env: { ORBIT_SESSION_ID: sessionId } })); }
       catch (e) { emit('error', { message: `${cfg.bin} failed: ${e.message}` }); return end(); }
       current = child;
       if (cfg.stdinPrompt) { try { child.stdin.write(text); child.stdin.end(); } catch {} }
@@ -458,12 +552,59 @@ function piMap(item, emit, st) {
   if (item.type === 'agent_end') { st.turnActive = false; emit('agent_end', { accumulatedText: st.acc, accumulatedThinking: st.accThinking }); st.acc = ''; st.accThinking = ''; return; }
   emit(item.type, item);
 }
+// pi's CLI flags drift across versions (e.g. some builds lack `--session-id`).
+// Probe `pi --help` ONCE per binary and only use flags that version supports, so
+// the adapter works against whatever pi is installed instead of erroring with
+// "Unknown option". Cached; failures degrade to a permissive default.
+const _piCapsCache = new Map();
+function piCapabilities(bin) {
+  const key = bin || 'pi';
+  if (_piCapsCache.has(key)) return _piCapsCache.get(key);
+  let help = '';
+  try {
+    const abs = whichCommand(key) || key;
+    const isCmd = process.platform === 'win32' && /\.(cmd|bat)$/i.test(abs);
+    help = execFileSync(abs, ['--help'], { encoding: 'utf8', timeout: 10000, windowsHide: true, shell: isCmd });
+  } catch (e) { help = (e && (e.stdout || '')) ? String(e.stdout) : ''; }
+  const has = (re) => re.test(help);
+  const caps = help
+    ? {
+        sessionId: has(/--session-id\b/),
+        appendSystemPrompt: has(/--append-system-prompt\b/),
+        systemPrompt: has(/--system-prompt\b/),
+        excludeTools: has(/--exclude-tools\b/) || has(/(^|\s)-xt\b/),
+      }
+    : { sessionId: false, appendSystemPrompt: true, systemPrompt: true, excludeTools: true }; // help unreadable → assume modern
+  _piCapsCache.set(key, caps);
+  return caps;
+}
 function createPiSession(sessionId, spawnMsg, emit, scope, bin) {
   return createJsonlSession(sessionId, spawnMsg, emit, scope, {
     bin: bin || 'pi',
     buildArgs: ({ sessionId, system, excluded }) => {
-      const a = ['--session-id', sessionId, '--mode', 'rpc', '--system-prompt', system];
-      if (excluded.size) a.push('--exclude-tools', Array.from(excluded).join(','));
+      const caps = piCapabilities(bin || 'pi');
+      const a = ['--mode', 'rpc'];
+      // Session id only when this pi supports it (older builds don't → pi manages
+      // its own in-process session, which is all we need per spawn).
+      if (caps.sessionId) a.push('--session-id', sessionId);
+      // System prompt: Orbit's is ~18KB — as an inline arg it overflows the Windows
+      // cmd.exe command-line limit ("The command line is too long"). pi's
+      // `--append-system-prompt` reads a FILE PATH, so offload to a file (tiny
+      // command line, every OS). Fall back to inline only if that flag is absent.
+      let promptRef = null;
+      if (caps.appendSystemPrompt) {
+        try {
+          const home = process.env.ORBIT_ADAPTER_HOME || path.join(os.homedir(), '.orbit');
+          const promptDir = path.join(home, 'prompts');
+          fs.mkdirSync(promptDir, { recursive: true });
+          const f = path.join(promptDir, `${sessionId}.md`);
+          fs.writeFileSync(f, system);
+          promptRef = f;
+        } catch {}
+      }
+      if (promptRef) a.push('--append-system-prompt', promptRef);
+      else if (caps.systemPrompt) a.push('--system-prompt', system);
+      if (excluded.size && caps.excludeTools) a.push('--exclude-tools', Array.from(excluded).join(','));
       return a;
     },
     map: piMap,
@@ -596,6 +737,19 @@ function connectSupervised(descriptor, { name, machine, credsPath, persisted, ad
   const sessions = new Map();
   let attempt = 0, stopped = false;
 
+  // Hand spawned agents the credentials to call Orbit's own API back (fixes the
+  // remote agent's Orbit MCP tools — fleet/notify — getting "Unauthorized"):
+  //   ORBIT_API     = Orbit's PUBLIC origin (derived from the wsUrl we dialed),
+  //   ORBIT_API_KEY = this device's token (a valid Orbit credential; scoped +
+  //                   revocable). Set process-wide so every agent inherits them;
+  //                   ORBIT_SESSION_ID is added per-spawn.
+  try {
+    const u = new URL(descriptor.wsUrl);
+    const httpProto = u.protocol === 'wss:' ? 'https:' : 'http:';
+    process.env.ORBIT_API = `${httpProto}//${u.host}`;
+    if (descriptor.token) process.env.ORBIT_API_KEY = descriptor.token;
+  } catch {}
+
   function scheduleReconnect() {
     if (stopped) return;
     const base = backoff[Math.min(attempt, backoff.length - 1)];
@@ -618,6 +772,9 @@ function connectSupervised(descriptor, { name, machine, credsPath, persisted, ad
       send({
         type: 'register', name, machine,
         model: desc.model || '', provider: desc.provider || adapter.kind,
+        agent: adapter.kind, // which agent type is driving (pi/claude/…)
+        platform: process.platform, // 'linux' | 'win32' | 'darwin'
+        osName: OS_NAMES[process.platform] || process.platform,
         capabilities: adapter.capabilities || ['chat', 'tools'],
       });
       heartbeat = setInterval(() => { try { ws.send(JSON.stringify({ type: 'ping' })); } catch {} }, heartbeatMs);
@@ -630,6 +787,8 @@ function connectSupervised(descriptor, { name, machine, credsPath, persisted, ad
 
       if (msg.type === 'registered') { console.log(`[orbit-connect] Registered as harness ${msg.harnessId}. Ready.`); return; }
       if (msg.type === 'list_tools') { send({ type: 'tools_list', reqId: msg.reqId, tools: adapter.tools ? adapter.tools() : [] }); return; }
+      if (msg.type === 'fs_request') { handleFsRequest(msg, send); return; }
+      if (msg.type === 'console_request') { handleConsole(msg, send); return; }
       if (msg.type === 'spawn') {
         const scope = descriptor.device && descriptor.device.scope;
         let session;
@@ -713,6 +872,15 @@ async function main() {
   } else {
     console.log(`[orbit-connect] Driving native agent "${adapter.kind}" (it uses its own provider + tools).`);
   }
+
+  // Came in via `curl … | node` (no file on disk)? Save the connector so a
+  // service can relaunch it from the persisted token after a crash/reboot —
+  // `node <path>` (no code; the bootstrap code is single-use).
+  if (INJECTED) {
+    const saved = await saveConnectorSource(descriptor);
+    if (saved) console.log(`[orbit-connect] Saved connector to ${saved}. For a durable service, run: node ${saved}`);
+  }
+
   connectSupervised(descriptor, { name, machine, credsPath, persisted, adapter });
 }
 
@@ -722,4 +890,4 @@ async function main() {
 // false and main() would silently never run (the script would just exit). Only
 // stay a pure module (no auto-run) when required for tests.
 if (require.main === module || INJECTED) main();
-module.exports = { createSession, runTurn, execTool, resolveLlm, abortSession, computeExcluded, createJsonlSession, createTextSession, createPiSession, createClaudeSession, createGenericSession, resolveAdapter, commandExists, whichCommand, spawnNativeAgent, ADAPTERS, GENERIC_ADAPTER, TOOL_SCHEMAS };
+module.exports = { createSession, runTurn, execTool, resolveLlm, abortSession, computeExcluded, createJsonlSession, createTextSession, createPiSession, createClaudeSession, createGenericSession, piCapabilities, resolveAdapter, commandExists, whichCommand, spawnNativeAgent, handleFsRequest, fsWorkspaceRoot, ADAPTERS, GENERIC_ADAPTER, TOOL_SCHEMAS };

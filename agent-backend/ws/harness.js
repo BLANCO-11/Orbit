@@ -53,6 +53,9 @@ function createHarnessRegistry() {
           // Remote's bring-your-own LLM, reported for read-only display only.
           model: typeof msg.model === "string" ? msg.model : "",
           provider: typeof msg.provider === "string" ? msg.provider : "",
+          agent: typeof msg.agent === "string" ? msg.agent : "",
+          platform: typeof msg.platform === "string" ? msg.platform : "",
+          osName: typeof msg.osName === "string" ? msg.osName : "",
           ws,
           device,
           origin, // public origin the harness reached us on (for the LLM gateway URL)
@@ -75,6 +78,18 @@ function createHarnessRegistry() {
       if (msg.type === "tools_list" && entry) {
         const waiter = entry._toolListWaiters?.get(msg.reqId);
         if (waiter) waiter(msg.tools);
+      }
+
+      // Reply to a workspace file-RPC request (requestFs → remote explorer).
+      if (msg.type === "fs_result" && entry) {
+        const waiter = entry._fsWaiters?.get(msg.reqId);
+        if (waiter) waiter(msg);
+      }
+
+      // Reply to an operator-console request (requestConsole → remote shell).
+      if (msg.type === "console_result" && entry) {
+        const waiter = entry._consoleWaiters?.get(msg.reqId);
+        if (waiter) waiter(msg);
       }
     });
 
@@ -101,6 +116,10 @@ function createHarnessRegistry() {
       capabilities: h.capabilities,
       model: h.model || "",
       provider: h.provider || "",
+      agent: h.agent || "",
+      platform: h.platform || "",
+      osName: h.osName || "",
+      deviceId: h.device?.id || null, // which paired device this agent authed as
       transport: "remote",
       status: "connected",
       activeSessions: h.sessions.size,
@@ -109,6 +128,63 @@ function createHarnessRegistry() {
 
   function get(harnessId) {
     return harnesses.get(harnessId);
+  }
+
+  /**
+   * Read-only workspace file RPC to a connected remote harness (the console's
+   * explorer for a remote agent). Round-trips over the adapter socket with a
+   * timeout. payload = { op:'list'|'read', sessionId, path }. Resolves to the
+   * connector's `fs_result` ({ ok, entries|content|error, … }) or an error shape.
+   */
+  function requestFs(harnessId, payload) {
+    const entry = harnesses.get(harnessId);
+    return new Promise((resolve) => {
+      if (!entry || !entry.ws || entry.ws.readyState !== entry.ws.OPEN) {
+        return resolve({ ok: false, error: "harness not connected" });
+      }
+      if (!entry._fsWaiters) entry._fsWaiters = new Map();
+      const reqId = `fs-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const timer = setTimeout(() => {
+        entry._fsWaiters.delete(reqId);
+        resolve({ ok: false, error: "timeout" });
+      }, 10000);
+      entry._fsWaiters.set(reqId, (m) => {
+        clearTimeout(timer);
+        entry._fsWaiters.delete(reqId);
+        resolve(m || { ok: false, error: "empty response" });
+      });
+      try { entry.ws.send(JSON.stringify({ type: "fs_request", reqId, ...payload })); }
+      catch (e) { clearTimeout(timer); entry._fsWaiters.delete(reqId); resolve({ ok: false, error: e.message }); }
+    });
+  }
+
+  /**
+   * Operator-console RPC to a connected remote harness: run a command in the
+   * session workspace ON that machine (or op:'cwd' to fetch its path). Round-trips
+   * with a timeout longer than the connector's own exec timeout so a slow command
+   * returns a timedOut result rather than this rejecting. payload = { op, sessionId,
+   * command }.
+   */
+  function requestConsole(harnessId, payload) {
+    const entry = harnesses.get(harnessId);
+    return new Promise((resolve) => {
+      if (!entry || !entry.ws || entry.ws.readyState !== entry.ws.OPEN) {
+        return resolve({ ok: false, error: "harness not connected" });
+      }
+      if (!entry._consoleWaiters) entry._consoleWaiters = new Map();
+      const reqId = `con-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const timer = setTimeout(() => {
+        entry._consoleWaiters.delete(reqId);
+        resolve({ ok: false, error: "timeout" });
+      }, 30000);
+      entry._consoleWaiters.set(reqId, (m) => {
+        clearTimeout(timer);
+        entry._consoleWaiters.delete(reqId);
+        resolve(m || { ok: false, error: "empty response" });
+      });
+      try { entry.ws.send(JSON.stringify({ type: "console_request", reqId, ...payload })); }
+      catch (e) { clearTimeout(timer); entry._consoleWaiters.delete(reqId); resolve({ ok: false, error: e.message }); }
+    });
   }
 
   /**
@@ -132,7 +208,7 @@ function createHarnessRegistry() {
     return true;
   }
 
-  return { wss, list, get, harnesses, disconnect };
+  return { wss, list, get, harnesses, disconnect, requestFs, requestConsole };
 }
 
 module.exports = createHarnessRegistry;

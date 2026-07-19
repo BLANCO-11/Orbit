@@ -85,16 +85,23 @@ export default function Header({
             <span className="text-[15px] font-semibold tracking-tight">Orbit</span>
           </>
         )}
-        {/* Which agent runtime / device this console is currently driving. */}
+        {/* Primary agent this console is driving — the selected harness. Shown
+            next to the sidebar toggle so it's always clear WHICH agent runs your
+            prompts (esp. a remote one). Highlighted when remote. */}
         {activeDevice && (
           <span
-            title={`Agent runtime: ${activeDevice.name}${activeDevice.machine && activeDevice.machine !== 'local' ? ` on ${activeDevice.machine}` : ''} (${activeDevice.transport || 'local'})`}
-            className="ml-1 hidden items-center gap-1.5 rounded-[5px] border border-border bg-card px-1.5 py-px text-[10.5px] font-medium text-muted-foreground sm:inline-flex"
+            title={`Primary agent: ${activeDevice.name}${activeDevice.machine && activeDevice.machine !== 'local' ? ` on ${activeDevice.machine}` : ''} (${activeDevice.transport || 'local'})`}
+            className={`ml-1 hidden items-center gap-1.5 rounded-md border px-2 py-0.75 text-[11px] font-semibold sm:inline-flex ${
+              activeDevice.transport === 'remote'
+                ? 'border-primary/40 bg-primary/10 text-primary'
+                : 'border-border bg-card text-muted-foreground'
+            }`}
           >
-            <MonitorSmartphone size={11} className={activeDevice.transport === 'remote' ? 'text-primary' : 'text-faint'} />
-            <span className="max-w-[140px] truncate">
-              {activeDevice.transport === 'remote' ? (activeDevice.machine || activeDevice.name) : activeDevice.name}
-            </span>
+            <MonitorSmartphone size={12} className={activeDevice.transport === 'remote' ? 'text-primary' : 'text-faint'} />
+            <span className="max-w-45 truncate">{activeDevice.name || 'pi-code'}</span>
+            {activeDevice.transport === 'remote' && activeDevice.machine && (
+              <span className="text-[10px] font-normal text-primary/70">· {activeDevice.machine}</span>
+            )}
           </span>
         )}
       </div>

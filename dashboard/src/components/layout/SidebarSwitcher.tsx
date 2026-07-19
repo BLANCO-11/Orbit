@@ -21,6 +21,7 @@ export default function SidebarSwitcher({
   parentToChildren,
   sessionsLength,
   onFileSelect,
+  harnessId,
 }: any) {
   const [activeTab, setActiveTab] = useState<'sessions' | 'files'>('sessions');
 
@@ -74,7 +75,7 @@ export default function SidebarSwitcher({
           </div>
         ) : (
           <div className="h-full w-full animate-fade-in">
-            <ExplorerSidebar onFileSelect={onFileSelect} />
+            <ExplorerSidebar onFileSelect={onFileSelect} harnessId={harnessId} />
           </div>
         )}
       </div>

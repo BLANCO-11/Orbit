@@ -14,16 +14,20 @@ interface FileNode {
 
 interface ExplorerSidebarProps {
   onFileSelect: (path: string) => void;
+  harnessId?: string;
 }
 
-export default function ExplorerSidebar({ onFileSelect }: ExplorerSidebarProps) {
+export default function ExplorerSidebar({ onFileSelect, harnessId }: ExplorerSidebarProps) {
   const { currentSessionId, status, metrics } = useOrbitState();
   const [rootFiles, setRootFiles] = useState<FileNode[]>([]);
   const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set());
   const [dirContents, setDirContents] = useState<Map<string, FileNode[]>>(new Map());
   const [loading, setLoading] = useState(false);
 
-  const sessionQ = currentSessionId ? `&session=${encodeURIComponent(currentSessionId)}` : '';
+  // Scope to the session AND its selected agent — a remote agent's files live on
+  // its machine (backend routes over the connector). Changing the agent re-scopes.
+  const harnessQ = harnessId && harnessId !== 'local' ? `&harnessId=${encodeURIComponent(harnessId)}` : '';
+  const sessionQ = (currentSessionId ? `&session=${encodeURIComponent(currentSessionId)}` : '') + harnessQ;
 
   // Fetch the contents of a directory (absolute or relative path mapping to sessionRoot)
   const fetchDirectory = useCallback(async (dirPath: string): Promise<FileNode[]> => {
