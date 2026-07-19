@@ -11,7 +11,7 @@
     "start": "npm run build && concurrently -k -n backend,dashboard -c blue,magenta \"npm run dev:backend\" \"npm --prefix dashboard run start\"",
     "verify": "npm run typecheck && NEXT_DIST_DIR=.next-verify npm --prefix dashboard run build",
     "typecheck": "npm --prefix dashboard run typecheck",
-    "test": "node tests/test_security_guard.js",
+    "test": "node tests/test_policy_hardening.js",
     "clean": "rm -rf dashboard/.next dashboard/.next-verify"
   },
   "keywords": [],

@@ -74,13 +74,35 @@ function isPathBlocked(targetPath, blockedPaths = []) {
   return (blockedPaths || []).some((b) => isUnder(targetPath, b));
 }
 
+// Argument keys that carry a filesystem path. Kept as a single exported source
+// of truth so the gate (server.js) can ask "does this tool name any path at all?"
+// against the exact same list the extractor scans. Broadened (Vuln D) to cover
+// tools that name their target with a non-standard key.
+const PATH_FIELDS = [
+  "path", "filePath", "dir", "directory", "target", "destination",
+  "source", "location", "folder",
+  "filename", "outputPath", "file", "uri", "targetPath",
+];
+
+/** True if `args` names a path in ANY known path field (regardless of whether it
+ *  is absolute/relative). Used to tell a genuine no-target tool call (Vuln C)
+ *  apart from one whose target is a relative string the extractor's anchor misses. */
+function hasPathField(args) {
+  if (!args) return false;
+  if (typeof args === "string") {
+    try { args = JSON.parse(args); } catch (e) { return false; }
+  }
+  if (typeof args !== "object") return false;
+  return PATH_FIELDS.some((f) => typeof args[f] === "string" && args[f].trim() !== "");
+}
+
 function extractPathsFromArgs(args) {
   const paths = [];
   if (!args) return paths;
   if (typeof args === "string") {
     try { args = JSON.parse(args); } catch(e) { return paths; }
   }
-  const pathFields = ["path", "filePath", "dir", "directory", "target", "destination", "source", "location", "folder"];
+  const pathFields = PATH_FIELDS;
   for (const field of pathFields) {
     if (args[field] && typeof args[field] === "string" && /^([~\/.\\]|[a-zA-Z]:\\)/.test(args[field])) {
       paths.push(args[field]);
@@ -102,4 +124,5 @@ module.exports = {
   getActiveSessionId, sendLog, sendStatus, sendWithSession,
   PROJECT_ROOT, resolveTargetPath, isPathAllowed, extractPathsFromArgs,
   isUnder, isPathInZones, isPathBlocked,
+  PATH_FIELDS, hasPathField,
 };

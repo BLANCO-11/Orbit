@@ -24,7 +24,7 @@ const { estimateTokens } = require("./metrics");
 const {
   sendLog, sendStatus, sendWithSession,
   resolveTargetPath, isPathAllowed, extractPathsFromArgs,
-  isPathInZones, isPathBlocked,
+  isPathInZones, isPathBlocked, hasPathField,
 } = require("./ws/session-helpers");
 const workspacePaths = require("./workspace-paths");
 const { isMutatingTool, isReadOnlyTool, isMultiStepTask } = require("./harnesses/picode/parser");
@@ -1529,7 +1529,21 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
     const outsidePaths = toolPaths.filter((p) =>
       !isPathInZones(p, safeZones) && !sessionPerms.has(resolveTargetPath(p))
     );
-    const isOutside = outsidePaths.length > 0;
+    let isOutside = outsidePaths.length > 0;
+
+    // Empty-argument write bypass (Vuln C): a file-writing tool that arrives with
+    // NO path field at all can't be proven in-zone, yet toolToCapability(name,false)
+    // would classify it write_workspace → auto-allowed in edit. Treat a targetless
+    // file-write as "outside" so the write_outside matrix (edit→ask, chat/plan→
+    // block) governs it instead of silently allowing an unverifiable write.
+    // SCOPED to genuine file-write tools only — deliberately NOT isMutatingTool(),
+    // which also covers `bash`/`subagent` (a shell command routinely names no path
+    // arg, so reclassifying those here would break normal shell/subagent use).
+    const isFileWriteTool = /^(write|edit|replace_file_content|multi_replace_file_content)$/.test(String(name).toLowerCase());
+    if (isFileWriteTool && toolPaths.length === 0 && !hasPathField(args)) {
+      isOutside = true;
+    }
+
     const capability = policyEngine.toolToCapability(name, isOutside);
     const deviceOverrides = ws.device?.policyOverrides || null;
     

@@ -1,6 +1,6 @@
 // agent-backend/harnesses/container/index.js
 // ContainerHarness — runs pi inside an ephemeral Docker container for real
-// filesystem isolation (stronger than the host security-guard's denylist).
+// filesystem isolation (stronger than the host policy gate's path denylist).
 // It reuses PiCodeHarness entirely and only wraps the spawn in `docker run`.
 //
 // Approach: rather than build/publish a pi image, we bind-mount the host's pi
