@@ -10,7 +10,7 @@
 const assert = require("assert");
 const policyEngine = require("../agent-backend/policy-engine");
 const {
-  extractPathsFromArgs, hasPathField, isPathInZones, isPathBlocked,
+  extractPathsFromArgs, hasPathField, isPathInZones, isPathBlocked, extractCommandPaths,
 } = require("../agent-backend/ws/session-helpers");
 
 // Mirror of the gate's Vuln-C predicate (server.js). Kept here so a change to the
@@ -48,9 +48,29 @@ function testExtractBroadenedFields() {
   // Absolute/anchored values in new fields are extracted for blocklist/zone checks.
   assert.deepStrictEqual(extractPathsFromArgs({ outputPath: "/etc/cron.d/job" }), ["/etc/cron.d/job"]);
   assert.deepStrictEqual(extractPathsFromArgs({ targetPath: "~/.ssh/authorized_keys" }), ["~/.ssh/authorized_keys"]);
-  // Command extraction (existing behavior) still works.
-  const p = extractPathsFromArgs({ command: "cat ~/.ssh/id_rsa" });
-  assert.ok(p.includes("~/.ssh/id_rsa"), "cat path still extracted");
+  // Command paths are NO LONGER extracted here (moved to extractCommandPaths).
+  assert.deepStrictEqual(extractPathsFromArgs({ command: "cat ~/.ssh/id_rsa" }), [],
+    "command paths must not flow through extractPathsFromArgs (zone logic)");
+  console.log("  ok");
+}
+
+function testCommandTokenization() {
+  console.log("Tier 2 — command tokenization (blocklist-only)...");
+  const has = (cmd, p) => extractCommandPaths(cmd).includes(p);
+  // Catches paths the old 10-utility regex missed: unlisted tools, redirects,
+  // operators, subshells, --flag=path.
+  assert.ok(has("tee ~/.ssh/authorized_keys", "~/.ssh/authorized_keys"), "tee target caught");
+  assert.ok(has("echo x > /etc/passwd", "/etc/passwd"), "redirect target caught");
+  assert.ok(has("cat /dev/null && sed -i s/x/y/ /etc/hosts", "/etc/hosts"), "path after && caught");
+  assert.ok(has("echo $(cat /etc/shadow)", "/etc/shadow"), "subshell path caught");
+  assert.ok(has("cp --target=/etc/cron.d/job x", "/etc/cron.d/job"), "--flag=path caught");
+  assert.ok(has("cat ~/.ssh/id_rsa", "~/.ssh/id_rsa"), "plain cat still caught (regression)");
+  // FALSE-POSITIVE GUARD: a path that appears only inside a quoted sub-expression
+  // (a sed script) is NOT a real target and must NOT be extracted.
+  assert.deepStrictEqual(extractCommandPaths("sed 's|/etc/hosts|foo|' myfile"), [],
+    "sed script inner path must not be flagged");
+  assert.deepStrictEqual(extractCommandPaths("npm test"), [], "benign command yields no paths");
+  assert.deepStrictEqual(extractCommandPaths("git commit -m 'fix'"), [], "git commit yields no paths");
   console.log("  ok");
 }
 
@@ -99,6 +119,7 @@ function testHardBlocklistPaths() {
 try {
   testHasPathField();
   testExtractBroadenedFields();
+  testCommandTokenization();
   testVulnCEmptyArgWrite();
   testVulnCDoesNotBreakShell();
   testHardBlocklistPaths();

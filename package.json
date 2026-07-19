@@ -25,6 +25,7 @@
     "marked": "^18.0.6",
     "openai": "^6.45.0",
     "puppeteer-core": "^25.3.0",
+    "shell-quote": "^1.8.4",
     "ws": "^8.21.0"
   },
   "devDependencies": {

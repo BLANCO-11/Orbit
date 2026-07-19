@@ -24,7 +24,7 @@ const { estimateTokens } = require("./metrics");
 const {
   sendLog, sendStatus, sendWithSession,
   resolveTargetPath, isPathAllowed, extractPathsFromArgs,
-  isPathInZones, isPathBlocked, hasPathField,
+  isPathInZones, isPathBlocked, hasPathField, extractCommandPaths,
 } = require("./ws/session-helpers");
 const workspacePaths = require("./workspace-paths");
 const { isMutatingTool, isReadOnlyTool, isMultiStepTask } = require("./harnesses/picode/parser");
@@ -1470,15 +1470,24 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
     
     // Resolve all target paths relative to the session's workspace
     const sessionRoot = workspacePaths.sessionRoot(sessionId);
+    const resolveToolPath = (p) => {
+      if (p.startsWith("~")) return p.replace(/^~/, require("os").homedir());
+      if (path.isAbsolute(p)) return p;
+      return path.resolve(path.join(sessionRoot, "workspace", p));
+    };
     const rawPaths = extractPathsFromArgs(args);
     if (args && args.path && typeof args.path === "string" && !rawPaths.includes(args.path)) {
       rawPaths.push(args.path);
     }
-    const toolPaths = rawPaths.map(p => {
-      if (p.startsWith("~")) return p.replace(/^~/, require("os").homedir());
-      if (path.isAbsolute(p)) return p;
-      return path.resolve(path.join(sessionRoot, "workspace", p));
-    });
+    const toolPaths = rawPaths.map(resolveToolPath);
+
+    // Shell command path tokens (Tier 2 tokenization). Kept SEPARATE from
+    // toolPaths and consulted ONLY by the hard blocklist below — never by the
+    // zone/capability logic — so a tokenized path can hard-block a protected
+    // target but can never soft-gate an otherwise-allowed command.
+    const commandPaths = (args && typeof args.command === "string")
+      ? extractCommandPaths(args.command).map(resolveToolPath)
+      : [];
 
     // (1) Hard blocklist — sits BELOW the permission layer: user consent cannot
     // override it. Two tiers:
@@ -1488,10 +1497,12 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
     const blockedPaths = (cfg.fileSystem && cfg.fileSystem.blockedPaths) || [];
     const writeBlockedPaths = (cfg.fileSystem && cfg.fileSystem.writeBlockedPaths) || [];
     const toolWrites = isMutatingTool(name);
-    let blockedHit = toolPaths.find((p) => isPathBlocked(p, blockedPaths));
+    // Blocklist runs over declared tool paths AND tokenized shell command paths.
+    const blockCandidates = commandPaths.length ? toolPaths.concat(commandPaths) : toolPaths;
+    let blockedHit = blockCandidates.find((p) => isPathBlocked(p, blockedPaths));
     let blockKind = blockedHit ? "protected (no read/write)" : null;
     if (!blockedHit && toolWrites) {
-      blockedHit = toolPaths.find((p) => isPathBlocked(p, writeBlockedPaths));
+      blockedHit = blockCandidates.find((p) => isPathBlocked(p, writeBlockedPaths));
       if (blockedHit) blockKind = "write-protected";
     }
     if (blockedHit) {

@@ -3,6 +3,7 @@
 
 const path = require("path");
 const os = require("os");
+const { parse: shellParse } = require("shell-quote");
 
 function getActiveSessionId(ws) {
   return (ws && ws.activeSessionId) ? ws.activeSessionId : "unknown";
@@ -108,21 +109,56 @@ function extractPathsFromArgs(args) {
       paths.push(args[field]);
     }
   }
-  if (args.command && typeof args.command === "string") {
-    const cmdPaths = args.command.match(/(?:^|\s)(?:cd\s+|cat\s+|ls\s+|rm\s+|cp\s+|mv\s+|mkdir\s+|touch\s+|chmod\s+|chown\s+)([~\/][^\s;|&]+)/gi);
-    if (cmdPaths) {
-      cmdPaths.forEach(cp => {
-        const p = cp.replace(/^\s*\w+\s+/, "").trim();
-        if (p) paths.push(p);
-      });
-    }
-  }
+  // NOTE: command-string paths are intentionally NOT extracted here anymore.
+  // They are handled separately by extractCommandPaths() and fed ONLY to the
+  // hard blocklist (see the gate) — never to the zone/capability logic that
+  // uses this function's result. This keeps shell path tokens from ever soft-
+  // gating an allowed command.
   return paths;
+}
+
+const CMD_PATH_RE = /^(~|\/|\.\.?\/|[a-zA-Z]:\\)/;
+
+/**
+ * Tokenize a shell command and return every argv token that looks like a
+ * filesystem path — across operators (`&& || ; |`), redirects (`> >> <`), and
+ * subshells (`$()`, backticks). Used ONLY to feed the hard blocklist (secrets +
+ * Orbit source); it never drives zone/capability decisions, so a stray token can
+ * hard-block a protected path but can never soft-gate an otherwise-allowed shell
+ * command.
+ *
+ * shell-quote yields real argv tokens, so a path that appears only INSIDE a
+ * quoted sub-expression (e.g. `sed 's|/etc/hosts|x|'`) stays one non-path token
+ * and is correctly NOT extracted — avoiding false blocks. Honest limits (defense-
+ * in-depth, not a guarantee): it cannot model `eval`, env-var expansion, or
+ * interpreter-embedded paths (`python -c "open('/etc/x')"`). Containment is the
+ * real guarantee for shell.
+ */
+function extractCommandPaths(command) {
+  if (!command || typeof command !== "string") return [];
+  const out = new Set();
+  const consider = (tok) => {
+    if (typeof tok !== "string" || !tok) return;
+    if (CMD_PATH_RE.test(tok)) out.add(tok);
+    // `--flag=/path` / `KEY=/path` — the path rides after an `=`.
+    const eq = tok.lastIndexOf("=");
+    if (eq >= 0) {
+      const rhs = tok.slice(eq + 1);
+      if (CMD_PATH_RE.test(rhs)) out.add(rhs);
+    }
+  };
+  let tokens;
+  try { tokens = shellParse(command); } catch { return []; }
+  for (const t of tokens) {
+    if (typeof t === "string") consider(t);
+    else if (t && typeof t === "object" && typeof t.pattern === "string") consider(t.pattern); // glob
+  }
+  return [...out];
 }
 
 module.exports = {
   getActiveSessionId, sendLog, sendStatus, sendWithSession,
   PROJECT_ROOT, resolveTargetPath, isPathAllowed, extractPathsFromArgs,
   isUnder, isPathInZones, isPathBlocked,
-  PATH_FIELDS, hasPathField,
+  PATH_FIELDS, hasPathField, extractCommandPaths,
 };
