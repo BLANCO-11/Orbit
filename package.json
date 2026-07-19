@@ -11,7 +11,7 @@
     "start": "npm run build && concurrently -k -n backend,dashboard -c blue,magenta \"npm run dev:backend\" \"npm --prefix dashboard run start\"",
     "verify": "npm run typecheck && NEXT_DIST_DIR=.next-verify npm --prefix dashboard run build",
     "typecheck": "npm --prefix dashboard run typecheck",
-    "test": "node tests/test_policy_hardening.js",
+    "test": "node tests/test_policy_hardening.js && node tests/test_db_adapter.js",
     "clean": "rm -rf dashboard/.next dashboard/.next-verify"
   },
   "keywords": [],
@@ -24,6 +24,7 @@
     "jose": "^6.2.3",
     "marked": "^18.0.6",
     "openai": "^6.45.0",
+    "pg": "^8.22.0",
     "puppeteer-core": "^25.3.0",
     "shell-quote": "^1.8.4",
     "ws": "^8.21.0"
