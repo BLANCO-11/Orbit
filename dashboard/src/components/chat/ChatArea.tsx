@@ -128,7 +128,11 @@ export default function ChatArea({
     <>
       {/* ── Scrolling conversation ── */}
       {/* pt clears the frosted header floating above this scroll container */}
-      <div ref={containerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-6 pb-40 pt-[72px]">
+      {/* overflow-anchor:none — the browser's native scroll anchoring otherwise
+          fights our stick-to-bottom pin every frame as tokens append, and the
+          two adjusting scrollTop against each other is the streaming jitter. With
+          anchoring off, the instant pin below is the sole authority. */}
+      <div ref={containerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-6 pb-40 pt-[72px] [overflow-anchor:none]">
         <div className="mx-auto flex w-full max-w-[720px] flex-col gap-6">
           {(llmUnconfigured || llmFailed) && (
             <Banner tone={llmUnconfigured ? 'info' : 'danger'} className="flex items-center gap-3">
