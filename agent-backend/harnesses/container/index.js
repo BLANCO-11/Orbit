@@ -4,8 +4,9 @@
 // It reuses PiCodeHarness entirely and only wraps the spawn in `docker run`.
 //
 // Approach: rather than build/publish a pi image, we bind-mount the host's pi
-// runtime and config into a stock node image at their same absolute paths, so
-// the same node/pi binaries run inside the container. The workspace is mounted
+// runtime and config into a stock python+node image at their same absolute
+// paths, so the same node/pi binaries run inside the container (and generated
+// python/node scripts run without an install step). The workspace is mounted
 // read-write; everything else on the host is invisible to the agent — file
 // writes outside the mounted workspace stay in the throwaway container and
 // vanish when it exits (--rm).
@@ -30,7 +31,13 @@ const os = require("os");
 const path = require("path");
 const PiCodeHarness = require("../picode");
 
-const IMAGE = process.env.ORBIT_SANDBOX_IMAGE || "node:22-slim";
+// Default sandbox image ships BOTH python + node so generated scripts (the run
+// API's smoke tests) execute without an install step. Override with
+// ORBIT_SANDBOX_IMAGE. `docker run` below uses `--pull missing`, so an image
+// that isn't local yet is fetched once on first use (then cached); no manual
+// pre-pull is required. Air-gapped hosts can set ORBIT_SANDBOX_PULL=never and
+// pre-load the image themselves.
+const IMAGE = process.env.ORBIT_SANDBOX_IMAGE || "nikolaik/python-nodejs:python3.12-nodejs22-slim";
 const PI_RUNTIME_DIR = path.join(os.homedir(), ".local", "share", "pi-node");
 const PI_CONFIG_DIR = path.join(os.homedir(), ".pi");
 
@@ -74,7 +81,11 @@ class ContainerHarness extends PiCodeHarness {
     // Forward only the gateway-provider env + mode the agent needs. The real
     // upstream key stays in the app (never entering this container).
     const envArgs = [];
-    for (const k of ["ORBIT_MODE", "ORBIT_LLM_BASE_URL", "ORBIT_LLM_KEY", "ORBIT_LLM_MODEL"]) {
+    // Provider/gateway env the agent needs, plus this session's injected tenant
+    // secrets (names set by the inherited connect() in `_secretNames`). Only the
+    // secret NAMES are enumerated here; values ride in `childEnv`, never logged.
+    const forward = ["ORBIT_MODE", "ORBIT_LLM_BASE_URL", "ORBIT_LLM_KEY", "ORBIT_LLM_MODEL", ...(this._secretNames || [])];
+    for (const k of forward) {
       if (!childEnv[k]) continue;
       let v = childEnv[k];
       if (!useHostNet && k === "ORBIT_LLM_BASE_URL") {
@@ -88,7 +99,12 @@ class ContainerHarness extends PiCodeHarness {
     const dockerArgs = [
       "run", "--rm", "-i",
       ...netArgs,
-      "--pull", "never",
+      // "missing": pull ONLY when the image isn't already local (one-time, e.g.
+      // the first run after changing ORBIT_SANDBOX_IMAGE), then cache it. Keeps
+      // the security intent of "never silently re-pull a tag you already have"
+      // while removing the first-run failure that "never" caused. Override with
+      // ORBIT_SANDBOX_PULL (e.g. "never" for fully air-gapped hosts).
+      "--pull", (process.env.ORBIT_SANDBOX_PULL || "missing"),
       ...mounts,
       "-w", workspace,
       "-e", `HOME=${home}`,

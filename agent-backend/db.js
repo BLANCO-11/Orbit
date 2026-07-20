@@ -49,7 +49,7 @@ async function addColumn(table, coldef) {
 }
 
 // ── Schema version ──────────────────────────────────────────────────
-const CURRENT_SCHEMA_VERSION = 15;
+const CURRENT_SCHEMA_VERSION = 18;
 const BACKUP_INTERVAL = 10; // auto-backup every N saves
 let saveCount = 0;
 
@@ -202,6 +202,45 @@ async function _doInit() {
     await setMeta("schema_version", CURRENT_SCHEMA_VERSION);
     console.log(`[DB] Migrated sessions schema to version ${CURRENT_SCHEMA_VERSION}`);
   }
+  if (currentSchemaVersion < 16) {
+    await q.exec(ddl(`
+      CREATE TABLE IF NOT EXISTS secrets (
+        tenant_id TEXT NOT NULL DEFAULT '', name TEXT NOT NULL,
+        value_enc TEXT NOT NULL DEFAULT '',
+        created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
+        PRIMARY KEY (tenant_id, name)
+      )
+    `));
+    await setMeta("schema_version", CURRENT_SCHEMA_VERSION);
+    console.log(`[DB] Migrated sessions schema to version ${CURRENT_SCHEMA_VERSION}`);
+  }
+  if (currentSchemaVersion < 17) {
+    await q.exec(ddl(`
+      CREATE TABLE IF NOT EXISTS runs (
+        run_id TEXT PRIMARY KEY, session_id TEXT NOT NULL, seq INTEGER NOT NULL,
+        tenant_id TEXT, status TEXT NOT NULL DEFAULT 'queued', prompt TEXT NOT NULL DEFAULT '',
+        source TEXT NOT NULL DEFAULT 'api', mode TEXT NOT NULL DEFAULT '',
+        contract_json TEXT NOT NULL DEFAULT '{}',
+        started_at INTEGER NOT NULL, ended_at INTEGER
+      )
+    `));
+    await q.exec("CREATE INDEX IF NOT EXISTS idx_runs_session ON runs(session_id)");
+    await q.exec("CREATE INDEX IF NOT EXISTS idx_runs_tenant ON runs(tenant_id)");
+    await setMeta("schema_version", CURRENT_SCHEMA_VERSION);
+    console.log(`[DB] Migrated sessions schema to version ${CURRENT_SCHEMA_VERSION}`);
+  }
+  if (currentSchemaVersion < 18) {
+    await q.exec(ddl(`
+      CREATE TABLE IF NOT EXISTS connectors (
+        tenant_id TEXT NOT NULL DEFAULT '', name TEXT NOT NULL,
+        def_json TEXT NOT NULL DEFAULT '{}',
+        created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
+        PRIMARY KEY (tenant_id, name)
+      )
+    `));
+    await setMeta("schema_version", CURRENT_SCHEMA_VERSION);
+    console.log(`[DB] Migrated sessions schema to version ${CURRENT_SCHEMA_VERSION}`);
+  }
 
   // ── Core tables (ensure ALL exist regardless of schema_version) ──
   await q.exec(ddl(`
@@ -243,6 +282,33 @@ async function _doInit() {
       access_token_enc TEXT NOT NULL DEFAULT '', refresh_token_enc TEXT NOT NULL DEFAULT '',
       expires_at INTEGER, meta TEXT NOT NULL DEFAULT '{}',
       created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+    )
+  `));
+  await q.exec(ddl(`
+    CREATE TABLE IF NOT EXISTS secrets (
+      tenant_id TEXT NOT NULL DEFAULT '', name TEXT NOT NULL,
+      value_enc TEXT NOT NULL DEFAULT '',
+      created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
+      PRIMARY KEY (tenant_id, name)
+    )
+  `));
+  await q.exec(ddl(`
+    CREATE TABLE IF NOT EXISTS runs (
+      run_id TEXT PRIMARY KEY, session_id TEXT NOT NULL, seq INTEGER NOT NULL,
+      tenant_id TEXT, status TEXT NOT NULL DEFAULT 'queued', prompt TEXT NOT NULL DEFAULT '',
+      source TEXT NOT NULL DEFAULT 'api', mode TEXT NOT NULL DEFAULT '',
+      contract_json TEXT NOT NULL DEFAULT '{}',
+      started_at INTEGER NOT NULL, ended_at INTEGER
+    )
+  `));
+  try { await q.exec("CREATE INDEX IF NOT EXISTS idx_runs_session ON runs(session_id)"); } catch {}
+  try { await q.exec("CREATE INDEX IF NOT EXISTS idx_runs_tenant ON runs(tenant_id)"); } catch {}
+  await q.exec(ddl(`
+    CREATE TABLE IF NOT EXISTS connectors (
+      tenant_id TEXT NOT NULL DEFAULT '', name TEXT NOT NULL,
+      def_json TEXT NOT NULL DEFAULT '{}',
+      created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
+      PRIMARY KEY (tenant_id, name)
     )
   `));
 
@@ -788,6 +854,194 @@ async function deleteConnection(provider) {
   await q.run("DELETE FROM connections WHERE provider = ?", [provider]);
 }
 
+// ── Secrets (tenant-scoped, encrypted-at-rest) ──────────────────────
+// The store holds ONLY ciphertext (value_enc); encrypt/decrypt is the caller's
+// job (crypto-store), mirroring the connections table. tenant_id is normalized
+// to '' for the "no tenant" bucket (dev/superadmin) so the composite PK stays
+// NULL-free and lookups are exact in both dialects.
+const secretTenant = (tenantId) => (tenantId == null ? "" : String(tenantId));
+
+function mapSecretRow(row) {
+  return {
+    tenantId: row.tenant_id || null,
+    name: row.name,
+    valueEnc: row.value_enc,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+async function setSecret({ tenantId, name, valueEnc }) {
+  await init();
+  const now = Date.now();
+  const tid = secretTenant(tenantId);
+  const existing = await q.get("SELECT created_at FROM secrets WHERE tenant_id = ? AND name = ?", [tid, name]);
+  await q.run(`
+    INSERT INTO secrets (tenant_id, name, value_enc, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(tenant_id, name) DO UPDATE SET
+      value_enc = excluded.value_enc, updated_at = excluded.updated_at
+  `, [tid, name, valueEnc || "", existing ? existing.created_at : now, now]);
+  return getSecret(tenantId, name);
+}
+
+async function getSecret(tenantId, name) {
+  await init();
+  const row = await q.get("SELECT * FROM secrets WHERE tenant_id = ? AND name = ?", [secretTenant(tenantId), name]);
+  return row ? mapSecretRow(row) : null;
+}
+
+// All of a tenant's secrets INCLUDING ciphertext — for spawn-time resolution
+// only. Callers decrypt (secrets-resolver); this is NEVER returned over the API.
+async function getSecretsForTenant(tenantId) {
+  await init();
+  const rows = await q.all("SELECT * FROM secrets WHERE tenant_id = ? ORDER BY name ASC", [secretTenant(tenantId)]);
+  return rows.map(mapSecretRow);
+}
+
+// Safe listing for the API: names + presence + timestamps, NEVER the ciphertext
+// or value.
+async function listSecrets(tenantId) {
+  await init();
+  const rows = await q.all(
+    "SELECT name, value_enc, created_at, updated_at FROM secrets WHERE tenant_id = ? ORDER BY name ASC",
+    [secretTenant(tenantId)]
+  );
+  return rows.map((r) => ({
+    name: r.name,
+    hasValue: !!(r.value_enc && r.value_enc.length),
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  }));
+}
+
+async function deleteSecret(tenantId, name) {
+  await init();
+  const r = await q.run("DELETE FROM secrets WHERE tenant_id = ? AND name = ?", [secretTenant(tenantId), name]);
+  return !!(r && r.changes);
+}
+
+// ── Runs (many-per-session, versioned; the run-API's unit of work) ───
+// A run is one execution against a session's durable context. Re-running the
+// same/refined task on the same session produces a NEW versioned run (seq
+// v1,v2,…), each with its own status + contract snapshot. contract_json holds
+// the full result contract; the columns are for indexing/listing.
+function mapRunRow(row) {
+  let contract = {};
+  try { contract = JSON.parse(row.contract_json || "{}"); } catch {}
+  return {
+    runId: row.run_id, sessionId: row.session_id, seq: Number(row.seq),
+    tenantId: row.tenant_id || null, status: row.status,
+    prompt: row.prompt || "", source: row.source || "api", mode: row.mode || "",
+    contract, startedAt: row.started_at, endedAt: row.ended_at || null,
+  };
+}
+
+// Next version number for a session (1-based). Runs are ordered v1, v2, ….
+async function nextRunSeq(sessionId) {
+  await init();
+  const row = await q.get("SELECT MAX(seq) AS maxSeq FROM runs WHERE session_id = ?", [sessionId]);
+  return (row && row.maxSeq ? Number(row.maxSeq) : 0) + 1;
+}
+
+async function createRun({ runId, sessionId, seq, tenantId, status, prompt, source, mode }) {
+  await init();
+  const now = Date.now();
+  await q.run(`
+    INSERT INTO runs (run_id, session_id, seq, tenant_id, status, prompt, source, mode, contract_json, started_at, ended_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, '{}', ?, NULL)
+  `, [runId, sessionId, seq, tenantId || null, status || "running", prompt || "", source || "api", mode || "", now]);
+  return getRun(runId);
+}
+
+async function getRun(runId) {
+  await init();
+  const row = await q.get("SELECT * FROM runs WHERE run_id = ?", [runId]);
+  return row ? mapRunRow(row) : null;
+}
+
+// Patch a run's terminal state. `contract` (object) is stored as JSON; `status`
+// and `endedAt` are set when provided.
+async function updateRun(runId, { status, contract, endedAt } = {}) {
+  await init();
+  const cur = await q.get("SELECT * FROM runs WHERE run_id = ?", [runId]);
+  if (!cur) return null;
+  const nextStatus = status !== undefined ? status : cur.status;
+  const nextContract = contract !== undefined ? JSON.stringify(contract || {}) : cur.contract_json;
+  const nextEnded = endedAt !== undefined ? endedAt : cur.ended_at;
+  await q.run("UPDATE runs SET status = ?, contract_json = ?, ended_at = ? WHERE run_id = ?",
+    [nextStatus, nextContract, nextEnded, runId]);
+  return getRun(runId);
+}
+
+// Version history for a session: seq, status, timestamps, and a one-line summary
+// (pulled from the stored contract). Newest first.
+async function listSessionRuns(sessionId) {
+  await init();
+  const rows = await q.all("SELECT * FROM runs WHERE session_id = ? ORDER BY seq DESC", [sessionId]);
+  return rows.map((r) => {
+    const m = mapRunRow(r);
+    return {
+      runId: m.runId, seq: m.seq, status: m.status,
+      summary: m.contract.summary || "", startedAt: m.startedAt, endedAt: m.endedAt,
+    };
+  });
+}
+
+async function deleteRunsForSession(sessionId) {
+  await init();
+  await q.run("DELETE FROM runs WHERE session_id = ?", [sessionId]);
+}
+
+// ── Connectors (tenant-scoped MCP servers; Gap 3) ───────────────────
+// User-registered MCP tool servers, isolated to the tenant of the API key that
+// registered them. Orbit's OWN servers (fleet/notify/search/…) stay in the
+// global .pi/mcp.json (shared) and are NOT stored here. def_json holds the
+// connector definition ({ command, args, env } | { url }); env may carry
+// ${secret:NAME} references resolved at spawn. tenant_id '' = dev/local bucket.
+const connectorTenant = (tenantId) => (tenantId == null ? "" : String(tenantId));
+
+function mapConnectorRow(row) {
+  let def = {};
+  try { def = JSON.parse(row.def_json || "{}"); } catch {}
+  return {
+    tenantId: row.tenant_id || null, name: row.name, def,
+    createdAt: row.created_at, updatedAt: row.updated_at,
+  };
+}
+
+async function upsertConnector({ tenantId, name, def }) {
+  await init();
+  const now = Date.now();
+  const tid = connectorTenant(tenantId);
+  const existing = await q.get("SELECT created_at FROM connectors WHERE tenant_id = ? AND name = ?", [tid, name]);
+  await q.run(`
+    INSERT INTO connectors (tenant_id, name, def_json, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(tenant_id, name) DO UPDATE SET
+      def_json = excluded.def_json, updated_at = excluded.updated_at
+  `, [tid, name, JSON.stringify(def || {}), existing ? existing.created_at : now, now]);
+  return getConnector(tenantId, name);
+}
+
+async function getConnector(tenantId, name) {
+  await init();
+  const row = await q.get("SELECT * FROM connectors WHERE tenant_id = ? AND name = ?", [connectorTenant(tenantId), name]);
+  return row ? mapConnectorRow(row) : null;
+}
+
+async function listConnectorsForTenant(tenantId) {
+  await init();
+  const rows = await q.all("SELECT * FROM connectors WHERE tenant_id = ? ORDER BY name ASC", [connectorTenant(tenantId)]);
+  return rows.map(mapConnectorRow);
+}
+
+async function deleteConnector(tenantId, name) {
+  await init();
+  const r = await q.run("DELETE FROM connectors WHERE tenant_id = ? AND name = ?", [connectorTenant(tenantId), name]);
+  return !!(r && r.changes);
+}
+
 // ── Access control: tenants / API keys / SSO ────────────────────────
 const VALID_ROLES = new Set(["superadmin", "admin", "member", "viewer"]);
 const normalizeRole = (r) => (VALID_ROLES.has(r) ? r : "member");
@@ -1025,6 +1279,12 @@ module.exports = {
   listChannels, getChannel, saveChannel, touchChannelTriggered, deleteChannel,
   setSessionRunning, clearSessionRunning, listInterruptedSessions,
   listConnections, getConnection, saveConnection, deleteConnection,
+  // Secrets (tenant-scoped, encrypted-at-rest)
+  setSecret, getSecret, getSecretsForTenant, listSecrets, deleteSecret,
+  // Runs (versioned executions + result contracts)
+  nextRunSeq, createRun, getRun, updateRun, listSessionRuns, deleteRunsForSession,
+  // Connectors (tenant-scoped MCP servers)
+  upsertConnector, getConnector, listConnectorsForTenant, deleteConnector,
   // Access control (tenants / API keys / SSO)
   createTenant, listTenants, getTenant, updateTenant, deleteTenant,
   createApiKey, getApiKey, getApiKeyByToken, touchApiKeyUsed, listApiKeys, revokeApiKey,

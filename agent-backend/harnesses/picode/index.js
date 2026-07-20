@@ -50,20 +50,57 @@ class PiCodeHarness extends HarnessInterface {
     const dirs = workspacePaths.ensureSessionDirs(this.sessionId);
     this._workspaceDir = dirs.workspace;
 
+    // ── Resolve this session's TENANT + its secrets ONCE (Gap 3 + Gap 4) ──
+    // The session row carries the tenant of the API key that owns it. Both the
+    // per-session MCP composition (below) and the sandbox env injection (later)
+    // are scoped to it. Decrypted secret VALUES stay in `tenantSecrets` and never
+    // touch the prompt/transcript/logs — only names are ever logged.
+    let sessionTenantId = null;
+    let tenantSecrets = {};
+    try {
+      const db = require("../../db");
+      const session = await db.getSession(this.sessionId);
+      sessionTenantId = (session && session.tenantId) || null;
+      const { getTenantSecrets } = require("../../secrets-resolver");
+      tenantSecrets = await getTenantSecrets(sessionTenantId);
+    } catch (e) {
+      console.error("[PiCodeHarness] tenant/secret resolution failed:", e.message);
+    }
+
     // CRITICAL: pi's MCP extension loads <cwd>/.pi/mcp.json. Since we run pi in
-    // the session workspace (for isolation), mirror the repo's MCP config into
-    // <workspace>/.pi/mcp.json — otherwise pi loads NO MCP servers (no orbit
-    // notify/search/plan, no lightpanda) and the agent falls back to bash.
+    // the session workspace (for isolation), COMPOSE that file per-session as
+    // `shared Orbit servers + this tenant's registered connectors` — never the
+    // whole global set (that would leak one tenant's connectors to another).
     try {
       const { MCP_CONFIG_PATH } = require("../../mcp-registry");
+      const { resolveDeep } = require("../../secrets-resolver");
       const piDir = path.join(this._workspaceDir, ".pi");
       fs.mkdirSync(piDir, { recursive: true });
-      // Inject this session's id into each Orbit MCP server's env so session-blind
-      // MCP tools (e.g. fleet dispatch) can identify the LEAD session — used to
-      // inherit its execution rights, not hardcode them.
+      // Shared servers = the global file (Orbit's own fleet/notify/search/… plus
+      // any OAuth-wired provider connectors). Inject this session's id into each
+      // Orbit MCP server's env so session-blind MCP tools (e.g. fleet dispatch)
+      // can identify the LEAD session.
       const cfg = JSON.parse(fs.readFileSync(MCP_CONFIG_PATH, "utf-8"));
-      for (const [name, s] of Object.entries(cfg.mcpServers || {})) {
+      if (!cfg.mcpServers || typeof cfg.mcpServers !== "object") cfg.mcpServers = {};
+      for (const [name, s] of Object.entries(cfg.mcpServers)) {
         if (name.startsWith("orbit-")) s.env = { ...(s.env || {}), ORBIT_SESSION_ID: this.sessionId };
+      }
+      // Tenant connectors = DB rows for THIS session's tenant, with ${secret:NAME}
+      // in their env/args resolved to values (in-memory, on-disk in the sandbox's
+      // isolated .pi only).
+      try {
+        const db = require("../../db");
+        const connectors = await db.listConnectorsForTenant(sessionTenantId);
+        for (const c of connectors) {
+          const { transport, lifecycle, ...rest } = c.def || {};
+          cfg.mcpServers[c.name] = {
+            ...resolveDeep(rest, tenantSecrets),
+            transport: transport || (c.def && c.def.url ? "http" : "stdio"),
+            lifecycle: lifecycle || "eager",
+          };
+        }
+      } catch (e) {
+        console.error("[PiCodeHarness] Could not compose tenant connectors:", e.message);
       }
       fs.writeFileSync(path.join(piDir, "mcp.json"), JSON.stringify(cfg, null, 2) + "\n");
     } catch (e) {
@@ -137,6 +174,26 @@ class PiCodeHarness extends HarnessInterface {
       delete childEnv.OPENAI_BASE_URL;
       delete childEnv.LLM_BASE_URL;
       delete childEnv.LITELLM_BASE_URL;
+    }
+
+    // ── Tenant secrets → sandbox env ────────────────────────────────────
+    // Inject this session's tenant-scoped secrets (resolved once, above) as env
+    // vars so generated scripts read them from os.environ — the value NEVER
+    // enters the prompt or transcript (the agent is told the env-var NAME only).
+    // Reserved provider/gateway/system names are protected so a secret can't
+    // hijack them. Runs after the gateway scrub above so injection sees the final
+    // env. Names (never values) are recorded on `this` for the container sandbox
+    // to forward and for redaction/telemetry.
+    this._secretNames = [];
+    try {
+      const { injectIntoEnv } = require("../../secrets-resolver");
+      const RESERVED = /^(ORBIT_|OPENAI_|LLM_|LITELLM_|PATH$|HOME$|NODE_|PWD$|SHELL$)/i;
+      const { injected, skipped } = injectIntoEnv(childEnv, tenantSecrets, RESERVED);
+      this._secretNames = injected;
+      if (skipped.length) console.warn(`[PiCodeHarness] skipped reserved-name secret(s): ${skipped.join(", ")}`);
+      if (injected.length) console.log(`[PiCodeHarness] injected ${injected.length} tenant secret(s) into sandbox env: ${injected.join(", ")}`);
+    } catch (e) {
+      console.error("[PiCodeHarness] secret injection failed:", e.message);
     }
 
     // Absolute path to the provider extension, so `-e` resolves regardless of

@@ -50,6 +50,8 @@ const { createSkillsRouter } = require("./routes/skills");
 const createConnectorsRouter = require("./routes/connectors");
 const createProfilesRouter = require("./routes/profiles");
 const createConnectionsRouters = require("./routes/connections");
+const createSecretsRouter = require("./routes/secrets");
+const createRunRouter = require("./routes/run");
 const createAdminRouter = require("./routes/admin");
 const createAuthSsoRouter = require("./routes/auth-sso");
 const { encrypt, decrypt } = require("./crypto-store");
@@ -59,6 +61,7 @@ const createWebSocketServer = require("./ws/index");
 const createHarnessRegistry = require("./ws/harness");
 const RemoteHarness = require("./harnesses/remote");
 const HeadlessSocket = require("./ws/headless-socket");
+const runContract = require("./run-contract");
 const ContainerHarness = require("./harnesses/container");
 const createChannelsRouter = require("./routes/channels");
 const { startScheduler } = require("./channel-scheduler");
@@ -488,8 +491,24 @@ app.use("/api/workspace", authMiddleware, createWorkspaceRouter(harnessRegistry)
 app.use("/api/console", authMiddleware, require("./routes/console")(harnessRegistry));
 app.use("/api/prompts", authMiddleware, createPromptsRouter());
 app.use("/api/skills", authMiddleware, createSkillsRouter());
-app.use("/api/connectors", authMiddleware, createConnectorsRouter(mcpRegistry));
+app.use("/api/connectors", authMiddleware, createConnectorsRouter({ db, registry: mcpRegistry }));
 app.use("/api/profiles", authMiddleware, createProfilesRouter(db));
+app.use("/api/secrets", authMiddleware, createSecretsRouter({ db, encrypt }));
+// Run API (Gap 1/2). startRun + cancelRun are defined below in this file; the
+// router captures them by reference (they're hoisted function declarations).
+app.use("/api/run", authMiddleware, createRunRouter({ db, startRun: (...a) => startRun(...a), cancelRun: (...a) => cancelRun(...a) }));
+// Session-scoped run version history (shares the sessions namespace; the
+// sessions router's "/:id" never matches this deeper path).
+app.get("/api/sessions/:id/runs", authMiddleware, async (req, res) => {
+  const s = await db.getSession(req.params.id);
+  if (!s) return res.status(404).json({ success: false, error: "no such session" });
+  const owner = s.tenantId || null;
+  const mine = (req.auth && req.auth.tenantId) || null;
+  if (req.auth.role !== "superadmin" && owner !== mine) {
+    return res.status(404).json({ success: false, error: "no such session" });
+  }
+  res.json({ success: true, runs: await db.listSessionRuns(req.params.id) });
+});
 
 // Service connections: list/token/disconnect are authed; the OAuth start +
 // callback are browser-navigated (can't carry a header token) so they mount
@@ -1303,6 +1322,225 @@ async function runProfileHeadless({ profileId, prompt, title, source }) {
     profile?.effort, "local", profile?.toolPolicy?.excluded || null
   );
   return { sessionId };
+}
+
+// ── Run API core (Gap 1 + Gap 2 + Gap 5) ───────────────────────────
+// A "run" is one versioned execution against a session's durable context. This
+// wraps handleStartTask on a HeadlessSocket, records a `runs` row, arms the
+// layered timeouts (idle watchdog + absolute backstop), and — off the SAME
+// terminal lifecycle the transcript already hangs on (socket done/error) —
+// assembles the typed result contract + snapshots the run's artifacts.
+//
+// Async by design: startRun returns as soon as the harness is spawned + prompt
+// sent; the parent app polls GET /api/run/:id for the contract.
+const activeRuns = new Map(); // runId → { sessionId, lifecycle, idleTimer, maxTimer, done }
+const TERMINAL_RUN_STATUSES = new Set(["succeeded", "failed", "timeout", "error", "needs_review"]);
+const DEFAULT_IDLE_MS = Number(process.env.ORBIT_RUN_IDLE_MS || 180_000);   // 3 min of silence → hang
+const DEFAULT_MAX_RUN_MS = Number(process.env.ORBIT_RUN_MAX_MS || 1_200_000); // 20 min absolute backstop
+
+function clampMs(v, dflt, min = 1000, max = 3_600_000) {
+  const n = Number(v);
+  if (!Number.isFinite(n) || n <= 0) return dflt;
+  return Math.max(min, Math.min(max, Math.floor(n)));
+}
+
+// Best-effort usage snapshot for the contract. Metrics are still live at
+// agent_end (whenDone resolves there, before releaseSession), so this reads the
+// real turn totals; falls back to the persisted session metrics if released.
+async function readRunUsage(sessionId) {
+  try {
+    const u = metricsManager.toFrontendUpdate(sessionId);
+    if (u && (u.tokens || u.cost || u.toolCalls)) {
+      return { tokens: u.tokens || 0, cost: u.cost || 0, toolCalls: u.toolCalls || 0 };
+    }
+  } catch {}
+  try {
+    const s = await db.getSession(sessionId);
+    const m = s && s.metrics;
+    if (m) return { tokens: m.sessionTokens || m.tokens?.total || 0, cost: m.cost || 0, toolCalls: m.sessionToolCalls || m.toolCalls?.total || 0 };
+  } catch {}
+  return { tokens: 0, cost: 0, toolCalls: 0 };
+}
+
+async function startRun({ sessionId: reqSessionId, prompt, profileId, mode, effort, tenantId, source, sandbox, timeouts } = {}) {
+  const profile = profileId ? await db.getProfile(profileId) : null;
+
+  // Resolve session (reuse or create) + this run's version number.
+  let sessionId = reqSessionId || null;
+  let resolvedTenant = tenantId || null;
+  let priorMessages = null;
+  if (sessionId) {
+    const existing = await db.getSession(sessionId);
+    if (existing) {
+      // Reuse the session's own tenant — a run never silently re-homes a session.
+      resolvedTenant = existing.tenantId || tenantId || null;
+      priorMessages = Array.isArray(existing.messages) ? existing.messages : null;
+    }
+  } else {
+    sessionId = `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  }
+  const seq = await db.nextRunSeq(sessionId);
+  const runId = `run_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+  const effMode = mode !== undefined ? mode : (profile?.mode || "");
+  const effEffort = effort !== undefined ? effort : profile?.effort;
+  // Always attach the mandatory `script-gen` skill so every run is instructed to
+  // smoke-test and emit a schema-valid artifacts/RESULT.json — without it the
+  // contract can only ever be needs_review (Gap 2). Profile skills merge on top.
+  const effSkills = Array.from(new Set([...(profile?.skills || []), "script-gen"]));
+  const effExclude = profile?.toolPolicy?.excluded || null;
+  // Runs default to the CONTAINER sandbox (network-on smoke tests, Gap 5) when a
+  // deployment default isn't set — an override chain keeps host/remote reachable.
+  let effSandbox = sandbox || profile?.sandbox || process.env.ORBIT_RUN_SANDBOX || process.env.ORBIT_DEFAULT_SANDBOX || "container";
+  // Never hard-fail a run just because Docker is absent: downgrade container →
+  // host (still network-on) so the caller always gets a terminal contract.
+  if (effSandbox === "container" && !ContainerHarness.dockerAvailable()) {
+    console.warn("[Run] container sandbox requested but Docker unavailable — falling back to host.");
+    effSandbox = "host";
+  }
+  const promptId = profile?.promptId;
+
+  // Persist the session row FIRST, carrying the tenant — the harness reads the
+  // tenant from here at spawn for secret injection + tenant-scoped MCP (Gap 3/4).
+  try {
+    const existing = await db.getSession(sessionId);
+    if (existing) {
+      await db.saveSession({ ...existing, tenantId: resolvedTenant, mode: effMode });
+    } else {
+      await db.saveSession({
+        id: sessionId, title: (prompt || "Run").slice(0, 60),
+        messages: [{ role: "user", content: prompt }],
+        logs: [], executionPlan: "", mode: effMode,
+        metrics: {}, subagentTree: {}, tenantId: resolvedTenant, timestamp: Date.now(),
+      });
+    }
+  } catch (e) { console.error("[Run] initial session save failed:", e.message); }
+
+  await db.createRun({ runId, sessionId, seq, tenantId: resolvedTenant, status: "running", prompt, source: source || "api", mode: effMode });
+
+  const socket = new HeadlessSocket(sessionId, db, {
+    title: (prompt || "Run").slice(0, 60),
+    source: source || "api",
+    notify: (n) => broadcastNotification(n),
+  });
+  // Preserve prior transcript on a reused session; seed the new user turn.
+  if (priorMessages && priorMessages.length) socket.seedMessages(priorMessages);
+  socket.addUserMessage(prompt);
+
+  // ── Layered timeouts (Gap 5) ──
+  const t = timeouts || {};
+  const idleMs = clampMs(t.idleTimeoutMs, DEFAULT_IDLE_MS);
+  const maxMs = clampMs(t.maxRunMs, DEFAULT_MAX_RUN_MS);
+  const rec = { sessionId, runId, lifecycle: "completed", idleTimer: null, maxTimer: null, done: false };
+  activeRuns.set(runId, rec);
+
+  const killWith = (why) => {
+    if (rec.done) return;
+    if (rec.lifecycle === "completed") rec.lifecycle = why; // "timeout" | "cancelled"
+    const ses = activeSessions.get(sessionId);
+    try { ses?.harness?.cancel?.(); } catch {}
+  };
+  const armIdle = () => {
+    if (!idleMs) return;
+    clearTimeout(rec.idleTimer);
+    rec.idleTimer = setTimeout(() => killWith("timeout"), idleMs);
+  };
+  // Reset the idle watchdog on every harness→socket event; a truly hung run stops
+  // emitting and dies, while a long legit run (still emitting) keeps living.
+  const origSend = socket.send.bind(socket);
+  socket.send = (str) => { armIdle(); return origSend(str); };
+  armIdle();
+  if (maxMs) rec.maxTimer = setTimeout(() => killWith("timeout"), maxMs);
+
+  // Fire the task. handleStartTask resolves quickly (spawn + sendPrompt); the
+  // terminal state arrives via the socket's status events.
+  handleStartTask(
+    socket, prompt, sessionId,
+    effMode, promptId, effSkills, effEffort, "local", effExclude, effSandbox
+  ).catch((e) => {
+    console.error("[Run] handleStartTask threw:", e.message);
+    rec.lifecycle = "error";
+    try { socket.send(JSON.stringify({ type: "status", status: "error" })); } catch {}
+  });
+
+  // On terminal lifecycle: (optionally nudge once for a missing RESULT.json,)
+  // then assemble the contract, snapshot artifacts, finalize the row.
+  socket.whenDone().then(async (status) => {
+    // ── Auto-finalize nudge (Gap 2 reliability) ──
+    // A clean completion that DIDN'T leave a valid artifacts/RESULT.json would
+    // become needs_review. Before giving up, send ONE follow-up turn asking the
+    // still-live agent to smoke-test + write RESULT.json, then re-assess. The
+    // idle/absolute watchdogs (not cleared yet) still bound this extra turn.
+    if (rec.lifecycle === "completed" && status !== "error" && !rec.nudged) {
+      let result = null;
+      try { result = runContract.readResultJson(workspacePaths.sessionDirs(sessionId).artifacts); } catch {}
+      const harnessAlive = !!(activeSessions.get(sessionId) && activeSessions.get(sessionId).harness);
+      if (result && (!result.present || !result.valid) && harnessAlive) {
+        rec.nudged = true;
+        const NUDGE =
+          "Before you finish: there is no valid ../artifacts/RESULT.json yet, which the run contract requires. " +
+          "Run the script now as a bounded smoke test (a --dry-run or single-item fetch), capture its exit and output, " +
+          "then write ../artifacts/RESULT.json EXACTLY per the script-gen skill: " +
+          `{ "ok": <bool>, "summary": "...", "primaryArtifact": "<script filename>", "tests": { "ran": true, "passed": <bool>, "command": "...", "output": "...(no secret values)" } }. ` +
+          "Do this now and nothing else.";
+        const p2 = socket.rearm();
+        armIdle(); // re-arm the idle watchdog for the nudge turn
+        handleStartTask(
+          socket, NUDGE, sessionId,
+          effMode, promptId, effSkills, effEffort, "local", effExclude, effSandbox
+        ).catch((e) => {
+          console.error("[Run] nudge turn threw:", e.message);
+          try { socket.send(JSON.stringify({ type: "status", status: "error" })); } catch {}
+        });
+        status = await p2;
+      }
+    }
+
+    rec.done = true;
+    clearTimeout(rec.idleTimer);
+    clearTimeout(rec.maxTimer);
+    // A watchdog firing during EITHER turn sets rec.lifecycle; re-read it here.
+    let lifecycle = rec.lifecycle;
+    if (lifecycle === "completed" && status === "error") lifecycle = "error";
+    try {
+      const usage = await readRunUsage(sessionId);
+      const errText =
+        lifecycle === "timeout" ? "run exceeded its time limit (idle/backstop)"
+        : lifecycle === "cancelled" ? "run cancelled by caller"
+        : lifecycle === "error" ? "the agent turn ended in error (see logs)"
+        : null;
+      const contract = runContract.assembleContract({
+        runId, sessionId, seq, lifecycle,
+        finalMessage: socket.getResult(), usage, error: errText,
+      });
+      runContract.snapshotArtifacts(sessionId, runId);
+      await db.updateRun(runId, { status: contract.status, contract, endedAt: Date.now() });
+    } catch (e) {
+      console.error("[Run] contract assembly failed:", e.message);
+      try {
+        await db.updateRun(runId, {
+          status: "error", endedAt: Date.now(),
+          contract: { runId, sessionId, seq, status: "error", ok: false, summary: "contract assembly failed", error: e.message, artifacts: [], tests: { ran: false, passed: false } },
+        });
+      } catch {}
+    } finally {
+      activeRuns.delete(runId);
+    }
+  });
+
+  return { runId, sessionId, seq, status: "running" };
+}
+
+// Cancel an in-flight run. Marks lifecycle "cancelled" and signals the harness;
+// the terminal handler above then finalizes the contract. Returns false if the
+// run isn't active (already finished / unknown).
+function cancelRun(runId) {
+  const rec = activeRuns.get(runId);
+  if (!rec || rec.done) return false;
+  if (rec.lifecycle === "completed") rec.lifecycle = "cancelled";
+  const ses = activeSessions.get(rec.sessionId);
+  try { ses?.harness?.cancel?.(); } catch {}
+  return true;
 }
 
 /**

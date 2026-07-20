@@ -24,6 +24,8 @@
 
 **How it fits together:** the backend owns sessions, metrics, and the capability×mode **policy** it enforces on every tool call. Each session spawns a harness with `cwd` = its own isolated workspace. Capabilities the agent reaches for (search, notify, plan, browser) are **MCP servers** Orbit auto-registers. A "lead" chat can delegate subtasks to other agents/devices (**Fleet**), and each delegate's activity streams back into the lead's Trace.
 
+> **📖 Full documentation lives in [`docs/`](./docs/README.md)** — [getting started](./docs/getting-started.md), [concepts](./docs/concepts.md), [user guide](./docs/user-guide.md), [configuration](./docs/configuration.md), the [integration guide](./docs/integration/README.md) for driving Orbit from your own app, and [troubleshooting](./docs/troubleshooting.md). The endpoint + WebSocket protocol reference is [`API.md`](./API.md).
+
 ---
 
 ## Prerequisites
@@ -73,7 +75,7 @@ Two layers, and env wins:
 
 **Database** — Orbit runs on either **PostgreSQL** or **SQLite**, chosen at boot: set `ORBIT_DB_DRIVER` explicitly, else a `DATABASE_URL` selects Postgres, else it falls back to SQLite (`node:sqlite`) at `ORBIT_DB_PATH`. SQLite is the zero-config default for local/single-box; the Docker stack ships a Postgres service and defaults to it. Migrate an existing SQLite DB with `agent-backend/scripts/migrate-sqlite-to-pg.js` (see `.env.example`). Both drivers share one schema and the same app behavior.
 
-**Permissions** are a capability × mode matrix (`chat`/`plan`/`edit`/`yolo` → allow/ask/block) enforced by the backend on every tool call, plus a consent-proof hard blocklist (your `~/.ssh`, Orbit's own source, etc.). Shell commands are tokenized so a blocklisted path can't slip through via redirects/subshells/unlisted tools. Each session writes only inside its own `~/.orbit/sessions/<id>/workspace`; anything outside asks first. For untrusted execution, set `ORBIT_DEFAULT_SANDBOX=container` to run agents in an ephemeral Docker sandbox by default.
+**Permissions** are a capability × mode matrix (`chat`/`plan`/`edit`/`yolo` → allow/ask/block) enforced by the backend on every tool call, plus a consent-proof hard blocklist (your `~/.ssh`, Orbit's own source, etc.). Shell commands are tokenized so a blocklisted path can't slip through via redirects/subshells/unlisted tools. Each session writes only inside its own `~/.orbit/sessions/<id>/workspace`; anything outside asks first. For untrusted execution, set `ORBIT_DEFAULT_SANDBOX=container` to run agents in an ephemeral Docker sandbox by default. The container sandbox ships a python+node image (`ORBIT_SANDBOX_IMAGE`, pulled on first use — set `ORBIT_SANDBOX_PULL=never` for air-gapped hosts) and its network is on by default (`ORBIT_SANDBOX_NETWORK`). Run-API executions are bounded by an idle watchdog and an absolute backstop (`ORBIT_RUN_IDLE_MS`, `ORBIT_RUN_MAX_MS`) so a hung task always terminates.
 
 ## Features
 
@@ -87,6 +89,7 @@ Two layers, and env wins:
 - **Capabilities as MCP servers** — Lightpanda browser, keyless web search, YouTube transcripts, notify (in-app + Telegram + webhooks), plan, fleet — all auto-registered.
 - **Prompt library + skills** — swap the system prompt and attach `skills/*/SKILL.md` packs per session; inherited by sub-agents.
 - **Channels** — trigger a saved profile unattended on a schedule or a verified webhook (GitHub/Slack HMAC).
+- **Run API** — a parent app submits a task with only its API key and polls back a typed, schema-validated **result contract** (status + artifacts + smoke-test results + usage); runs are versioned per session, execute in a network-on sandbox with layered timeouts, and always reach a terminal status. Tenant-scoped **secrets** (env-injected, never in the transcript) and **connectors** back the flow.
 - **Voice** *(optional)* — STT in, streamed TTS out with barge-in, shown only when a TTS backend is configured.
 
 ## Project layout
@@ -316,6 +319,16 @@ Never commit `.env`, `agent-backend/security-config.json`, or `agent-backend/.or
 ## Orbit as a Headless Backend
 
 Orbit can be run as a headless backend service (`agent-backend`). This allows third-party developers to connect their own dashboards, voice control suites, or external scripts.
+
+**Parent-app run flow.** With only its Orbit API key, an external app can drive an agent end-to-end and read a typed result:
+
+1. `POST /api/secrets` — stash datasource/tool credentials (encrypted, tenant-scoped).
+2. `POST /api/connectors` — register datasource MCP servers (isolated to the caller's tenant).
+3. `POST /api/run` `{ prompt }` — submit the task → `{ runId, sessionId, seq }`.
+4. `GET /api/run/:runId` — poll → the **result contract** (status + artifacts + tests + usage).
+5. `GET /api/workspace/file?session=<sessionId>&path=<primaryArtifact.path>` — fetch the generated script.
+
+Secrets are injected into the sandbox as env vars (referenced as `${secret:NAME}`), never appearing in the prompt or transcript; connectors are composed per-session and never leak across tenants. See the [API Specification Guide](./API.md) for the run/secrets/connectors endpoints and the contract schema.
 
 For detailed request/response structures, WebSocket event protocols, authentication, and stability notes, refer to the [API Specification Guide](./API.md).
 

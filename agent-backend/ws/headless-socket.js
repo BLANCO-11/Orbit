@@ -83,12 +83,22 @@ class HeadlessSocket {
     return (this._assistant?.content || "").replace(/<tts>[\s\S]*?<\/tts>/gi, "").trim();
   }
 
+  // Set the done flag SYNCHRONOUSLY (guards send() re-entrancy across the awaits
+  // below), then persist + notify asynchronously. db.* is async now, so the old
+  // sync `getSession()` spread a Promise (dropping every prior field, incl.
+  // tenant_id) — this awaits it and preserves the existing row.
   _persist(status) {
+    if (this._done) return;
     this._done = true;
     this._status = status;
+    this._persistAsync(status).catch((e) =>
+      console.error(`[Headless] persist failed for ${this._sessionId}:`, e.message));
+  }
+
+  async _persistAsync(status) {
     try {
-      const existing = this._db.getSession(this._sessionId) || {};
-      this._db.saveSession({
+      const existing = (await this._db.getSession(this._sessionId)) || {};
+      await this._db.saveSession({
         ...existing,
         id: this._sessionId,
         title: this._title,
@@ -96,6 +106,7 @@ class HeadlessSocket {
         logs: this._logs,
         executionPlan: this._executionPlan,
         mode: existing.mode || "",
+        tenantId: existing.tenantId ?? null,
         timestamp: Date.now(),
       });
     } catch (e) {
@@ -107,6 +118,24 @@ class HeadlessSocket {
     }
     if (this._onDone) { try { this._onDone(status, this._sessionId); } catch {} }
     if (this._resolveDone) { try { this._resolveDone(status); } catch {} }
+  }
+
+  // Re-arm for a FOLLOW-UP turn on the same live session (e.g. the run API's
+  // "write RESULT.json" nudge). Clears the done latch and hands back a fresh
+  // completion promise that resolves on the next done/error status.
+  rearm() {
+    this._done = false;
+    this._status = null;
+    this._donePromise = new Promise((res) => { this._resolveDone = res; });
+    return this._donePromise;
+  }
+
+  /** Preload a prior transcript so a reused-session run appends instead of truncating. */
+  seedMessages(messages) {
+    if (Array.isArray(messages) && messages.length) {
+      this._messages = messages.map((m) => ({ ...m }));
+      this._assistant = null;
+    }
   }
 }
 

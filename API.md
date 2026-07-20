@@ -87,6 +87,30 @@ Authorization-Code + PKCE against any OIDC IdP (Entra/Azure AD, Okta, Google, Au
 - **`DELETE /api/sessions/:id`**: Delete a session and purge its workspace files.
 - **`GET /api/sessions/export/all`**: Export all sessions as a downloadable JSON file.
 - **`POST /api/sessions/import`**: Import an array of exported sessions.
+- **`GET /api/sessions/:id/runs`**: Version history for a session — `[{ runId, seq, status, summary, startedAt, endedAt }]`, newest first.
+
+### Run API (task submission & result contract)
+Submit a structured task and read back a typed, validated **result contract** — no transcript scraping. A **run** is one versioned execution against a session's durable context; re-running against the same `sessionId` produces a new `seq` (v1, v2, …) with its own contract and its own artifact snapshot. Runs are async: submit, then poll.
+- **`POST /api/run`**: Body `{ sessionId?, prompt, profileId?, mode?, effort?, sandbox?, timeouts? }`. Omit `sessionId` to start a new session; provide it to run against (and version) an existing one. Returns `{ runId, sessionId, seq, status: "running" }`. Add `?wait=true&timeoutMs=` to long-poll for short runs (returns the contract, or `202` + `{ runId, … }` on timeout). Connectors and secrets are resolved from the caller's tenant at spawn — not passed inline. Runs default to the container sandbox (network-on; downgrades to host if Docker is unavailable) and always attach the mandatory `script-gen` skill.
+- **`GET /api/run/:runId`**: The result contract for that run (pollable). Scoped to the caller's tenant.
+- **`POST /api/run/:runId/cancel`**: Abort an in-flight run.
+
+**Result contract shape** (`{ success, run: … }`):
+```jsonc
+{
+  "runId": "run_…", "sessionId": "…", "seq": 1,
+  "status": "running|succeeded|failed|timeout|error|needs_review",
+  "ok": true,
+  "summary": "one-line what-happened",
+  "primaryArtifact": { "path": "/artifacts/fetch.py", "language": "python", "bytes": 2481 },
+  "artifacts": [ { "path": "/artifacts/report.md", "language": "markdown", "mime": "text/markdown", "bytes": 123 } ],
+  "tests": { "ran": true, "passed": true, "command": "python fetch.py --dry-run", "output": "…(capped)" },
+  "usage": { "tokens": 42100, "cost": 0.031, "toolCalls": 12 },
+  "finalMessage": "…", "error": null,
+  "raw": { "resultJsonPresent": true, "resultJsonValid": true, "resultJsonErrors": [] }
+}
+```
+Status is derived from the run lifecycle merged with the agent-authored `artifacts/RESULT.json` (validated against a schema): a clean run with a valid, passing `RESULT.json` → `succeeded`; failing tests / `ok:false` → `failed`; a missing/invalid `RESULT.json` → `needs_review` (never a false `succeeded`); a hung run → `timeout`. Fetch a generated file via the workspace file API: `GET /api/workspace/file?session=<sessionId>&path=<primaryArtifact.path>`.
 
 ### Settings & Configuration
 - **`GET /api/config`**: Fetch the current `security-config.json` (HITL approval gates, allowed paths, budgets).
@@ -95,18 +119,30 @@ Authorization-Code + PKCE against any OIDC IdP (Entra/Azure AD, Okta, Google, Au
 - **`POST /api/config/ui`**: Set UI visibility configuration.
 
 ### Connectors & Harnesses
-- **`GET /api/connectors`**: List registered MCP connectors and their available tools with their live status.
-- **`POST /api/connectors`**: Register or update an MCP connector. Accepts a JSON body:
+MCP connectors are **tenant-scoped**: one registered by an API key is isolated to that key's tenant and is composed into only that tenant's session sandboxes (`<workspace>/.pi/mcp.json`) at spawn. Orbit's own servers (fleet/notify/search/…) and OAuth-wired providers are **shared** across tenants and shown read-only.
+- **`GET /api/connectors`**: List connectors — shared ones (`shared: true`) plus this tenant's own (`shared: false`).
+- **`POST /api/connectors`** *(member+)*: Register or update one of the caller's tenant connectors. Accepts a JSON body:
   ```json
   {
     "name": "my-mcp-server",
     "command": "node",
     "args": ["/path/to/server.js"],
-    "env": { "PORT": "3015" },
+    "env": { "PORT": "3015", "API_KEY": "${secret:MY_TOKEN}" },
     "url": ""
   }
   ```
-- **`DELETE /api/connectors/:name`**: Unregister/delete an MCP connector by its name.
+  `env` values may contain `${secret:NAME}` references; they are stored verbatim and resolved into the sandbox at spawn from the tenant's secret store (see **Secrets** below) — the plaintext never lands in config on disk.
+- **`DELETE /api/connectors/:name`** *(member+)*: Unregister one of the caller's tenant connectors.
+- **`GET /api/harnesses`**: List available runtimes/harnesses (local pi, OpenCode, paired remote fleet devices).
+- **`GET /api/harnesses/:id/tools`**: Retrieve the tools available under a specific harness.
+
+### Secrets (tenant-scoped, encrypted at rest)
+Datasource/tool credentials the agent's generated scripts read from the sandbox **environment**, never from the prompt or transcript. Values are encrypted at rest (`crypto-store.js`) and are **never** returned over the API.
+- **`GET /api/secrets`**: List this tenant's secret **names** + presence only — `{ secrets: [{ name, hasValue, createdAt, updatedAt }] }`. Never returns values.
+- **`POST /api/secrets`** *(member+)*: Set `{ name, value }` (upsert). `name` must be a valid env-var identifier (`[A-Za-z_][A-Za-z0-9_]*`); `value` is a non-empty string ≤ 64 KiB. Returns `{ secret: { name, hasValue: true } }` — never echoes the value.
+- **`DELETE /api/secrets/:name`** *(member+)*: Remove a secret.
+
+At session spawn, every one of the tenant's secrets is injected as an env var (`NAME=value`) into the sandbox (reserved provider/gateway/system names are protected). Reference them in prompts or connector `env` as `${secret:NAME}`; the generated script reads `os.environ["NAME"]`. The value appears only in the sandbox env at run time — never in the stored prompt, transcript, or logs.
 - **`GET /api/harnesses`**: List available runtimes/harnesses (local pi, OpenCode, paired remote fleet devices).
 - **`GET /api/harnesses/:id/tools`**: Retrieve the tools available under a specific harness.
 
