@@ -24,7 +24,7 @@
 
 **How it fits together:** the backend owns sessions, metrics, and the capability×mode **policy** it enforces on every tool call. Each session spawns a harness with `cwd` = its own isolated workspace. Capabilities the agent reaches for (search, notify, plan, browser) are **MCP servers** Orbit auto-registers. A "lead" chat can delegate subtasks to other agents/devices (**Fleet**), and each delegate's activity streams back into the lead's Trace.
 
-> **📖 Full documentation lives in [`docs/`](./docs/README.md)** — [getting started](./docs/getting-started.md), [concepts](./docs/concepts.md), [user guide](./docs/user-guide.md), [configuration](./docs/configuration.md), the [integration guide](./docs/integration/README.md) for driving Orbit from your own app, and [troubleshooting](./docs/troubleshooting.md). The endpoint + WebSocket protocol reference is [`API.md`](./API.md).
+> **📖 Full documentation lives in [`docs/`](./docs/README.md)** — [getting started](./docs/getting-started.md), [concepts](./docs/concepts.md), [architecture](./docs/architecture.md) (component + data-flow diagrams), [user guide](./docs/user-guide.md), [configuration](./docs/configuration.md), the [integration guide](./docs/integration/README.md) for driving Orbit from your own app, and [troubleshooting](./docs/troubleshooting.md). The endpoint + WebSocket protocol reference is [`API.md`](./API.md).
 
 ---
 

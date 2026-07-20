@@ -14,6 +14,7 @@ protocol spec, see [`../API.md`](../API.md).
 |---|---|
 | Install and run Orbit for the first time | [Getting started](./getting-started.md) |
 | Understand the moving parts (sessions, runs, tenants, sandbox, policy) | [Concepts](./concepts.md) |
+| See the system design — components, data flows, diagrams (architect view) | [Architecture](./architecture.md) |
 | Use the app day-to-day (console, modes, connectors, policies, fleet) | [User guide](./user-guide.md) |
 | Configure Orbit (env vars, settings, database, sandbox) | [Configuration](./configuration.md) |
 | Drive Orbit from your own application | [Integration guide](./integration/README.md) |
