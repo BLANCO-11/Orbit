@@ -80,7 +80,8 @@ Authorization-Code + PKCE against any OIDC IdP (Entra/Azure AD, Okta, Google, Au
 - **`GET /api/auth/whoami`** *(authed)* — the caller's identity (see §1).
 
 ### Sessions Management
-- **`GET /api/sessions`**: List all saved sessions (returns metadata and metrics seeds).
+Sessions are **tenant-scoped and owner-private**: every endpoint below is filtered by the caller's identity — superadmin sees all; a tenant **admin** sees all of its tenant's sessions; a signed-in (SSO) **member/viewer** sees only sessions it owns; an **API-key/device** caller (no per-user identity) is scoped to its whole tenant. New sessions are stamped with the creating tenant + user; a cross-tenant/other-user id returns `404`. Import re-stamps each session to the caller and won't overwrite another owner's session.
+- **`GET /api/sessions`**: List saved sessions visible to the caller (metadata + metrics seeds).
 - **`GET /api/sessions/search?q=<query>`**: Search sessions containing text in title or messages.
 - **`GET /api/sessions/:id`**: Retrieve the full state of a session (messages, plans, metrics, logs, runState, subagentTree).
 - **`POST /api/sessions`**: Create or update a session.
@@ -136,8 +137,9 @@ MCP connectors are **tenant-scoped**: one registered by an API key is isolated t
   ```
   `env` values may contain `${secret:NAME}` references; they are stored verbatim and resolved into the sandbox at spawn from the tenant's secret store (see **Secrets** below) — the plaintext never lands in config on disk.
 - **`DELETE /api/connectors/:name`** *(member+)*: Unregister one of the caller's tenant connectors.
-- **`GET /api/harnesses`**: List available runtimes/harnesses (local pi, OpenCode, paired remote fleet devices).
-- **`GET /api/harnesses/:id/tools`**: Retrieve the tools available under a specific harness.
+- **`GET /api/harnesses`**: List available runtimes: the shared local pi/OpenCode, plus **only the caller's own tenant's** paired remote fleet devices (superadmin sees all). Remote harnesses/devices are tenant-scoped; a cross-tenant `GET /api/harnesses/:id/tools`, `DELETE /api/harnesses/:id` (disconnect), or `DELETE /api/devices/:id` (revoke) returns `404`.
+- **`GET /api/harnesses/:id/tools`**: Retrieve the tools available under a specific harness (own tenant only).
+- **`DELETE /api/harnesses/:id`**: Disconnect a remote harness — **terminal**: the agent adapter kills its child processes and exits (does not reconnect). Own tenant only.
 
 ### Secrets (tenant-scoped, encrypted at rest)
 Datasource/tool credentials the agent's generated scripts read from the sandbox **environment**, never from the prompt or transcript. Values are encrypted at rest (`crypto-store.js`) and are **never** returned over the API.
@@ -146,8 +148,6 @@ Datasource/tool credentials the agent's generated scripts read from the sandbox 
 - **`DELETE /api/secrets/:name`** *(member+)*: Remove a secret.
 
 At session spawn, every one of the tenant's secrets is injected as an env var (`NAME=value`) into the sandbox (reserved provider/gateway/system names are protected). Reference them in prompts or connector `env` as `${secret:NAME}`; the generated script reads `os.environ["NAME"]`. The value appears only in the sandbox env at run time — never in the stored prompt, transcript, or logs.
-- **`GET /api/harnesses`**: List available runtimes/harnesses (local pi, OpenCode, paired remote fleet devices).
-- **`GET /api/harnesses/:id/tools`**: Retrieve the tools available under a specific harness.
 
 ### Runtime Templates (tenant-scoped output constraints)
 Per-tenant **templates** constrain *what a run may produce* — allowed languages, allowed/denied packages, implementation-structure rules + conventions — and optionally seed a **workspace scaffold**. They are distinct from profiles (which set *how* a run executes). A template is compiled into the system prompt at spawn (a "sub-prompt") and checked after generation; a run/profile references it by `templateId`. Compliance is **audit-only** — surfaced in the contract's `templateCompliance` block, never a hard block. Tenant-scoped like secrets/connectors.
@@ -476,7 +476,7 @@ The server replies `{ "type": "registered", "harnessId": "remote-…" }`. A reje
 
 ### D. Staying connected
 - **Heartbeat:** the harness sends WS `ping` frames every `heartbeat.intervalMs` to hold the socket through proxy idle timeouts; the server auto-pongs.
-- **Reconnect:** on a dropped socket the harness retries with `reconnect.backoffMs` + up to `maxJitterMs` jitter, then re-`register`s (a fresh `harnessId`).
+- **Reconnect:** on a *transient* dropped socket the harness retries with `reconnect.backoffMs` + up to `maxJitterMs` jitter, then re-`register`s (a fresh `harnessId`). An **operator disconnect** (`DELETE /api/harnesses/:id`) is different — the server sends a `shutdown` and closes with code **4001**, and the adapter treats that as terminal (kills its agents and exits, no reconnect).
 - **Restart:** the persisted token in `~/.orbit/adapter-credentials.json` (keyed by server host, chmod 600) lets a restarted harness reconnect with **no re-pairing** — the expired code is irrelevant.
 - **Revocation:** `DELETE /api/devices/:id` marks the token revoked; the next WS upgrade returns 401 and the adapter drops its stored credential and exits "re-pair required."
 

@@ -49,7 +49,7 @@ async function addColumn(table, coldef) {
 }
 
 // ── Schema version ──────────────────────────────────────────────────
-const CURRENT_SCHEMA_VERSION = 19;
+const CURRENT_SCHEMA_VERSION = 20;
 const BACKUP_INTERVAL = 10; // auto-backup every N saves
 let saveCount = 0;
 
@@ -90,6 +90,7 @@ async function _doInit() {
     if (!columnSet.has("plans")) await addColumn("sessions", "plans TEXT NOT NULL DEFAULT '[]'");
     if (!columnSet.has("active_plan_id")) await addColumn("sessions", "active_plan_id TEXT NOT NULL DEFAULT ''");
     if (!columnSet.has("tenant_id")) await addColumn("sessions", "tenant_id TEXT");
+    if (!columnSet.has("user_id")) await addColumn("sessions", "user_id TEXT");
     if (!columnSet.has("composer")) await addColumn("sessions", "composer TEXT NOT NULL DEFAULT '{}'");
   } catch (e) {
     console.error("[DB] Self-healing check failed:", e.message);
@@ -238,6 +239,14 @@ async function _doInit() {
         PRIMARY KEY (tenant_id, name)
       )
     `));
+    await setMeta("schema_version", CURRENT_SCHEMA_VERSION);
+    console.log(`[DB] Migrated sessions schema to version ${CURRENT_SCHEMA_VERSION}`);
+  }
+  if (currentSchemaVersion < 20) {
+    // Per-user session ownership (isolation within a tenant). Existing sessions
+    // get NULL — invisible to tenant members, visible to superadmin (the "backfill
+    // to the default bucket" choice) — until re-owned by a fresh run.
+    await addColumn("sessions", "user_id TEXT");
     await setMeta("schema_version", CURRENT_SCHEMA_VERSION);
     console.log(`[DB] Migrated sessions schema to version ${CURRENT_SCHEMA_VERSION}`);
   }
@@ -438,6 +447,7 @@ function mapRow(row) {
     activePlanId: row.active_plan_id || "",
     runState: JSON.parse(row.run_state || "{}"),
     tenantId: row.tenant_id || null,
+    userId: row.user_id || null,
     timestamp: Number(row.timestamp),
     schemaVersion: row.schema_version || 0,
   };
@@ -485,13 +495,18 @@ async function saveSession(session) {
     const composerJson = JSON.stringify(composerObj);
 
     await t.run(`
-      INSERT INTO sessions (id, title, messages, logs, execution_plan, metrics, mode, subagent_tree, plan_steps, plans, active_plan_id, tenant_id, composer, timestamp)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO sessions (id, title, messages, logs, execution_plan, metrics, mode, subagent_tree, plan_steps, plans, active_plan_id, tenant_id, user_id, composer, timestamp)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         title = excluded.title, messages = excluded.messages, logs = excluded.logs,
         execution_plan = excluded.execution_plan, metrics = excluded.metrics, mode = excluded.mode,
         subagent_tree = excluded.subagent_tree, plan_steps = excluded.plan_steps, plans = excluded.plans,
-        active_plan_id = excluded.active_plan_id, tenant_id = excluded.tenant_id,
+        active_plan_id = excluded.active_plan_id,
+        -- Ownership is set at CREATE and never cleared by a later partial save:
+        -- COALESCE keeps the stored owner when an update omits it (the dashboard
+        -- re-POSTs sessions without tenant/user, which previously nulled tenant_id).
+        tenant_id = COALESCE(excluded.tenant_id, sessions.tenant_id),
+        user_id = COALESCE(excluded.user_id, sessions.user_id),
         composer = excluded.composer, timestamp = excluded.timestamp
     `, [
       session.id,
@@ -506,6 +521,7 @@ async function saveSession(session) {
       JSON.stringify(session.plans || []),
       session.activePlanId || "",
       session.tenantId || null,
+      session.userId || null,
       composerJson,
       session.timestamp || Date.now(),
     ]);
@@ -525,6 +541,35 @@ async function getAllSessions() {
   await init();
   await enforceTTL();
   const rows = await q.all("SELECT * FROM sessions ORDER BY timestamp DESC");
+  return rows.map(mapRow);
+}
+
+// Tenant/user-scoped session listing (isolation). Pass `tenantId` to limit to a
+// tenant; additionally pass `ownerId` to limit to one user's own sessions
+// (SSO userId). Superadmin/internal callers use getAllSessions() instead.
+async function getSessionsScoped({ tenantId, ownerId } = {}) {
+  await init();
+  await enforceTTL();
+  const where = [];
+  const params = [];
+  if (tenantId !== undefined) { where.push("tenant_id = ?"); params.push(tenantId); }
+  if (ownerId !== undefined && ownerId !== null) { where.push("user_id = ?"); params.push(ownerId); }
+  const sql = "SELECT * FROM sessions" + (where.length ? " WHERE " + where.join(" AND ") : "") + " ORDER BY timestamp DESC";
+  const rows = await q.all(sql, params);
+  return rows.map(mapRow);
+}
+
+// Scoped search — same predicate as getSessionsScoped, plus a title/messages LIKE.
+async function searchSessionsScoped(query, { tenantId, ownerId } = {}) {
+  await init();
+  if (!query || typeof query !== "string") return getSessionsScoped({ tenantId, ownerId });
+  const like = PG ? "ILIKE" : "LIKE";
+  const term = `%${query}%`;
+  const where = [`(title ${like} ? OR messages ${like} ?)`];
+  const params = [term, term];
+  if (tenantId !== undefined) { where.push("tenant_id = ?"); params.push(tenantId); }
+  if (ownerId !== undefined && ownerId !== null) { where.push("user_id = ?"); params.push(ownerId); }
+  const rows = await q.all(`SELECT * FROM sessions WHERE ${where.join(" AND ")} ORDER BY timestamp DESC`, params);
   return rows.map(mapRow);
 }
 
@@ -1355,7 +1400,7 @@ async function revokeSsoSession(token) {
 module.exports = {
   init,
   dialect: q.dialect,
-  saveSession, getSession, getAllSessions, deleteSession, searchSessions,
+  saveSession, getSession, getAllSessions, getSessionsScoped, deleteSession, searchSessions, searchSessionsScoped,
   performBackup, getBackups,
   createPairingCode, redeemPairingCode, createDevice, getDeviceByToken,
   touchDeviceLastSeen, getDevice, listDevices, renameDevice, revokeDevice, setDevicePolicyOverrides,

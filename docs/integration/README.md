@@ -49,6 +49,9 @@ Everything is scoped to the tenant of your API key:
   sessions; another tenant never sees or can call them.
 - **Runs** are versioned per session, execute in a network-on sandbox with
   layered timeouts, and always reach a terminal status.
+- **Sessions, templates, and the fleet** (paired devices / remote harnesses) are
+  tenant-scoped too; sessions are additionally owner-private within a tenant (a
+  signed-in user sees only its own; a tenant admin sees all).
 
 Steps 1–2 are **one-time setup** per datasource; steps 3–5 repeat per task.
 

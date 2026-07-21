@@ -533,9 +533,16 @@ app.post("/api/build/end", authMiddleware, async (req, res) => {
 app.get("/api/sessions/:id/runs", authMiddleware, async (req, res) => {
   const s = await db.getSession(req.params.id);
   if (!s) return res.status(404).json({ success: false, error: "no such session" });
-  const owner = s.tenantId || null;
-  const mine = (req.auth && req.auth.tenantId) || null;
-  if (req.auth.role !== "superadmin" && owner !== mine) {
+  // Same visibility rule as the sessions router: tenant boundary, then per-user
+  // (SSO) unless the caller is a tenant admin / API key.
+  const role = req.auth && req.auth.role;
+  const mineTenant = (req.auth && req.auth.tenantId) || null;
+  const ownerUser = (req.auth && req.auth.userId) || null;
+  const visible =
+    role === "superadmin" ||
+    ((s.tenantId || null) === mineTenant &&
+      (role === "admin" || !ownerUser || (s.userId || null) === ownerUser));
+  if (!visible) {
     return res.status(404).json({ success: false, error: "no such session" });
   }
   res.json({ success: true, runs: await db.listSessionRuns(req.params.id) });
@@ -786,13 +793,46 @@ app.use("/api", createDevicesRouter(db, authMiddleware, () => process.env.DASHBO
 app.use(errorHandler);
 
 // ── WebSocket Handler ───────────────────────────────────────────────
+// Whether this WS connection's identity may act on `sessionId`. Mirrors the REST
+// sessions visibility rule (tenant boundary → per-user for SSO, tenant-wide for
+// admins / API keys / devices). A not-yet-created session is allowed (it will be
+// owned by this caller). Fails OPEN only for superadmin / dev-mode / shared-secret
+// local (no identity) — never for a real tenant member.
+async function wsCanAccessSession(ws, sessionId) {
+  const auth = ws.auth || null;
+  if (!sessionId) return true;
+  if (!auth || auth.role === "superadmin" || auth.devMode) return true;
+  const s = await db.getSession(sessionId);
+  if (!s) return true; // new session — becomes owned by this caller
+  if ((s.tenantId || null) !== (auth.tenantId || null)) return false;
+  if (auth.role === "admin") return true;
+  const owner = auth.userId || null;
+  if (!owner) return true; // API key / device: tenant-scoped, no per-user split
+  return (s.userId || null) === owner;
+}
+
+// WS commands that act on an existing session — gated by ownership above.
+const SESSION_SCOPED_WS_TYPES = new Set([
+  "start_task", "subscribe", "mode_switch", "cancel", "resume",
+  "cancel_session", "mode_switch_rerun", "compact", "set_auto_compaction",
+]);
+
 wss.on("connection", (ws) => {
   console.log("Dashboard client connected to WebSocket.");
 
   ws.on("message", async (messageStr) => {
     try {
       const data = JSON.parse(messageStr);
-      
+
+      // ── Session-ownership gate (tenant + per-user isolation) ──
+      if (SESSION_SCOPED_WS_TYPES.has(data.type)) {
+        const sid = data.sessionId;
+        if (sid && !(await wsCanAccessSession(ws, sid))) {
+          sendWithSession(ws, { type: "error", message: "You don't have access to that session." }, sid);
+          return;
+        }
+      }
+
       // ── start_task ──────────────────────────────────────────
       if (data.type === "start_task") {
         let { prompt, sessionId: sid, mode, systemPromptType, skills, effort, harnessId, excludeTools, profileId, sandbox, templateId } = data;

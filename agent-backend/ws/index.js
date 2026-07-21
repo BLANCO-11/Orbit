@@ -24,6 +24,7 @@ function createWebSocketServer(httpServer, db, harnessRegistry) {
     // request, so both travel as query params instead of headers.
     const deviceToken = url.searchParams.get("deviceToken") || url.searchParams.get("token");
     let device = null;
+    let identity = null; // resolved auth for the dashboard lane (tenant/user/role)
     const reject = () => { socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n"); socket.destroy(); };
 
     if (isHarness) {
@@ -40,7 +41,7 @@ function createWebSocketServer(httpServer, db, harnessRegistry) {
       // Browsers can't set headers on a WS upgrade, so the credential rides as a
       // query param (`deviceToken` or `key`); adapt it into a header for reuse.
       const cred = deviceToken || url.searchParams.get("key") || "";
-      const identity = await resolveIdentity({ headers: { "x-api-key": cred } }, db);
+      identity = await resolveIdentity({ headers: { "x-api-key": cred } }, db);
       if (!identity) return reject();
       // Keep the device binding when a device token was used, so per-device
       // scope enforcement (server.js start_task) still applies.
@@ -59,6 +60,7 @@ function createWebSocketServer(httpServer, db, harnessRegistry) {
 
     wss.handleUpgrade(request, socket, head, (ws) => {
       ws.device = device; // null when authenticated via the shared-secret stopgap
+      ws.auth = identity;  // { role, tenantId, userId? } — for session-ownership checks
       wss.emit("connection", ws, request);
     });
    } catch (e) {

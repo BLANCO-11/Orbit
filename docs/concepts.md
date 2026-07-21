@@ -54,13 +54,20 @@ A **tenant** is an isolation boundary. Every credential resolves to an identity
 with a role and (optionally) a tenant:
 
 - **superadmin** — the operator; env-key or seeded account; sees everything.
-- **admin** — manages its tenant (keys, members).
+- **admin** — manages its tenant (keys, members); sees **all** of the tenant's sessions.
 - **member** — normal programmatic access within its tenant (the default for
   minted API keys; can manage its own secrets/connectors/runs).
 - **viewer** — read-only.
 
-Secrets, connectors, and runs are all scoped to the tenant of the API key that
+Secrets, connectors, runs, **sessions**, templates, and the **fleet** (paired
+devices / remote harnesses) are all scoped to the tenant of the API key that
 created them. A member of tenant A can never see tenant B's data.
+
+**Per-user isolation (sessions).** Within a tenant, a session has an owner. A
+signed-in (SSO) member or viewer sees only its **own** sessions; a tenant admin
+sees all of the tenant's; an API-key or device caller (which has no per-user
+identity) is scoped to the whole tenant. This holds over both REST and the
+WebSocket stream.
 
 **Dev-mode:** if no `ORBIT_SUPERADMIN_KEY` is configured, every caller is treated
 as superadmin (zero-config local use). Set the key before exposing Orbit.

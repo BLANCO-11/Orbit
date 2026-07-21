@@ -348,6 +348,7 @@ erDiagram
     SESSIONS {
         string id PK
         string tenant_id FK
+        string user_id
         text messages
         text metrics
         text run_state
@@ -456,18 +457,29 @@ Additional controls:
 
 ```mermaid
 flowchart LR
-    KA["API key — tenant A"] --> RA["secrets / connectors / runs A"]
-    KB["API key — tenant B"] --> RB["secrets / connectors / runs B"]
+    KA["API key — tenant A"] --> RA["secrets / connectors / runs /<br/>sessions / templates / fleet A"]
+    KB["API key — tenant B"] --> RB["secrets / connectors / runs /<br/>sessions / templates / fleet B"]
     KA -. no access .-> RB
     KB -. no access .-> RA
     SHARED["Shared: Orbit MCP servers,<br/>OAuth-wired providers"] --> RA
     SHARED --> RB
 ```
 
-The isolation unit is **the tenant of the API key** that created the resource.
-Superadmin operates in the shared (`null`) bucket. Known residual sharing:
-OAuth-wired provider connectors live in the global config (per-deployment), and
-remote harnesses run with their own `.pi` outside this composition.
+The isolation unit is **the tenant of the API key** that created the resource —
+enforced (not just tagged) across secrets, connectors, runs, **sessions**,
+templates, and the **fleet** (paired devices / remote harnesses, scoped by the
+device's tenant; cross-tenant disconnect/revoke is refused). Superadmin operates
+in the shared (`null`) bucket.
+
+**Per-user isolation within a tenant (sessions).** Sessions additionally carry an
+owner (`sessions.user_id`, schema v20). An SSO member/viewer sees only its **own**
+sessions; a tenant **admin** sees all of the tenant's; an API-key/device caller
+(no per-user identity) is tenant-scoped. Enforced on the REST CRUD, the
+`/runs` endpoint, and the WebSocket lane (`ws.auth` gates session-scoped commands).
+
+Known residual sharing: OAuth-wired provider connectors live in the global config
+(per-deployment), and remote harnesses run with their own `.pi` outside the
+per-session MCP composition.
 
 ## 6. Deployment topologies
 

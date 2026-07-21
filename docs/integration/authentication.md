@@ -77,12 +77,19 @@ immediately. Revoke with `DELETE /api/admin/keys/:id`.
 
 ## Isolation guarantee
 
-Secrets, connectors, sessions, and runs are all scoped to the tenant of the key
-that created them. A `member` of tenant A:
+Secrets, connectors, sessions, runs, templates, and the fleet (paired devices /
+remote harnesses) are all scoped to the tenant of the key that created them. A
+`member` of tenant A:
 
-- sees only tenant A's secrets/connectors/runs,
-- cannot read or cancel tenant B's runs (they 404),
+- sees only tenant A's secrets/connectors/runs/sessions/templates/devices,
+- cannot read or cancel tenant B's runs, or read/rename/delete tenant B's
+  sessions, or disconnect/revoke tenant B's devices (they 404),
 - gets only tenant A's connectors composed into its session sandboxes.
+
+**Per-user (sessions).** Within a tenant, sessions are owner-private: a signed-in
+(SSO) member/viewer sees only its own sessions, while a tenant `admin` sees all
+of the tenant's. API-key callers have no per-user identity, so they are scoped to
+the whole tenant. Enforced over REST and WebSocket alike.
 
 `superadmin` operates in the shared (`null`) bucket. (Cross-tenant management by
 superadmin via a `?tenantId` selector is not exposed on the secrets/connectors
