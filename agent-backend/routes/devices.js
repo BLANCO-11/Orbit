@@ -127,6 +127,20 @@ function createDevicesRouter(db, authMiddleware, getDashboardOrigin) {
   // 20 attempts / minute / IP across the open code-gated endpoints.
   const pairRateLimit = makeRateLimiter({ windowMs: 60 * 1000, max: 20 });
 
+  // ── Tenant scoping for device management ──
+  // Paired devices belong to the tenant of the key that paired them. A caller
+  // sees/manages only its own tenant's devices; superadmin sees all. Guards
+  // return 404 (not 403) so cross-tenant ids look like unknown ids.
+  const tenantOf = (req) => (req.auth && req.auth.tenantId) || null;
+  const isSuper = (req) => req.auth && req.auth.role === "superadmin";
+  // Load a device and confirm the caller may act on it; else null.
+  const ownedDevice = async (req, id) => {
+    const device = await db.getDevice(id);
+    if (!device) return null;
+    if (isSuper(req) || (device.tenantId || null) === tenantOf(req)) return device;
+    return null;
+  };
+
   // Generic connection descriptor for ANY harness (Orbit's adapter or a custom
   // third-party one). Redeems the code single-use, then hands back everything
   // needed to connect and stay connected as plain JSON.
@@ -333,7 +347,9 @@ schtasks /Create /TN OrbitConnect /SC ONLOGON /RL LIMITED /F ^
   });
 
   router.get("/devices", authMiddleware, async (req, res) => {
-    res.json({ success: true, devices: await db.listDevices() });
+    const all = await db.listDevices();
+    const devices = isSuper(req) ? all : all.filter((d) => (d.tenantId || null) === tenantOf(req));
+    res.json({ success: true, devices });
   });
 
   router.patch("/devices/:id", authMiddleware, async (req, res) => {
@@ -341,6 +357,7 @@ schtasks /Create /TN OrbitConnect /SC ONLOGON /RL LIMITED /F ^
     if (!label || typeof label !== "string") {
       return res.status(400).json({ success: false, message: "Missing label." });
     }
+    if (!(await ownedDevice(req, req.params.id))) return res.status(404).json({ success: false, message: "no such device" });
     await db.renameDevice(req.params.id, label.slice(0, 100));
     res.json({ success: true });
   });
@@ -353,6 +370,7 @@ schtasks /Create /TN OrbitConnect /SC ONLOGON /RL LIMITED /F ^
     if (policyOverrides && typeof policyOverrides !== "object") {
       return res.status(400).json({ success: false, message: "policyOverrides must be an object." });
     }
+    if (!(await ownedDevice(req, req.params.id))) return res.status(404).json({ success: false, message: "no such device" });
     await db.setDevicePolicyOverrides(req.params.id, policyOverrides || {});
     res.json({ success: true });
   });
@@ -377,11 +395,13 @@ schtasks /Create /TN OrbitConnect /SC ONLOGON /RL LIMITED /F ^
     if (cfg && cfg.baseURL && !/^https?:\/\//i.test(String(cfg.baseURL))) {
       return res.status(400).json({ success: false, message: "llmConfig.baseURL must be an http(s) URL." });
     }
+    if (!(await ownedDevice(req, req.params.id))) return res.status(404).json({ success: false, message: "no such device" });
     await db.setDeviceLlmConfig(req.params.id, cfg || {});
     res.json({ success: true });
   });
 
   router.delete("/devices/:id", authMiddleware, async (req, res) => {
+    if (!(await ownedDevice(req, req.params.id))) return res.status(404).json({ success: false, message: "no such device" });
     await db.revokeDevice(req.params.id);
     res.json({ success: true });
   });

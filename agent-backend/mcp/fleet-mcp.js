@@ -69,7 +69,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
   try {
     if (name === "list_devices") {
-      const d = await api("/api/fleet/devices");
+      const sid = process.env.ORBIT_SESSION_ID || "";
+      const d = await api(`/api/fleet/devices${sid ? `?sessionId=${encodeURIComponent(sid)}` : ""}`);
       const list = (d.devices || [])
         .map((x) => `- ${x.id}  (${x.name}${x.machine && x.machine !== x.id ? ` · ${x.machine}` : ""}) — ${x.transport}, ${x.status}`)
         .join("\n");

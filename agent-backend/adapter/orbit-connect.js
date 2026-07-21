@@ -808,6 +808,18 @@ function connectSupervised(descriptor, { name, machine, credsPath, persisted, ad
       if (msg.type === 'prompt') { const s = sessions.get(sessionId); if (s) await s.prompt(msg.message); return; }
       if (msg.type === 'cancel') { const s = sessions.get(sessionId); if (s) s.cancel(); return; }
       if (msg.type === 'disconnect') { const s = sessions.get(sessionId); if (s) { s.dispose(); sessions.delete(sessionId); } return; }
+      // Operator disconnect from the Fleet UI: TERMINAL. Kill every agent child on
+      // this machine and exit the adapter — do NOT reconnect. (A transient network
+      // drop, by contrast, keeps `stopped` false and reconnects via close handler.)
+      if (msg.type === 'shutdown') {
+        console.log('[orbit-connect] Shutdown requested by operator — killing agents and exiting.');
+        for (const s of sessions.values()) { try { s.dispose(); } catch {} }
+        sessions.clear();
+        stopped = true;
+        try { ws.close(4001, 'operator disconnect'); } catch {}
+        process.exit(0);
+        return;
+      }
     });
 
     // A 401 on upgrade → token revoked/rotated. If it came from stored creds,
@@ -818,6 +830,13 @@ function connectSupervised(descriptor, { name, machine, credsPath, persisted, ad
       for (const s of sessions.values()) { try { s.dispose(); } catch {} }
       sessions.clear();
       if (stopped) return;
+      // Operator disconnect (Fleet UI) closes with 4001 — terminal, no reconnect.
+      // Fallback for when the `shutdown` message wasn't processed before close.
+      if (ev && ev.code === 4001) {
+        console.log('[orbit-connect] Disconnected by operator — exiting (will not reconnect).');
+        stopped = true; process.exit(0);
+        return;
+      }
       if (ev && ev.code === 4401 || ev?.reason === 'unauthorized') {
         console.error('[orbit-connect] Token rejected. Re-pair with a fresh code.');
         if (persisted) dropCredential(credsPath, descriptor.wsUrl);

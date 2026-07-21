@@ -38,11 +38,14 @@ function createFleet({ db, harnessRegistry, handleStartTask, getSessionMode, cre
 
   // Targets the lead can delegate to: local agent types + every connected remote
   // device (which runs whatever agent that device's adapter hosts).
-  function listDevices() {
+  // Tenant-scoped: `tenantId` limits remotes to that tenant's paired devices
+  // (locals are the host's own, always listed). Pass null only for a trusted/
+  // superadmin context. Prevents a lead agent from seeing another tenant's fleet.
+  function listDevices(tenantId = null) {
     const locals = Object.entries(LOCAL_AGENTS).map(([id, v]) => ({
       id, name: v.name, machine: "local", transport: "local", agent: v.agent, status: "connected",
     }));
-    const remotes = harnessRegistry.list().map((h) => ({
+    const remotes = harnessRegistry.list(tenantId).map((h) => ({
       id: h.id,
       name: h.name || h.id,
       machine: h.machine || h.id,
@@ -66,10 +69,19 @@ function createFleet({ db, harnessRegistry, handleStartTask, getSessionMode, cre
     // delegate can never escalate beyond what the lead itself may do.
     const leadMode = (getSessionMode && leadSessionId && await getSessionMode(leadSessionId)) || "edit";
     const resolvedMode = capMode(mode, leadMode);
+    // A delegate may only target the LEAD's own tenant's fleet. Resolve the lead
+    // session's tenant and scope both the availability check and the error's
+    // valid-target list to it, so an agent can't dispatch across tenants.
+    let leadTenant = null;
+    try { leadTenant = leadSessionId ? ((await db.getSession(leadSessionId))?.tenantId || null) : null; } catch {}
     const isLocalAgent = Object.prototype.hasOwnProperty.call(LOCAL_AGENTS, harnessId);
-    if (!isLocalAgent && !harnessRegistry.get(harnessId)) {
-      const ids = listDevices().map((d) => d.id).join(", ");
-      throw new Error(`target "${harnessId}" is not available. Valid targets: ${ids}`);
+    if (!isLocalAgent) {
+      const rh = harnessRegistry.get(harnessId);
+      const sameTenant = rh && (leadTenant == null || (rh.device?.tenantId || null) === leadTenant);
+      if (!sameTenant) {
+        const ids = listDevices(leadTenant).map((d) => d.id).join(", ");
+        throw new Error(`target "${harnessId}" is not available. Valid targets: ${ids}`);
+      }
     }
 
     const sessionId = `${source}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;

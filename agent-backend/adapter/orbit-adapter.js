@@ -306,12 +306,30 @@ function connectSupervised(descriptor, { name, machine, config, binaries, credsP
         if (harness) { await harness.disconnect(); harnesses.delete(msg.sessionId); }
         return;
       }
+
+      // Operator disconnect from the Fleet UI: TERMINAL. Stop every agent on this
+      // machine and exit — do NOT reconnect (a transient drop still reconnects).
+      if (msg.type === "shutdown") {
+        console.log("[adapter] Shutdown requested by operator — stopping agents and exiting.");
+        cleanupSessions();
+        stopped = true;
+        try { ws.close(4001, "operator disconnect"); } catch {}
+        process.exit(0);
+        return;
+      }
     });
 
-    ws.on("close", () => {
+    ws.on("close", (code) => {
       if (heartbeat) clearInterval(heartbeat);
       cleanupSessions();
       if (stopped) return;
+      // Operator disconnect closes with 4001 — terminal, no reconnect (fallback
+      // for when the `shutdown` message wasn't processed before the close).
+      if (code === 4001) {
+        console.log("[adapter] Disconnected by operator — exiting (will not reconnect).");
+        stopped = true; process.exit(0);
+        return;
+      }
       console.log("[adapter] Disconnected from console.");
       scheduleReconnect();
     });

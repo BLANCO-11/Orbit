@@ -107,23 +107,32 @@ function createHarnessRegistry() {
     });
   });
 
-  /** Public snapshot of connected remote harnesses (no sockets). */
-  function list() {
-    return Array.from(harnesses.values()).map((h) => ({
-      id: h.id,
-      name: h.name,
-      machine: h.machine,
-      capabilities: h.capabilities,
-      model: h.model || "",
-      provider: h.provider || "",
-      agent: h.agent || "",
-      platform: h.platform || "",
-      osName: h.osName || "",
-      deviceId: h.device?.id || null, // which paired device this agent authed as
-      transport: "remote",
-      status: "connected",
-      activeSessions: h.sessions.size,
-    }));
+  /**
+   * Public snapshot of connected remote harnesses (no sockets). Tenant-scoped:
+   * pass a `tenantId` to return only that tenant's harnesses (the paired device's
+   * owning tenant). Pass `null`/omit for the unscoped view (superadmin only) — a
+   * regular tenant must NEVER see another tenant's harnesses. Fixes a cross-tenant
+   * leak where every caller saw every connected remote agent.
+   */
+  function list(tenantId = null) {
+    return Array.from(harnesses.values())
+      .filter((h) => tenantId == null ? true : ((h.device?.tenantId || null) === tenantId))
+      .map((h) => ({
+        id: h.id,
+        name: h.name,
+        machine: h.machine,
+        capabilities: h.capabilities,
+        model: h.model || "",
+        provider: h.provider || "",
+        agent: h.agent || "",
+        platform: h.platform || "",
+        osName: h.osName || "",
+        deviceId: h.device?.id || null, // which paired device this agent authed as
+        tenantId: h.device?.tenantId || null, // owning tenant (for scoping/ownership checks)
+        transport: "remote",
+        status: "connected",
+        activeSessions: h.sessions.size,
+      }));
   }
 
   function get(harnessId) {
@@ -189,19 +198,24 @@ function createHarnessRegistry() {
 
   /**
    * Operator-initiated disconnect of a connected remote harness (from the UI).
-   * Asks the adapter to stop, closes the socket (the 'close' handler above then
-   * notifies any bound RemoteHarness and removes it from the registry), and
-   * drops it immediately so it disappears from the list even if the socket lingers.
-   * Returns true if a harness with that id existed.
+   * This is TERMINAL: it tells the adapter to shut down entirely (kill its agent
+   * child processes and exit — NOT reconnect), then closes the socket with a
+   * dedicated code (4001) the adapter also treats as terminal in case the message
+   * is missed. The 'close' handler above notifies any bound RemoteHarness and
+   * removes it from the registry; we also drop it immediately so it disappears
+   * from the list even if the socket lingers. Returns true if the harness existed.
+   *
+   * (Distinct from a transient network drop, which the adapter SHOULD reconnect
+   * from — only this explicit operator action stops the agent for good.)
    */
   function disconnect(harnessId) {
     const entry = harnesses.get(harnessId);
     if (!entry) return false;
-    try { entry.ws.send(JSON.stringify({ type: "disconnect" })); } catch {}
-    try { entry.ws.close(1000, "disconnected by operator"); } catch {}
+    try { entry.ws.send(JSON.stringify({ type: "shutdown", reason: "operator" })); } catch {}
+    try { entry.ws.close(4001, "disconnected by operator"); } catch {}
     if (entry._eventHandlers) {
       for (const handler of entry._eventHandlers.values()) {
-        try { handler("close", { code: 1000 }); } catch {}
+        try { handler("close", { code: 4001 }); } catch {}
       }
     }
     harnesses.delete(harnessId);

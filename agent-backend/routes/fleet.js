@@ -6,13 +6,21 @@
 
 const express = require("express");
 
-function createFleetRouter({ fleet }) {
+function createFleetRouter({ fleet, db }) {
   const router = express.Router();
 
-  // Devices the lead can delegate to.
-  router.get("/devices", (req, res, next) => {
+  // Devices the lead can delegate to — tenant-scoped. This is called by the
+  // orbit-fleet MCP tool as the app key (superadmin), so we CANNOT rely on
+  // req.auth.tenantId; scope to the LEAD SESSION's tenant instead (the MCP passes
+  // ?sessionId=ORBIT_SESSION_ID). Superadmin with no session context sees all.
+  router.get("/devices", async (req, res, next) => {
     try {
-      res.json({ success: true, devices: fleet.listDevices() });
+      let tenantId = (req.auth && req.auth.role === "superadmin") ? null : (req.auth && req.auth.tenantId) || null;
+      const sid = req.query.sessionId;
+      if (sid && db) {
+        try { const s = await db.getSession(String(sid)); if (s) tenantId = s.tenantId || null; } catch {}
+      }
+      res.json({ success: true, devices: fleet.listDevices(tenantId) });
     } catch (err) { next(err); }
   });
 

@@ -654,6 +654,13 @@ async function touchDeviceLastSeen(id) {
   await q.run("UPDATE devices SET last_seen = ? WHERE id = ?", [Date.now(), id]);
 }
 
+// Fetch a single device by id (incl. tenantId) — for tenant ownership checks.
+async function getDevice(id) {
+  await init();
+  const row = await q.get("SELECT * FROM devices WHERE id = ?", [id]);
+  return row ? mapDeviceRow(row) : null;
+}
+
 async function listDevices() {
   await init();
   const rows = await q.all("SELECT * FROM devices ORDER BY created_at DESC");
@@ -1351,7 +1358,7 @@ module.exports = {
   saveSession, getSession, getAllSessions, deleteSession, searchSessions,
   performBackup, getBackups,
   createPairingCode, redeemPairingCode, createDevice, getDeviceByToken,
-  touchDeviceLastSeen, listDevices, renameDevice, revokeDevice, setDevicePolicyOverrides,
+  touchDeviceLastSeen, getDevice, listDevices, renameDevice, revokeDevice, setDevicePolicyOverrides,
   mintDeviceLlmToken, getDeviceByLlmToken, recordDeviceLlmUsage, setDeviceLlmConfig,
   listProfiles, getProfile, saveProfile, deleteProfile, countProfiles,
   listChannels, getChannel, saveChannel, touchChannelTriggered, deleteChannel,

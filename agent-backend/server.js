@@ -631,7 +631,7 @@ const fleet = createFleet({
     }
   },
 });
-app.use("/api/fleet", authMiddleware, createFleetRouter({ fleet }));
+app.use("/api/fleet", authMiddleware, createFleetRouter({ fleet, db }));
 
 // Telegram bridge: two-way integration over the stored "telegram" bot token.
 // Inbound messages from paired chats run the agent (via the same headless
@@ -706,7 +706,11 @@ app.get("/api/harnesses", authMiddleware, (req, res) => {
     capabilities: ["chat", "plan", "edit", "yolo", "tools"],
     activeSessions: [...activeSessions.values()].filter(s => s.harnessId === "opencode").length,
   } : null;
-  res.json({ success: true, harnesses: [local, ...(opencode ? [opencode] : []), ...harnessRegistry.list()] });
+  // Remote harnesses are tenant-scoped: a caller sees only harnesses whose
+  // paired device belongs to its tenant (superadmin sees all). Local pi/OpenCode
+  // are the deployment's own shared runtime and stay visible to everyone.
+  const scopeTenant = req.auth?.role === "superadmin" ? null : (req.auth?.tenantId || null);
+  res.json({ success: true, harnesses: [local, ...(opencode ? [opencode] : []), ...harnessRegistry.list(scopeTenant)] });
 });
 
 // Disconnect a connected remote harness from the UI. Local harnesses (the pi
@@ -716,6 +720,12 @@ app.delete("/api/harnesses/:id", authMiddleware, (req, res) => {
   const id = req.params.id;
   if (id === "local" || id === "opencode" || id === "pi-code" || id === "picode") {
     return res.status(400).json({ success: false, error: "Local harnesses can't be disconnected; cancel their sessions instead." });
+  }
+  // Ownership guard: a tenant may only disconnect its OWN harnesses (superadmin
+  // any). 404 (not 403) so cross-tenant ids are indistinguishable from unknown.
+  const entry = harnessRegistry.get(id);
+  if (entry && req.auth?.role !== "superadmin" && (entry.device?.tenantId || null) !== (req.auth?.tenantId || null)) {
+    return res.status(404).json({ success: false, error: "harness not connected" });
   }
   // Cancel any active sessions running on this harness first, so nothing is left
   // orphaned when the adapter socket drops.
@@ -749,6 +759,10 @@ app.get("/api/harnesses/:id/tools", authMiddleware, async (req, res) => {
     } else {
       const entry = harnessRegistry.get(id);
       if (!entry) return res.status(404).json({ success: false, error: "harness not connected" });
+      // Tenant scoping: don't reveal another tenant's harness tools.
+      if (req.auth?.role !== "superadmin" && (entry.device?.tenantId || null) !== (req.auth?.tenantId || null)) {
+        return res.status(404).json({ success: false, error: "harness not connected" });
+      }
       const RemoteH = require("./harnesses/remote");
       const probe = new RemoteH({ events: new EventEmitter(), config: getConfig(), sessionId: "probe", registryEntry: entry });
       harnessTools = await probe.listTools();
