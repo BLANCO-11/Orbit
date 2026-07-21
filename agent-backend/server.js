@@ -51,6 +51,7 @@ const createConnectorsRouter = require("./routes/connectors");
 const createProfilesRouter = require("./routes/profiles");
 const createConnectionsRouters = require("./routes/connections");
 const createSecretsRouter = require("./routes/secrets");
+const createTemplatesRouter = require("./routes/templates");
 const createRunRouter = require("./routes/run");
 const createAdminRouter = require("./routes/admin");
 const createAuthSsoRouter = require("./routes/auth-sso");
@@ -62,6 +63,8 @@ const createHarnessRegistry = require("./ws/harness");
 const RemoteHarness = require("./harnesses/remote");
 const HeadlessSocket = require("./ws/headless-socket");
 const runContract = require("./run-contract");
+const { compileTemplatePrompt, materializeScaffold } = require("./templates");
+const { verifyTemplateCompliance } = require("./template-verify");
 const ContainerHarness = require("./harnesses/container");
 const createChannelsRouter = require("./routes/channels");
 const { startScheduler } = require("./channel-scheduler");
@@ -89,6 +92,8 @@ process.env.ORBIT_GATEWAY_KEY = GATEWAY_KEY;
 process.env.ORBIT_GATEWAY_URL = process.env.ORBIT_GATEWAY_URL || `http://127.0.0.1:${PORT}/llm/v1`;
 const activeSessions = new Map();    // sessionId → { harness, ws, mode, subagentTracker }
 const pendingApprovals = new Map();  // toolCallId → resolve callback
+const pendingQuestions = new Map();  // questionId → { resolve, sessionId, runId, questions } — ask_questions park/await
+const activeBuilds = new Map();      // buildId → { sessionId, runId, status, block } — orbit-build handoff
 const turnGuards = new Map();         // sessionId → anti-flail counters for the active turn
 const sessionPlans = new Map();       // sessionId → structured plan steps (the live Mission checklist)
 
@@ -494,9 +499,35 @@ app.use("/api/skills", authMiddleware, createSkillsRouter());
 app.use("/api/connectors", authMiddleware, createConnectorsRouter({ db, registry: mcpRegistry }));
 app.use("/api/profiles", authMiddleware, createProfilesRouter(db));
 app.use("/api/secrets", authMiddleware, createSecretsRouter({ db, encrypt }));
+app.use("/api/templates", authMiddleware, createTemplatesRouter({ db }));
 // Run API (Gap 1/2). startRun + cancelRun are defined below in this file; the
 // router captures them by reference (they're hoisted function declarations).
-app.use("/api/run", authMiddleware, createRunRouter({ db, startRun: (...a) => startRun(...a), cancelRun: (...a) => cancelRun(...a) }));
+app.use("/api/run", authMiddleware, createRunRouter({ db, startRun: (...a) => startRun(...a), cancelRun: (...a) => cancelRun(...a), answerRun: (...a) => answerRun(...a) }));
+// ask_questions sink: the orbit-ask MCP tool POSTs here and blocks until the
+// user answers (browser question_response) or the parent app answers
+// (POST /api/run/:id/answer). askQuestion is a hoisted fn defined below.
+app.post("/api/ask", authMiddleware, async (req, res) => {
+  try {
+    const result = await askQuestion({ sessionId: req.body?.sessionId, questions: req.body?.questions });
+    res.json({ success: true, ...result });
+  } catch (e) {
+    res.status(400).json({ success: false, error: e.message });
+  }
+});
+// Build handoff sinks: the orbit-build MCP tools POST here. startBuild/endBuild
+// are hoisted fns defined below.
+app.post("/api/build/start", authMiddleware, async (req, res) => {
+  try {
+    const out = await startBuild({ sessionId: req.body?.sessionId, language: req.body?.language, entrypoint: req.body?.entrypoint, summary: req.body?.summary });
+    res.json({ success: true, ...out });
+  } catch (e) { res.status(400).json({ success: false, error: e.message }); }
+});
+app.post("/api/build/end", authMiddleware, async (req, res) => {
+  try {
+    const build = await endBuild({ sessionId: req.body?.sessionId, buildId: req.body?.buildId, summary: req.body?.summary, notes: req.body?.notes });
+    res.json({ success: true, build });
+  } catch (e) { res.status(400).json({ success: false, error: e.message }); }
+});
 // Session-scoped run version history (shares the sessions namespace; the
 // sessions router's "/:id" never matches this deeper path).
 app.get("/api/sessions/:id/runs", authMiddleware, async (req, res) => {
@@ -750,7 +781,7 @@ wss.on("connection", (ws) => {
       
       // ── start_task ──────────────────────────────────────────
       if (data.type === "start_task") {
-        let { prompt, sessionId: sid, mode, systemPromptType, skills, effort, harnessId, excludeTools, profileId, sandbox } = data;
+        let { prompt, sessionId: sid, mode, systemPromptType, skills, effort, harnessId, excludeTools, profileId, sandbox, templateId } = data;
         const sessionId = sid || "default-session";
 
         // Expand a profile server-side: its fields are DEFAULTS; any field the
@@ -766,8 +797,12 @@ wss.on("connection", (ws) => {
             skills = skills ?? profile.skills;
             excludeTools = excludeTools ?? profile.toolPolicy?.excluded;
             sandbox = sandbox ?? profile.sandbox;
+            templateId = templateId ?? profile.templateId;
           }
         }
+        // Carry the resolved template id onto the socket so handleStartTask can
+        // compile it into the prompt + materialize its scaffold at spawn.
+        ws.templateId = templateId || null;
 
         // Device scope enforcement (scope is set at pairing time; ws.device is
         // null for the local dev / shared-secret path, which is unrestricted).
@@ -842,6 +877,12 @@ wss.on("connection", (ws) => {
         }
       }
       
+      // ── question_response (ask_questions answer from the browser) ──
+      else if (data.type === "question_response") {
+        const { questionId, answers } = data;
+        if (questionId) resolveQuestion(questionId, answers);
+      }
+
       // ── compact ─────────────────────────────────────────────
       else if (data.type === "compact") {
         const ses = activeSessions.get(data.sessionId || ws.activeSessionId);
@@ -1224,12 +1265,40 @@ async function handleStartTask(ws, userPrompt, sessionId, mode, systemPromptType
     }
     sendLog(ws, `Spawning agent session for ${sessionId} (mode=${activeMode}, sandbox=${activeSandbox}, harness=${remoteEntry ? remoteEntry.id : "local"})...`, false, sessionId);
 
+    // ── Tenant output-constraint template (optional) ──
+    // Resolve the session's template (if the caller/profile named one), compile
+    // it into a system-prompt fragment, and materialize its workspace scaffold
+    // once into an empty workspace. Scoped to the session's tenant — the same
+    // tenant the harness uses for connectors/secrets. Best-effort, never fatal.
+    let templateBlock = "";
+    try {
+      const templateId = ws.templateId || null;
+      if (templateId) {
+        const sess = await db.getSession(sessionId);
+        const tenantId = (sess && sess.tenantId) || (ws.auth && ws.auth.tenantId) || null;
+        const template = await db.getTemplate(tenantId, templateId);
+        if (template) {
+          templateBlock = compileTemplatePrompt(template);
+          if (template.def && template.def.scaffold) {
+            const fsx = require("fs");
+            const dirs = workspacePaths.ensureSessionDirs(sessionId);
+            let existing = [];
+            try { existing = fsx.readdirSync(dirs.workspace).filter((f) => f !== ".pi"); } catch {}
+            if (!existing.length) {
+              const r = materializeScaffold(dirs.workspace, template.def.scaffold);
+              if (r.dirs || r.files) sendLog(ws, `[Template] scaffold '${template.id}': ${r.dirs} dir(s), ${r.files} file(s)`, false, sessionId);
+            }
+          }
+        }
+      }
+    } catch (e) { console.error("[Template] resolve failed:", e.message); }
+
     try {
       const events = createHarnessEventEmitter(ws, sessionId, activeMode, subagentTracker);
       const commonOpts = {
         events, config: getConfig(), sessionId, mode: activeMode,
         systemPromptType, skills: skills || [], model: activeModelName,
-        excludeTools: excludeTools || null,
+        excludeTools: excludeTools || null, templateBlock,
         // Dynamic capability manifest, rendered fresh per session start and laid
         // into the system prompt so the agent knows what it can use vs what
         // needs setup — never hand-edited (Workstream D2).
@@ -1314,6 +1383,7 @@ async function runProfileHeadless({ profileId, prompt, title, source }) {
     notify: (n) => broadcastNotification(n),
   });
   socket.addUserMessage(prompt);
+  socket.templateId = profile?.templateId || null;
 
   // Expand the profile → handleStartTask fields (it doesn't take profileId).
   await handleStartTask(
@@ -1362,7 +1432,7 @@ async function readRunUsage(sessionId) {
   return { tokens: 0, cost: 0, toolCalls: 0 };
 }
 
-async function startRun({ sessionId: reqSessionId, prompt, profileId, mode, effort, tenantId, source, sandbox, timeouts } = {}) {
+async function startRun({ sessionId: reqSessionId, prompt, profileId, mode, effort, tenantId, source, sandbox, timeouts, templateId } = {}) {
   const profile = profileId ? await db.getProfile(profileId) : null;
 
   // Resolve session (reuse or create) + this run's version number.
@@ -1399,6 +1469,7 @@ async function startRun({ sessionId: reqSessionId, prompt, profileId, mode, effo
     effSandbox = "host";
   }
   const promptId = profile?.promptId;
+  const effTemplateId = templateId !== undefined ? templateId : (profile?.templateId || null);
 
   // Persist the session row FIRST, carrying the tenant — the harness reads the
   // tenant from here at spawn for secret injection + tenant-scoped MCP (Gap 3/4).
@@ -1426,12 +1497,13 @@ async function startRun({ sessionId: reqSessionId, prompt, profileId, mode, effo
   // Preserve prior transcript on a reused session; seed the new user turn.
   if (priorMessages && priorMessages.length) socket.seedMessages(priorMessages);
   socket.addUserMessage(prompt);
+  socket.templateId = effTemplateId; // consumed by handleStartTask at spawn
 
   // ── Layered timeouts (Gap 5) ──
   const t = timeouts || {};
   const idleMs = clampMs(t.idleTimeoutMs, DEFAULT_IDLE_MS);
   const maxMs = clampMs(t.maxRunMs, DEFAULT_MAX_RUN_MS);
-  const rec = { sessionId, runId, lifecycle: "completed", idleTimer: null, maxTimer: null, done: false };
+  const rec = { sessionId, runId, seq, lifecycle: "completed", idleTimer: null, maxTimer: null, done: false };
   activeRuns.set(runId, rec);
 
   const killWith = (why) => {
@@ -1442,9 +1514,15 @@ async function startRun({ sessionId: reqSessionId, prompt, profileId, mode, effo
   };
   const armIdle = () => {
     if (!idleMs) return;
+    if (rec.idleSuspended) return; // parked on ask_questions — don't count the wait as a hang
     clearTimeout(rec.idleTimer);
     rec.idleTimer = setTimeout(() => killWith("timeout"), idleMs);
   };
+  // Exposed so askQuestion() can pause the idle watchdog while a run legitimately
+  // waits for a human answer (the absolute backstop still applies).
+  rec.armIdle = armIdle;
+  rec.suspendIdle = () => { rec.idleSuspended = true; clearTimeout(rec.idleTimer); };
+  rec.resumeIdle = () => { rec.idleSuspended = false; armIdle(); };
   // Reset the idle watchdog on every harness→socket event; a truly hung run stops
   // emitting and dies, while a long legit run (still emitting) keeps living.
   const origSend = socket.send.bind(socket);
@@ -1513,6 +1591,23 @@ async function startRun({ sessionId: reqSessionId, prompt, profileId, mode, effo
         runId, sessionId, seq, lifecycle,
         finalMessage: socket.getResult(), usage, error: errText,
       });
+      // Tenant-template compliance (audit-only — surfaced, never flips status).
+      try {
+        if (effTemplateId) {
+          const template = await db.getTemplate(resolvedTenant, effTemplateId);
+          const compliance = verifyTemplateCompliance(sessionId, template);
+          if (compliance) contract.templateCompliance = compliance;
+        }
+      } catch (e) { console.error("[Template] verify failed:", e.message); }
+      // Build handoff verdict (from end_build), if the agent ran one this run.
+      if (rec.build) {
+        contract.build = rec.build;
+        // A definitive tester failure flips the run to failed (never a false pass).
+        if (rec.build.status === "failed" && contract.status === "succeeded") {
+          contract.status = "failed";
+          contract.ok = false;
+        }
+      }
       runContract.snapshotArtifacts(sessionId, runId);
       await db.updateRun(runId, { status: contract.status, contract, endedAt: Date.now() });
     } catch (e) {
@@ -1541,6 +1636,199 @@ function cancelRun(runId) {
   const ses = activeSessions.get(rec.sessionId);
   try { ses?.harness?.cancel?.(); } catch {}
   return true;
+}
+
+// ── ask_questions (baked-in HITL clarification) ─────────────────────
+// The orbit-ask MCP tool POSTs /api/ask and BLOCKS; we park a promise and
+// resolve it from EITHER a browser `question_response` (interactive) OR a
+// headless POST /api/run/:id/answer (parent app). Bounded so a turn never hangs.
+const ASK_TIMEOUT_MS = Number(process.env.ORBIT_ASK_TIMEOUT_MS || 600_000); // 10 min
+
+function normalizeQuestions(input) {
+  const arr = Array.isArray(input) ? input : [];
+  return arr.slice(0, 4).map((q, i) => {
+    const rawKind = q && q.kind;
+    const options = Array.isArray(q && q.options)
+      ? q.options.slice(0, 8).map((o) => (typeof o === "string"
+          ? { label: o.slice(0, 200) }
+          : { label: String((o && o.label) || "").slice(0, 200), description: o && o.description ? String(o.description).slice(0, 500) : undefined }))
+        .filter((o) => o.label)
+      : [];
+    let kind = ["text", "single", "multi"].includes(rawKind) ? rawKind : (options.length ? "single" : "text");
+    if (kind === "text" && options.length) kind = "single";
+    return {
+      id: String((q && q.id) || `q${i + 1}`),
+      question: String((q && q.question) || "").slice(0, 2000),
+      header: q && q.header ? String(q.header).slice(0, 40) : undefined,
+      kind, options,
+    };
+  }).filter((q) => q.question);
+}
+
+function findRunBySession(sessionId) {
+  for (const rec of activeRuns.values()) {
+    if (rec.sessionId === sessionId && !rec.done) return rec;
+  }
+  return null;
+}
+
+function finishAsk(rec) {
+  if (!rec) return;
+  rec.awaitingQuestionId = null;
+  rec.resumeIdle?.();
+  // Flip the run row back to running (cleared contract → GET synthesizes "running").
+  db.updateRun(rec.runId, { status: "running", contract: {} }).catch(() => {});
+}
+
+async function askQuestion({ sessionId, questions }) {
+  const qs = normalizeQuestions(questions);
+  if (!sessionId || !qs.length) throw new Error("sessionId and at least one question are required");
+  const questionId = `q_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+  // Route to any live browser client watching this session (interactive path).
+  try {
+    const payload = JSON.stringify({ type: "question_request", sessionId, questionId, questions: qs });
+    wss.clients.forEach((c) => {
+      if (c.readyState === 1 && c.activeSessionId === sessionId) { try { c.send(payload); } catch {} }
+    });
+  } catch {}
+
+  // If this session is an active RUN, mark it awaiting_input for pollers and
+  // suspend its idle watchdog (a human may take a while; the backstop still holds).
+  const rec = findRunBySession(sessionId);
+  if (rec) {
+    rec.suspendIdle?.();
+    rec.awaitingQuestionId = questionId;
+    try {
+      await db.updateRun(rec.runId, {
+        status: "awaiting_input",
+        contract: {
+          runId: rec.runId, sessionId, seq: rec.seq, status: "awaiting_input", ok: false,
+          summary: "awaiting caller input", pendingQuestions: qs, questionId,
+          artifacts: [], tests: { ran: false, passed: false },
+        },
+      });
+    } catch (e) { console.error("[ask] run status update failed:", e.message); }
+  }
+
+  return await new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      if (pendingQuestions.delete(questionId)) {
+        finishAsk(rec);
+        resolve({ answered: false, note: "No answer was provided within the time limit; proceed with your best assumption.", answers: {} });
+      }
+    }, ASK_TIMEOUT_MS);
+    pendingQuestions.set(questionId, {
+      resolve: (answers) => { clearTimeout(timer); finishAsk(rec); resolve({ answered: true, answers: answers || {} }); },
+      sessionId, runId: rec ? rec.runId : null, questions: qs,
+    });
+  });
+}
+
+// Resolve a parked question by id (browser question_response OR headless answer).
+function resolveQuestion(questionId, answers) {
+  const p = pendingQuestions.get(questionId);
+  if (!p) return false;
+  pendingQuestions.delete(questionId);
+  try { p.resolve(answers || {}); } catch {}
+  return true;
+}
+
+// Answer a run's pending question (headless parent-app path).
+function answerRun(runId, { questionId, answers } = {}) {
+  const rec = activeRuns.get(runId);
+  const qid = questionId || (rec && rec.awaitingQuestionId);
+  if (!qid) return false;
+  const p = pendingQuestions.get(qid);
+  if (!p) return false;
+  if (runId && p.runId && p.runId !== runId) return false;
+  return resolveQuestion(qid, answers);
+}
+
+// ── orbit-build (build handoff notifiers → external test facility) ──
+// start_build / end_build are lifecycle notifiers the agent calls once a script
+// is written, to hand it off to the EXTERNAL build+test facility (a separate
+// service, out of Orbit's scope). start_build marks the boundary + emits an
+// event; end_build submits the artifacts to the tester and merges the returned
+// verdict into the run contract.
+//
+// NOTE: the external tester HTTP client is a STUB here — the facility is built
+// and owned separately (see plans/external-testing-facility.md). When
+// ORBIT_TESTER_URL is unset, end_build returns a `skipped` verdict rather than
+// failing, so the handoff is inert until the facility is wired.
+const TESTER_URL = process.env.ORBIT_TESTER_URL || "";
+
+// Emit a build lifecycle event to the session's live browser clients + the
+// in-app notification bell (so parent-app progress UIs and the console see it).
+function emitBuildState(sessionId, build) {
+  try {
+    const payload = JSON.stringify({ type: "build_state", sessionId, build });
+    wss.clients.forEach((c) => {
+      if (c.readyState === 1 && c.activeSessionId === sessionId) { try { c.send(payload); } catch {} }
+    });
+  } catch {}
+}
+
+async function startBuild({ sessionId, language, entrypoint, summary }) {
+  if (!sessionId) throw new Error("no session context");
+  const buildId = `bld_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const rec = findRunBySession(sessionId);
+  const build = {
+    buildId, status: "building", language: language || "", entrypoint: entrypoint || "",
+    summary: summary || "", submitted: false, startedAt: Date.now(),
+  };
+  activeBuilds.set(buildId, { sessionId, runId: rec ? rec.runId : null, status: "building", block: build });
+  emitBuildState(sessionId, build);
+  return { buildId };
+}
+
+// Submit the session's artifacts to the external tester (stubbed) and return a
+// `build` verdict block. Also stashes it on the run rec so run finalization
+// merges it into the contract.
+async function endBuild({ sessionId, buildId, summary, notes }) {
+  if (!sessionId) throw new Error("no session context");
+  const entry = buildId ? activeBuilds.get(buildId) : null;
+  const rec = findRunBySession(sessionId);
+  const bId = buildId || (entry && entry.block.buildId) || `bld_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+  // Collect an artifact manifest for the handoff (best-effort).
+  let artifacts = [];
+  try { artifacts = runContract.listArtifacts(workspacePaths.sessionDirs(sessionId).artifacts).map((a) => a.path); } catch {}
+
+  let block;
+  if (!TESTER_URL) {
+    // Facility not wired — inert, non-failing handoff.
+    block = {
+      buildId: bId, submitted: false, status: "skipped",
+      summary: summary || "external test facility not configured (ORBIT_TESTER_URL unset)",
+      artifacts,
+    };
+  } else {
+    // Real submission (bounded). The verdict schema is owned by the external
+    // facility; we merge it under `tester`.
+    emitBuildState(sessionId, { buildId: bId, status: "submitting" });
+    try {
+      const headers = { "Content-Type": "application/json" };
+      if (process.env.ORBIT_TESTER_KEY) headers["Authorization"] = `Bearer ${process.env.ORBIT_TESTER_KEY}`;
+      const resp = await fetch(`${TESTER_URL.replace(/\/$/, "")}/grade`, {
+        method: "POST", headers,
+        body: JSON.stringify({ submissionId: bId, sessionId, notes: notes || "", artifacts }),
+      });
+      const verdict = await resp.json().catch(() => ({}));
+      block = {
+        buildId: bId, submitted: true,
+        status: verdict.status === "passed" ? "passed" : (verdict.status === "failed" ? "failed" : "error"),
+        summary: summary || verdict.summary || "", tester: verdict, artifacts,
+      };
+    } catch (e) {
+      block = { buildId: bId, submitted: true, status: "error", summary: `tester submit failed: ${e.message}`, artifacts };
+    }
+  }
+
+  activeBuilds.set(bId, { sessionId, runId: rec ? rec.runId : null, status: block.status, block });
+  if (rec) rec.build = block; // merged into the contract at finalization
+  emitBuildState(sessionId, block);
+  return block;
 }
 
 /**
@@ -2213,6 +2501,9 @@ function ensureOrbitMcpServersRegistered() {
     // notify-bus.js / fleet.js; MCP is the only way to expose a tool to pi).
     "orbit-fleet": { path: path.join(__dirname, "./mcp/fleet-mcp.js") },
     "orbit-notify": { path: path.join(__dirname, "./mcp/notify-mcp.js") },
+    // Baked-in clarification (ask the user, incl. MCQ) + build handoff notifiers.
+    "orbit-ask": { path: path.join(__dirname, "./mcp/ask-mcp.js") },
+    "orbit-build": { path: path.join(__dirname, "./mcp/build-mcp.js") },
     // External capability servers — live under the top-level mcp-servers/ folder.
     "orbit-transcript": { path: path.join(__dirname, "../mcp-servers/transcript/index.js") },
     "orbit-search": { path: path.join(__dirname, "../mcp-servers/search/index.js") },

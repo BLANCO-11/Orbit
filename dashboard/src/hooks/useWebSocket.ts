@@ -193,6 +193,16 @@ export function useWebSocket(
             }));
             break;
             
+          case 'question_request':
+            // ask_questions: the agent is asking the user (text / MCQ) and is
+            // blocked until we answer with a matching question_response.
+            dispatch(actions.setQuestionRequest({
+              questionId: data.questionId,
+              sessionId: data.sessionId,
+              questions: Array.isArray(data.questions) ? data.questions : [],
+            }));
+            break;
+
           case 'subagent_metrics':
           case 'usage_update':
             dispatch(actions.updateMetrics(data));

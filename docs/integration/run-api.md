@@ -54,6 +54,31 @@ terminal. Scoped to your tenant (another tenant's run 404s).
 `POST /api/run/:runId/cancel` → aborts an in-flight run; it finalizes with a
 terminal contract.
 
+## Answer a run (`awaiting_input`)
+
+If the agent calls the built-in `ask_questions` tool, the run pauses at
+**`awaiting_input`** (a non-terminal status) and its idle watchdog is suspended
+(the absolute backstop still applies). `GET /api/run/:id` then returns the pending
+questions:
+
+```jsonc
+{ "status": "awaiting_input", "questionId": "q_…",
+  "pendingQuestions": [ { "id": "db", "question": "Which datastore?", "kind": "single",
+    "options": [ { "label": "Postgres" }, { "label": "Mongo" } ] } ] }
+```
+
+Answer with:
+
+```
+POST /api/run/:runId/answer
+{ "questionId": "q_…", "answers": { "db": "Postgres" } }
+```
+
+`answers` is keyed by question id → the selected label(s) (single/multi) or text.
+The parked tool call resolves and the run resumes `running`. Unanswered within
+`ORBIT_ASK_TIMEOUT_MS` (default 10 min), the tool returns a "no answer" sentinel
+and the run continues.
+
 ## Version history
 
 `GET /api/sessions/:id/runs` →
@@ -77,15 +102,26 @@ survive when v2 rewrites the workspace.
   "usage": { "tokens": 42100, "cost": 0.031, "toolCalls": 12 },
   "finalMessage": "…(capped 4KB)",
   "error": null,
-  "raw": { "resultJsonPresent": true, "resultJsonValid": true, "resultJsonErrors": [] }
+  "raw": { "resultJsonPresent": true, "resultJsonValid": true, "resultJsonErrors": [] },
+
+  // Optional, present only when applicable:
+  "build": { "buildId": "bld_…", "submitted": true, "status": "passed|failed|error|skipped", "tester": { … }, "artifacts": [ "…" ] },
+  "templateCompliance": { "templateId": "…", "ok": false, "violations": [ { "rule": "packages.denied", "detail": "…", "file": "…" } ] }
 }
 ```
+
+- **`build`** — present when the agent ran the `end_build` handoff. A definitive
+  tester `failed` flips the run status to `failed`; `skipped` means the external
+  facility isn't configured (`ORBIT_TESTER_URL` unset).
+- **`templateCompliance`** — present when the run used a `templateId`. **Audit-only:**
+  violations are reported but do **not** change the run status.
 
 ### Status meanings
 
 | Status | Meaning |
 |---|---|
 | `running` | Not terminal yet — keep polling. |
+| `awaiting_input` | Paused on a built-in `ask_questions` call — answer via `POST /api/run/:id/answer` to resume. Not terminal. |
 | `succeeded` | Clean completion **and** a valid `RESULT.json` with `tests.passed: true`. `ok` is `true`. |
 | `failed` | The agent reported `ok:false`, or tests ran and failed (`tests.passed:false`). |
 | `needs_review` | Completed, but `RESULT.json` is missing or schema-invalid — inspect the artifacts manually. **Never a false success.** |

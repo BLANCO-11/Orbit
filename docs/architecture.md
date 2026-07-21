@@ -45,7 +45,7 @@ flowchart TB
 
     subgraph exec["Execution plane"]
         H["Harnesses<br/>pi / container / opencode / remote"]
-        MCP["MCP capability servers<br/>search · notify · plan · browser · fleet"]
+        MCP["MCP capability servers<br/>search · notify · ask · build · browser · fleet"]
     end
 
     subgraph ext["External"]
@@ -278,8 +278,10 @@ Two properties make this robust:
 ```mermaid
 stateDiagram-v2
     [*] --> running: POST /api/run
+    running --> awaiting_input: ask_questions (idle watchdog suspended)
+    awaiting_input --> running: POST /api/run/:id/answer
     running --> succeeded: clean end + valid RESULT.json (tests pass)
-    running --> failed: ok=false or tests failed
+    running --> failed: ok=false or tests failed (or build verdict failed)
     running --> needs_review: RESULT.json missing/invalid
     running --> timeout: idle watchdog / absolute backstop
     running --> error: agent/provider error or cancelled
@@ -311,7 +313,7 @@ flowchart LR
     P --> PG[("Postgres")]
 ```
 
-### 4.2 Core entities (schema v18)
+### 4.2 Core entities (schema v19)
 
 ```mermaid
 erDiagram
@@ -395,9 +397,10 @@ Notable modeling choices:
 
 - **`runs : sessions = many : 1`** with a monotonic `seq` — runs are versioned; a
   session is the durable context, a run is one execution against it.
-- **`secrets` / `connectors`** use a composite `(tenant_id, name)` PK with
-  `tenant_id=''` as the "no-tenant/dev" bucket, keeping the key NULL-free across
-  both dialects.
+- **`secrets` / `connectors` / `templates`** use a composite `(tenant_id, name|id)`
+  PK with `tenant_id=''` as the "no-tenant/dev" bucket, keeping the key NULL-free
+  across both dialects. (`templates` — the tenant output-constraint layer — is the
+  v19 addition, following this same pattern.)
 - **Encrypted columns** (`*_enc`, `value_enc`) store only ciphertext; the crypto
   boundary is the caller (route/harness) via `crypto-store`, never the DB layer.
 - **Tokens are hashed, not encrypted**, where they're only ever compared

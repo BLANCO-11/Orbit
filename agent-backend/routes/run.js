@@ -19,7 +19,7 @@ const { Router } = require("express");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const TERMINAL = new Set(["succeeded", "failed", "timeout", "error", "needs_review"]);
 
-function createRunRouter({ db, startRun, cancelRun }) {
+function createRunRouter({ db, startRun, cancelRun, answerRun }) {
   const router = Router();
 
   const tenantOf = (req) => (req.auth && req.auth.tenantId) || null;
@@ -50,6 +50,7 @@ function createRunRouter({ db, startRun, cancelRun }) {
         effort: b.effort,
         sandbox: b.sandbox,
         timeouts: b.timeouts,
+        templateId: b.templateId,
         tenantId: tenantOf(req),
         source: "api",
       });
@@ -91,6 +92,18 @@ function createRunRouter({ db, startRun, cancelRun }) {
     const cancelled = cancelRun(req.params.runId);
     if (!cancelled) return res.status(409).json({ success: false, error: "run is not in flight" });
     res.json({ success: true, status: "cancelling" });
+  });
+
+  // Answer a run that is `awaiting_input` (the agent called ask_questions).
+  // Body: { questionId?, answers }. Resolves the parked tool call; the run
+  // resumes. answers is an object keyed by question id → selected label(s)/text.
+  router.post("/:runId/answer", async (req, res) => {
+    const run = await db.getRun(req.params.runId);
+    if (!run) return res.status(404).json({ success: false, error: "no such run" });
+    if (!canAccess(req, run.tenantId)) return res.status(404).json({ success: false, error: "no such run" });
+    const ok = answerRun(req.params.runId, { questionId: req.body?.questionId, answers: req.body?.answers });
+    if (!ok) return res.status(409).json({ success: false, error: "run is not awaiting input" });
+    res.json({ success: true, status: "running" });
   });
 
   return router;

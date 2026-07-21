@@ -52,7 +52,7 @@ function renderPolicyMatrix(config) {
  * @param {string}   [opts.capabilitiesBlock] rendered "what's configured now" block
  * @param {string}   [opts.workspaceBlock]    per-session workspace block (omit for remote)
  */
-function composeSystemPrompt({ config, systemPromptType, mode, skills, capabilitiesBlock, workspaceBlock } = {}) {
+function composeSystemPrompt({ config, systemPromptType, mode, skills, capabilitiesBlock, templateBlock, workspaceBlock } = {}) {
   const activePromptType = systemPromptType || (config && config.systemPromptType) || "standard";
   const { resolvePromptFile } = require("../../routes/prompts");
   const basePromptFile = resolvePromptFile(activePromptType);
@@ -95,6 +95,10 @@ function composeSystemPrompt({ config, systemPromptType, mode, skills, capabilit
     const skillsText = resolveSkills(skills || (config && config.skills) || []);
     if (skillsText) combined += skillsText;
   } catch (e) { console.error("[prompt] skill resolution failed:", e.message); }
+
+  // Tenant output-constraint template (compiled by the caller). Appended last so
+  // it frames the constraints on everything above.
+  if (templateBlock) combined += "\n\n" + templateBlock;
 
   return combined;
 }

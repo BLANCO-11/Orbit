@@ -67,8 +67,18 @@ response/reasoning models in Settings › Models.
 | `ORBIT_RUN_SANDBOX` | (falls back to `container`) | Sandbox for `/api/run` when the request/profile doesn't set one. Downgrades to `host` if Docker is unavailable. |
 | `ORBIT_RUN_IDLE_MS` | `180000` | Idle watchdog: abort if the harness emits no events for this long (hang → `timeout`). |
 | `ORBIT_RUN_MAX_MS` | `1200000` | Absolute backstop per run (~20 min). |
+| `ORBIT_ASK_TIMEOUT_MS` | `600000` | How long the built-in `ask_questions` tool parks a run at `awaiting_input` before returning a "no answer" sentinel. The idle watchdog is suspended while waiting; the backstop still applies. |
 
 See the [Run API](./integration/run-api.md).
+
+## External build+test facility
+
+The `orbit-build` `end_build` tool hands generated code to a **separate** test facility.
+
+| Var | Default | Purpose |
+|---|---|---|
+| `ORBIT_TESTER_URL` | — | Facility base URL. Set → `end_build` submits artifacts to `<url>/grade` and merges the verdict into the contract's `build` block. Unset → handoff is inert (`skipped`). |
+| `ORBIT_TESTER_KEY` | — | Bearer token sent to the facility. |
 
 ## Secrets encryption
 

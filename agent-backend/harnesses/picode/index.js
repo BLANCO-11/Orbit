@@ -129,6 +129,7 @@ class PiCodeHarness extends HarnessInterface {
       mode: activeMode,
       skills: this.skills || this.config.skills || [],
       capabilitiesBlock: this.capabilitiesBlock,
+      templateBlock: this.templateBlock,
       workspaceBlock,
     });
 

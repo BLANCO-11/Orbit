@@ -47,6 +47,8 @@ function sanitize(body) {
     ? body.toolPolicy.excluded.filter((s) => typeof s === "string").slice(0, 200) : [];
   p.toolPolicy = { excluded };
   p.sandbox = VALID_SANDBOX.has(body.sandbox) ? body.sandbox : "host";
+  // Optional reference to a tenant output-constraint template (see routes/templates.js).
+  if (body.templateId) p.templateId = String(body.templateId).slice(0, 64);
   return p;
 }
 

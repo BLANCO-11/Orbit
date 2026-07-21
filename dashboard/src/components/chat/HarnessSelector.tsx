@@ -25,12 +25,23 @@ interface HarnessSelectorProps {
 export default function HarnessSelector({ harnessId, onSetHarnessId }: HarnessSelectorProps) {
   const [open, setOpen] = useState(false);
   const [harnesses, setHarnesses] = useState<Harness[]>([{ id: 'local', name: 'pi-code', transport: 'local' }]);
+  // Whether the harness list has been fetched from the server at least once. The
+  // "fall back to local" guard below MUST NOT act before this is true — on mount
+  // the list holds only `local`, and acting early would wrongly reset a selected
+  // remote harness (and then persist `local` over it). Bug fix.
+  const [loaded, setLoaded] = useState(false);
+  const missesRef = useRef(0);
   const ref = useRef<HTMLDivElement>(null);
 
   const refresh = useCallback(() => {
     fetch('/api/harnesses')
       .then((r) => r.json())
-      .then((d) => { if (d.success && Array.isArray(d.harnesses) && d.harnesses.length) setHarnesses(d.harnesses); })
+      .then((d) => {
+        if (d.success && Array.isArray(d.harnesses) && d.harnesses.length) {
+          setHarnesses(d.harnesses);
+          setLoaded(true);
+        }
+      })
       .catch(() => {});
   }, []);
 
@@ -48,12 +59,21 @@ export default function HarnessSelector({ harnessId, onSetHarnessId }: HarnessSe
     return () => document.removeEventListener('mousedown', handleClick);
   }, [open]);
 
-  // If the selected remote harness disappears, fall back to local.
+  // If the selected remote harness genuinely disappears, fall back to local.
+  // Only after the list has loaded (never on the mount-time local-only list) and
+  // only after it's been absent across a couple of polls — so a momentary poll
+  // blip can't clobber a valid selection (which would then persist `local`).
   useEffect(() => {
-    if (harnessId !== 'local' && !harnesses.some((h) => h.id === harnessId)) {
+    if (!loaded || harnessId === 'local' || harnesses.some((h) => h.id === harnessId)) {
+      missesRef.current = 0;
+      return;
+    }
+    missesRef.current += 1;
+    if (missesRef.current >= 2) {
+      missesRef.current = 0;
       onSetHarnessId('local');
     }
-  }, [harnesses, harnessId, onSetHarnessId]);
+  }, [harnesses, harnessId, onSetHarnessId, loaded]);
 
   const active = harnesses.find((h) => h.id === (harnessId || 'local')) || harnesses[0];
 

@@ -71,6 +71,7 @@ class HarnessInterface {
     this.excludeTools = options.excludeTools || null; // tool names to disable this session (null = harness default)
     this.binaries = options.binaries || {};
     this.capabilitiesBlock = options.capabilitiesBlock || ""; // dynamic "what's configured now" prompt block (Workstream D2)
+    this.templateBlock = options.templateBlock || ""; // tenant output-constraint template, compiled to a prompt fragment
   }
 
   /**

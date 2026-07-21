@@ -34,6 +34,7 @@ const initialState = {
   },
   approvalsHistory: [],
   approvalRequest: null,
+  questionRequest: null, // ask_questions: { questionId, questions } while awaiting the user's answer
   
   // Session
   currentSessionId: '',
@@ -75,6 +76,7 @@ const REMOVE_MODE_SUGGESTIONS = 'REMOVE_MODE_SUGGESTIONS';
 const TOGGLE_TOOL = 'TOGGLE_TOOL';
 const SET_VISIBLE_COUNT = 'SET_VISIBLE_COUNT';
 const SET_APPROVAL_REQUEST = 'SET_APPROVAL_REQUEST';
+const SET_QUESTION_REQUEST = 'SET_QUESTION_REQUEST';
 const ADD_APPROVAL_HISTORY = 'ADD_APPROVAL_HISTORY';
 const UPDATE_APPROVAL_HISTORY = 'UPDATE_APPROVAL_HISTORY';
 const SET_CURRENT_SESSION = 'SET_CURRENT_SESSION';
@@ -255,6 +257,9 @@ function orbitReducer(state, action) {
     
     case SET_APPROVAL_REQUEST:
       return { ...state, approvalRequest: action.payload };
+
+    case SET_QUESTION_REQUEST:
+      return { ...state, questionRequest: action.payload };
     
     case ADD_APPROVAL_HISTORY:
       return { ...state, approvalsHistory: [action.payload, ...state.approvalsHistory] };
@@ -376,6 +381,7 @@ export const actions = {
   toggleTool: (id) => ({ type: TOGGLE_TOOL, payload: id }),
   setVisibleCount: (count) => ({ type: SET_VISIBLE_COUNT, payload: count }),
   setApprovalRequest: (req) => ({ type: SET_APPROVAL_REQUEST, payload: req }),
+  setQuestionRequest: (req) => ({ type: SET_QUESTION_REQUEST, payload: req }),
   addApprovalHistory: (entry) => ({ type: ADD_APPROVAL_HISTORY, payload: entry }),
   updateApprovalHistory: (id, updates) => ({ type: UPDATE_APPROVAL_HISTORY, payload: { id, updates } }),
   setCurrentSession: (id) => ({ type: SET_CURRENT_SESSION, payload: id }),

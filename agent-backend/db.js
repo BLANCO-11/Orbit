@@ -49,7 +49,7 @@ async function addColumn(table, coldef) {
 }
 
 // ── Schema version ──────────────────────────────────────────────────
-const CURRENT_SCHEMA_VERSION = 18;
+const CURRENT_SCHEMA_VERSION = 19;
 const BACKUP_INTERVAL = 10; // auto-backup every N saves
 let saveCount = 0;
 
@@ -241,6 +241,20 @@ async function _doInit() {
     await setMeta("schema_version", CURRENT_SCHEMA_VERSION);
     console.log(`[DB] Migrated sessions schema to version ${CURRENT_SCHEMA_VERSION}`);
   }
+  if (currentSchemaVersion < 19) {
+    await q.exec(ddl(`
+      CREATE TABLE IF NOT EXISTS templates (
+        tenant_id TEXT NOT NULL DEFAULT '', id TEXT NOT NULL,
+        name TEXT NOT NULL, def_json TEXT NOT NULL DEFAULT '{}',
+        source_url TEXT NOT NULL DEFAULT '', source_etag TEXT NOT NULL DEFAULT '',
+        fetched_at INTEGER,
+        created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
+        PRIMARY KEY (tenant_id, id)
+      )
+    `));
+    await setMeta("schema_version", CURRENT_SCHEMA_VERSION);
+    console.log(`[DB] Migrated sessions schema to version ${CURRENT_SCHEMA_VERSION}`);
+  }
 
   // ── Core tables (ensure ALL exist regardless of schema_version) ──
   await q.exec(ddl(`
@@ -309,6 +323,16 @@ async function _doInit() {
       def_json TEXT NOT NULL DEFAULT '{}',
       created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
       PRIMARY KEY (tenant_id, name)
+    )
+  `));
+  await q.exec(ddl(`
+    CREATE TABLE IF NOT EXISTS templates (
+      tenant_id TEXT NOT NULL DEFAULT '', id TEXT NOT NULL,
+      name TEXT NOT NULL, def_json TEXT NOT NULL DEFAULT '{}',
+      source_url TEXT NOT NULL DEFAULT '', source_etag TEXT NOT NULL DEFAULT '',
+      fetched_at INTEGER,
+      created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
+      PRIMARY KEY (tenant_id, id)
     )
   `));
 
@@ -1042,6 +1066,60 @@ async function deleteConnector(tenantId, name) {
   return !!(r && r.changes);
 }
 
+// ── Templates (tenant-scoped output-constraint layer) ───────────────
+// Per-tenant "what the runtime may produce" documents: allowed languages,
+// allowed/denied packages, structure rules + conventions (compiled into the
+// system prompt) and an optional workspace scaffold. Distinct from profiles
+// ("how the runtime runs"). def_json holds the template document; source_url is
+// an optional tenant repo/URL the def can be synced from. tenant_id '' = dev bucket.
+const templateTenant = (tenantId) => (tenantId == null ? "" : String(tenantId));
+
+function mapTemplateRow(row) {
+  let def = {};
+  try { def = JSON.parse(row.def_json || "{}"); } catch {}
+  return {
+    tenantId: row.tenant_id || null, id: row.id, name: row.name, def,
+    sourceUrl: row.source_url || "", sourceEtag: row.source_etag || "",
+    fetchedAt: row.fetched_at || null,
+    createdAt: row.created_at, updatedAt: row.updated_at,
+  };
+}
+
+async function upsertTemplate({ tenantId, id, name, def, sourceUrl, sourceEtag, fetchedAt }) {
+  await init();
+  const now = Date.now();
+  const tid = templateTenant(tenantId);
+  const existing = await q.get("SELECT created_at FROM templates WHERE tenant_id = ? AND id = ?", [tid, id]);
+  await q.run(`
+    INSERT INTO templates (tenant_id, id, name, def_json, source_url, source_etag, fetched_at, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(tenant_id, id) DO UPDATE SET
+      name = excluded.name, def_json = excluded.def_json,
+      source_url = excluded.source_url, source_etag = excluded.source_etag,
+      fetched_at = excluded.fetched_at, updated_at = excluded.updated_at
+  `, [tid, id, name || id, JSON.stringify(def || {}), sourceUrl || "", sourceEtag || "",
+      fetchedAt || null, existing ? existing.created_at : now, now]);
+  return getTemplate(tenantId, id);
+}
+
+async function getTemplate(tenantId, id) {
+  await init();
+  const row = await q.get("SELECT * FROM templates WHERE tenant_id = ? AND id = ?", [templateTenant(tenantId), id]);
+  return row ? mapTemplateRow(row) : null;
+}
+
+async function listTemplatesForTenant(tenantId) {
+  await init();
+  const rows = await q.all("SELECT * FROM templates WHERE tenant_id = ? ORDER BY name ASC", [templateTenant(tenantId)]);
+  return rows.map(mapTemplateRow);
+}
+
+async function deleteTemplate(tenantId, id) {
+  await init();
+  const r = await q.run("DELETE FROM templates WHERE tenant_id = ? AND id = ?", [templateTenant(tenantId), id]);
+  return !!(r && r.changes);
+}
+
 // ── Access control: tenants / API keys / SSO ────────────────────────
 const VALID_ROLES = new Set(["superadmin", "admin", "member", "viewer"]);
 const normalizeRole = (r) => (VALID_ROLES.has(r) ? r : "member");
@@ -1285,6 +1363,8 @@ module.exports = {
   nextRunSeq, createRun, getRun, updateRun, listSessionRuns, deleteRunsForSession,
   // Connectors (tenant-scoped MCP servers)
   upsertConnector, getConnector, listConnectorsForTenant, deleteConnector,
+  // Templates (tenant-scoped output-constraint layer)
+  upsertTemplate, getTemplate, listTemplatesForTenant, deleteTemplate,
   // Access control (tenants / API keys / SSO)
   createTenant, listTenants, getTenant, updateTenant, deleteTenant,
   createApiKey, getApiKey, getApiKeyByToken, touchApiKeyUsed, listApiKeys, revokeApiKey,

@@ -41,6 +41,10 @@ A run is **async**: submit it, then poll. Its lifecycle is:
 running → { succeeded | failed | timeout | error | needs_review }
 ```
 
+A run may transiently enter **`awaiting_input`** if the agent calls the built-in
+`ask_questions` tool — it pauses (idle watchdog suspended) until the caller
+answers via `POST /api/run/:id/answer`, then resumes `running`.
+
 The terminal status is derived from the run lifecycle merged with the agent's
 self-reported `artifacts/RESULT.json`. See the [Run API](./integration/run-api.md).
 
@@ -108,7 +112,8 @@ the containment layer beneath the policy.
 **Connectors** are MCP tool servers the agent can call. Two kinds:
 
 - **Shared** — Orbit's own servers (fleet, notify, search, transcript,
-  lightpanda) and OAuth-wired providers; available to all tenants.
+  lightpanda, and the baked-in `ask`/`build` tools) and OAuth-wired providers;
+  available to all tenants.
 - **Tenant** — servers a tenant registers via `POST /api/connectors`; isolated to
   that tenant and composed into only its sessions' `.pi/mcp.json` at spawn.
 
@@ -121,6 +126,32 @@ Tenant-scoped credentials, encrypted at rest. They are **injected into the
 sandbox environment** at spawn (so a generated script reads `os.environ["NAME"]`)
 and are **never** placed in the prompt, transcript, or logs — the agent is told
 the env-var *name*, never the value. Reference them anywhere as `${secret:NAME}`.
+
+## Templates
+
+A **template** is a tenant-scoped **output-constraint layer** — distinct from a
+profile (which sets *how* a run executes). It declares what a run may produce:
+allowed languages, allowed/denied packages, implementation-structure rules and
+free-form conventions, plus an optional **workspace scaffold** (starter dirs and
+files seeded into `workspace/` at session creation). A run or profile references
+one by `templateId`. It is **compiled into the system prompt** at spawn (a
+"sub-prompt") and **checked after generation** — violations are surfaced in the
+contract's `templateCompliance` block but are **audit-only** (never a hard block).
+Templates live in the DB (editable via `POST /api/templates`) and can also be
+synced from a tenant-provided URL/repo. See
+[Secrets & connectors](./integration/secrets-and-connectors.md).
+
+## Built-in tools: ask & build
+
+Two capabilities are baked into every session as always-on Orbit MCP servers:
+
+- **`ask_questions`** — the agent can ask the user for clarification (free-text
+  or multiple-choice). In the console it opens a live dialog; in a headless run
+  it pauses to `awaiting_input` for the parent app to answer over REST.
+- **`start_build` / `end_build`** — lifecycle notifiers the agent calls once code
+  is written, to hand it off to the **external** build+test facility. `end_build`
+  submits the artifacts and merges the returned verdict into the contract's
+  `build` block (inert until `ORBIT_TESTER_URL` is configured).
 
 ## Result contract
 

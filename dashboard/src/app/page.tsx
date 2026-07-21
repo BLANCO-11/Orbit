@@ -6,6 +6,7 @@ import BottomNav from '@/components/layout/BottomNav';
 import { ErrorBoundary, ComponentErrorBoundary } from '@/components/ErrorBoundary';
 import CommandPalette from '@/components/widgets/CommandPalette';
 import NotificationCenter from '@/components/widgets/NotificationCenter';
+import QuestionDialog from '@/components/QuestionDialog';
 
 // Providers & Hooks
 import { OrbitProvider, useOrbitState, useOrbitDispatch, actions } from '@/providers/OrbitProvider';
@@ -438,6 +439,17 @@ function DashboardInner({ auth, onLogout }: { auth: AuthIdentity; onLogout: () =
     }));
     dispatch(actions.setApprovalRequest(null));
   }, [state.approvalRequest, sendMessage, dispatch]);
+
+  const handleQuestionSubmit = useCallback((answers) => {
+    if (!state.questionRequest || !sendMessage) return;
+    sendMessage({
+      type: 'question_response',
+      questionId: state.questionRequest.questionId,
+      sessionId: state.questionRequest.sessionId || state.currentSessionId,
+      answers,
+    });
+    dispatch(actions.setQuestionRequest(null));
+  }, [state.questionRequest, state.currentSessionId, sendMessage, dispatch]);
 
   const handleSetSessionMode = useCallback((mode) => {
     dispatch(actions.setSessionMode(mode));
@@ -911,6 +923,13 @@ function DashboardInner({ auth, onLogout }: { auth: AuthIdentity; onLogout: () =
           onSetTheme: setTheme,
         }}
       />
+      {state.questionRequest && (
+        <div className="fixed inset-x-0 bottom-0 z-50 flex justify-center p-4 pointer-events-none">
+          <div className="w-full max-w-xl pointer-events-auto">
+            <QuestionDialog questionRequest={state.questionRequest} onSubmit={handleQuestionSubmit} />
+          </div>
+        </div>
+      )}
     </ErrorBoundary>
   );
 }

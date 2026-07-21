@@ -91,9 +91,12 @@ Authorization-Code + PKCE against any OIDC IdP (Entra/Azure AD, Okta, Google, Au
 
 ### Run API (task submission & result contract)
 Submit a structured task and read back a typed, validated **result contract** — no transcript scraping. A **run** is one versioned execution against a session's durable context; re-running against the same `sessionId` produces a new `seq` (v1, v2, …) with its own contract and its own artifact snapshot. Runs are async: submit, then poll.
-- **`POST /api/run`**: Body `{ sessionId?, prompt, profileId?, mode?, effort?, sandbox?, timeouts? }`. Omit `sessionId` to start a new session; provide it to run against (and version) an existing one. Returns `{ runId, sessionId, seq, status: "running" }`. Add `?wait=true&timeoutMs=` to long-poll for short runs (returns the contract, or `202` + `{ runId, … }` on timeout). Connectors and secrets are resolved from the caller's tenant at spawn — not passed inline. Runs default to the container sandbox (network-on; downgrades to host if Docker is unavailable) and always attach the mandatory `script-gen` skill.
+- **`POST /api/run`**: Body `{ sessionId?, prompt, profileId?, mode?, effort?, sandbox?, timeouts?, templateId? }`. `templateId` applies a tenant Runtime Template (output constraints + scaffold). Omit `sessionId` to start a new session; provide it to run against (and version) an existing one. Returns `{ runId, sessionId, seq, status: "running" }`. Add `?wait=true&timeoutMs=` to long-poll for short runs (returns the contract, or `202` + `{ runId, … }` on timeout). Connectors and secrets are resolved from the caller's tenant at spawn — not passed inline. Runs default to the container sandbox (network-on; downgrades to host if Docker is unavailable) and always attach the mandatory `script-gen` skill.
 - **`GET /api/run/:runId`**: The result contract for that run (pollable). Scoped to the caller's tenant.
 - **`POST /api/run/:runId/cancel`**: Abort an in-flight run.
+- **`POST /api/run/:runId/answer`**: Answer a run that is paused at `awaiting_input` (the agent called the built-in `ask_questions` tool). Body `{ questionId?, answers }` where `answers` is keyed by question id → the selected label(s) or text. Resolves the parked tool call; the run resumes (`running`). While a run is `awaiting_input` its idle watchdog is suspended (the absolute backstop still applies). `GET /api/run/:id` surfaces the pending questions: `{ status:"awaiting_input", pendingQuestions:[…], questionId }`.
+
+The result contract may also carry (when applicable): a **`build`** block (from the `orbit-build` `end_build` handoff — `{ buildId, submitted, status, tester?, artifacts }`; a definitive tester `failed` flips the run to `failed`) and a **`templateCompliance`** block (audit-only — `{ templateId, ok, violations[] }`).
 
 **Result contract shape** (`{ success, run: … }`):
 ```jsonc
@@ -146,8 +149,25 @@ At session spawn, every one of the tenant's secrets is injected as an env var (`
 - **`GET /api/harnesses`**: List available runtimes/harnesses (local pi, OpenCode, paired remote fleet devices).
 - **`GET /api/harnesses/:id/tools`**: Retrieve the tools available under a specific harness.
 
+### Runtime Templates (tenant-scoped output constraints)
+Per-tenant **templates** constrain *what a run may produce* — allowed languages, allowed/denied packages, implementation-structure rules + conventions — and optionally seed a **workspace scaffold**. They are distinct from profiles (which set *how* a run executes). A template is compiled into the system prompt at spawn (a "sub-prompt") and checked after generation; a run/profile references it by `templateId`. Compliance is **audit-only** — surfaced in the contract's `templateCompliance` block, never a hard block. Tenant-scoped like secrets/connectors.
+- **`GET /api/templates`**: list this tenant's templates.
+- **`GET /api/templates/:id`**: full template def.
+- **`POST /api/templates`** *(member+)*: create/update `{ id?, name, def, sourceUrl? }`. `def` shape:
+  ```jsonc
+  {
+    "languages": { "allowed": ["python","node"], "default": "python" },
+    "packages": { "python": { "allowed": ["requests"], "denied": ["boto3"] } },
+    "structure": { "rules": ["Entrypoint in artifacts/"] },
+    "conventions": "Markdown appended to the system prompt.",
+    "scaffold": { "dirs": ["src","tests"], "files": [ { "path": "README.md", "content": "…" } ] }
+  }
+  ```
+- **`DELETE /api/templates/:id`** *(member+)*.
+- **`POST /api/templates/:id/sync`** *(member+)*: refresh `def` from the template's `sourceUrl` (a tenant repo/URL returning the def JSON). Fetch failure is non-fatal — the stored def is kept.
+
 ### Reusable Session Profiles
-Named templates containing default agent runtime settings. A session can load a profile by specifying its `profileId` on `start_task`.
+Named templates containing default agent runtime settings. A session can load a profile by specifying its `profileId` on `start_task`. A profile may also carry a `templateId` (see **Runtime Templates**).
 - **`GET /api/profiles`**: List all saved session profiles.
 - **`POST /api/profiles`**: Create or update a session profile. Accepts a JSON body:
   ```json
@@ -287,6 +307,17 @@ Responds to a write restriction path gate.
 }
 ```
 
+#### 7. Question Response (ask_questions answer)
+Answers a `question_request` (see Server Outbound) — the agent's built-in `ask_questions` tool. `answers` is keyed by question id → the selected label(s) (single/multi) or text.
+```json
+{
+  "type": "question_response",
+  "questionId": "q_123",
+  "sessionId": "session-12345",
+  "answers": { "db_choice": "Postgres", "features": ["auth", "billing"] }
+}
+```
+
 ---
 
 ### B. Server Outbound Messages (Events)
@@ -366,6 +397,26 @@ Emitted when the turn settles and the agent process halts.
   "sessionId": "session-12345",
   "status": "done"
 }
+```
+
+#### 7. Question Request (ask_questions)
+Emitted when the agent calls the built-in `ask_questions` tool; the turn blocks until a `question_response` arrives. Each question is free-text or multiple-choice (`single`/`multi`).
+```json
+{
+  "type": "question_request",
+  "sessionId": "session-12345",
+  "questionId": "q_123",
+  "questions": [
+    { "id": "db_choice", "question": "Which datastore?", "header": "Datastore", "kind": "single",
+      "options": [ { "label": "Postgres", "description": "Relational" }, { "label": "Mongo" } ] }
+  ]
+}
+```
+
+#### 8. Build State
+Emitted by the `orbit-build` tools as a build is handed to the external test facility (`building` → `submitting` → `passed|failed|error|skipped`).
+```json
+{ "type": "build_state", "sessionId": "session-12345", "build": { "buildId": "bld_1", "status": "building" } }
 ```
 
 ---

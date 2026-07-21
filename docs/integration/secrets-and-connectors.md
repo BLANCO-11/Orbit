@@ -84,6 +84,32 @@ curl -s -X POST "$BASE/api/connectors" -H "x-api-key: $KEY" \
 Inside a run, the agent calls the tool as `mcp_<connector>_<tool>` (e.g.
 `mcp_watchlist_get_watchlist`).
 
+## Templates (output constraints)
+
+A third tenant-scoped resource: **templates** constrain *what a run produces*
+(allowed languages, allowed/denied packages, structure rules, conventions) and
+can seed a **workspace scaffold**. Reference one from a run or profile via
+`templateId`. It's compiled into the system prompt and checked after generation
+(audit-only — reported in the contract's `templateCompliance`, never a hard block).
+
+| Method | Endpoint | Notes |
+|---|---|---|
+| `GET` | `/api/templates` | Your tenant's templates. |
+| `GET` | `/api/templates/:id` | Full `def`. |
+| `POST` | `/api/templates` | Create/update `{ id?, name, def, sourceUrl? }`. *member+*. |
+| `DELETE` | `/api/templates/:id` | Remove one. *member+*. |
+| `POST` | `/api/templates/:id/sync` | Refresh `def` from `sourceUrl` (a repo/URL). Non-fatal on failure. *member+*. |
+
+```jsonc
+{ "name": "Python integration", "def": {
+  "languages": { "allowed": ["python"], "default": "python" },
+  "packages": { "python": { "allowed": ["requests"], "denied": ["boto3"] } },
+  "structure": { "rules": ["Entrypoint in artifacts/"] },
+  "conventions": "Read all credentials from environment variables.",
+  "scaffold": { "dirs": ["src","tests"], "files": [ { "path": "README.md", "content": "# App" } ] }
+} }
+```
+
 ## Isolation
 
 A `member` of tenant A:

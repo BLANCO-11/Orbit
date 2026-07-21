@@ -103,7 +103,7 @@ agent-backend/        Express backend, harnesses, policy engine, MCP registry
   workspace-paths.js  per-session ~/.orbit/sessions/<id> layout
 dashboard/            Next.js console (src/app, components, hooks, providers)
 mcp-servers/          External capability MCP servers (lightpanda, search, transcript)
-agent-backend/mcp/    Native platform tool shims (fleet, notify) over the backend's own features
+agent-backend/mcp/    Native platform tool shims (fleet, notify, ask, build) over the backend's own features
 prompts/  skills/     system prompts + reusable instruction packs
 restart-orbit.sh      clean rebuild + boot
 ```
