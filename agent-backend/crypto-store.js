@@ -11,7 +11,20 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 
-const KEY_FILE = path.join(__dirname, ".orbit-secret");
+// Where the auto-generated key is persisted. IMPORTANT: it must live on a DURABLE
+// path, otherwise a container recreate mints a fresh random key and every secret
+// already encrypted in the (persistent) DB becomes undecryptable → the
+// "[Crypto] decrypt failed: Unsupported state or unable to authenticate data"
+// bug on session init. Prefer an explicit ORBIT_SECRET_FILE, else a file under
+// ORBIT_HOME (the mounted /data volume in Docker), else the module dir (bare-metal
+// back-compat). Best practice is still to set a stable ORBIT_SECRET env.
+function keyFilePath() {
+  if (process.env.ORBIT_SECRET_FILE) return process.env.ORBIT_SECRET_FILE;
+  if (process.env.ORBIT_HOME) return path.join(process.env.ORBIT_HOME, ".orbit-secret");
+  return path.join(__dirname, ".orbit-secret");
+}
+
+const KEY_FILE = keyFilePath();
 
 function loadKey() {
   if (process.env.ORBIT_SECRET) {
@@ -23,7 +36,9 @@ function loadKey() {
   } catch {}
   const key = crypto.randomBytes(32);
   try {
+    fs.mkdirSync(path.dirname(KEY_FILE), { recursive: true });
     fs.writeFileSync(KEY_FILE, key.toString("hex"), { mode: 0o600 });
+    console.log(`[Crypto] generated a new encryption key at ${KEY_FILE} (set ORBIT_SECRET to make it deterministic).`);
   } catch (e) {
     console.error("[Crypto] could not persist key file:", e.message);
   }
@@ -54,7 +69,13 @@ function decrypt(payload) {
     decipher.setAuthTag(tag);
     return Buffer.concat([decipher.update(ct), decipher.final()]).toString("utf8");
   } catch (e) {
-    console.error("[Crypto] decrypt failed:", e.message);
+    // GCM auth-tag failure ("Unsupported state or unable to authenticate data")
+    // almost always means the key differs from the one used to encrypt this value
+    // — typically the encryption key was regenerated (no stable ORBIT_SECRET and a
+    // non-persistent key file). The value must be re-saved to recover it.
+    console.error(
+      `[Crypto] decrypt failed: ${e.message} — likely the encryption key changed since this value was stored (set a stable ORBIT_SECRET; key file: ${KEY_FILE}).`,
+    );
     return "";
   }
 }

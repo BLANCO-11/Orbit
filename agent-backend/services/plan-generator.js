@@ -25,18 +25,41 @@ async function generatePlan(userPrompt, getConfig) {
     return null;
   }
 
-  const reasoningModel = (config && config.litellm && config.litellm.selectedReasoningModel) || "deepseek-v4-flash";
-  const baseURL = (config && config.litellm && config.litellm.baseURL) || "http://127.0.0.1:5000/v1";
+  // NO hardcoded model name: use the runtime/parent-configured reasoning model,
+  // else the normal model, else the LLM_MODEL / ORBIT_PLAN_MODEL env — never a
+  // provider literal the gateway may reject (the old "deepseek-v4-flash" → 401).
+  const reasoningModel =
+    (config && config.litellm && config.litellm.selectedReasoningModel) ||
+    (config && config.litellm && config.litellm.selectedNormalModel) ||
+    process.env.ORBIT_PLAN_MODEL ||
+    process.env.LLM_MODEL ||
+    "";
+  if (!reasoningModel) {
+    console.error("[Plan Generator] No plan/reasoning model configured (set ORBIT_PLAN_MODEL or LLM_MODEL); skipping plan generation.");
+    return null;
+  }
+  const baseURL = (config && config.litellm && config.litellm.baseURL) || process.env.LLM_BASE_URL || "";
+  if (!baseURL) {
+    console.error("[Plan Generator] No LLM base URL configured; skipping plan generation.");
+    return null;
+  }
   
   const planPrompt = ((config && config.litellm && config.litellm.hybridPlanPrompt) || DEFAULT_PLAN_PROMPT) + userPrompt;
   
   try {
-    const openai = new OpenAI({ baseURL, apiKey });
+    // The pre-plan is a short UI reasoning preview (it does NOT drive generation —
+    // the agent self-plans). So BOUND it: cap output + a hard client timeout so an
+    // uncapped/slow completion can't run for ~60s. Overridable via env.
+    const maxTokens = Number(process.env.ORBIT_PLAN_MAX_TOKENS || 600);
+    const timeoutMs = Number(process.env.ORBIT_PLAN_TIMEOUT_MS || 20000);
+    const openai = new OpenAI({ baseURL, apiKey, timeout: timeoutMs, maxRetries: 0 });
     const planCompletion = await openai.chat.completions.create({
       model: reasoningModel,
-      messages: [{ role: "user", content: planPrompt }]
+      messages: [{ role: "user", content: planPrompt }],
+      max_tokens: maxTokens,
+      temperature: 0.3,
     });
-    
+
     const rawPlan = planCompletion.choices[0].message.content;
     return stripTuiChars(rawPlan);
   } catch (err) {

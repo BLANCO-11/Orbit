@@ -32,6 +32,13 @@ The `error` field has a hint; full detail is in the session logs
   `ORBIT_RUN_MAX_MS`, check that the process isn't blocked on a slow image pull
   (see below).
 
+### Closing the browser tab killed my running task
+This is fixed: a dashboard WebSocket disconnect (navigate away / refresh / network
+blip) while a turn is in flight now **detaches** the socket and lets the run finish
+(it persists on completion; reconnect + re-subscribe to watch again). Only an idle
+session is torn down on disconnect. Previously the disconnect called
+`harness.disconnect()` and the agent process exited with code 143 (SIGTERM).
+
 ## Sandbox / Docker
 
 ### First container run is slow, then fine
@@ -93,6 +100,15 @@ cross-tenant). Fix the name or add the secret.
 ### A tenant connector's stdio `command` isn't found in the container
 Host-absolute `command` paths may not resolve inside the container sandbox. Use
 an HTTP (`url`) connector, or an image that contains the command.
+
+### `[Crypto] decrypt failed: Unsupported state or unable to authenticate data`
+The encryption key differs from the one that encrypted the value — an AES-GCM
+auth-tag mismatch. Almost always: `ORBIT_SECRET` is unset **and** the generated key
+file wasn't persisted, so a container rebuild/recreate minted a new key. Fix going
+forward by pinning a stable `ORBIT_SECRET` (or keeping `ORBIT_SECRET_FILE` on a
+volume — it defaults to `$ORBIT_HOME/.orbit-secret`). Values already encrypted under
+the lost key are unrecoverable — **re-save** them (re-enter the secret / re-add the
+datasource) so they re-encrypt under the current key.
 
 ## Ports & connectivity
 

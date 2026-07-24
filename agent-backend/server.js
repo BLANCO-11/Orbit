@@ -351,6 +351,15 @@ const getConfig = () => {
   if (!config.litellm.selectedNormalModel) {
     config.litellm.selectedNormalModel = llmEnv.model || "";
   }
+  // Reasoning/plan model: NO hardcoded provider default (the old "deepseek-v4-flash"
+  // 401s on gateways that don't serve it — the generatePlan failure). Fall back to
+  // an explicit ORBIT_PLAN_MODEL env, else the normal model / LLM_MODEL, so plan-gen
+  // uses whatever the runtime actually has access to. A distinct reasoner can still
+  // be set via config or ORBIT_PLAN_MODEL.
+  if (!config.litellm.selectedReasoningModel) {
+    config.litellm.selectedReasoningModel =
+      process.env.ORBIT_PLAN_MODEL || config.litellm.selectedNormalModel || llmEnv.model || "";
+  }
   return config;
 };
 const { nodePath, piPath } = discoverPiBinaries();
@@ -964,6 +973,13 @@ wss.on("connection", (ws) => {
           ws.activeSessionId = sessionId;
           const ses = activeSessions.get(sessionId);
           if (ses) {
+            // If a headless sink (POST /api/run) is attached, preserve it before we
+            // rebind: when this browser later disconnects we restore it so the run
+            // keeps recording + persists on completion (a browser navigating away must
+            // not starve/kill a headless run).
+            if (ses.ws && ses.ws !== ws && typeof ses.ws.whenDone === "function") {
+              ses._headlessSink = ses.ws;
+            }
             // Bind the active WebSocket to this running session
             ses.ws = ws;
             // Send the current running status immediately
@@ -1088,22 +1104,36 @@ wss.on("connection", (ws) => {
   ws.on("close", () => {
     console.log("Dashboard client disconnected.");
     for (const [sid, ses] of activeSessions.entries()) {
-      if (ses.ws === ws) {
-        // Persist final metrics (no-clobber: keeps the DB copy if already released)
-        persistSessionMetrics(sid, ses.subagentTracker);
+      if (ses.ws !== ws) continue;
+      // Persist final metrics (no-clobber: keeps the DB copy if already released)
+      persistSessionMetrics(sid, ses.subagentTracker);
 
-        if (ses.harness) {
-          try { ses.harness.disconnect(); } catch {}
-        }
-        // The owning dashboard socket closed and we just tore down the harness,
-        // so this session isn't running — clear the resumable flag so it doesn't
-        // reopen showing a stale "interrupted / Resume" banner (Workstream D4). A
-        // hard server crash doesn't fire this handler, so restart-resume (which
-        // relies on run_state persisting in the DB) is unaffected.
-        try { db.clearSessionRunning(sid); } catch {}
-        activeSessions.delete(sid);
-        metricsManager.releaseSession(sid);
+      // A browser navigating away / refreshing / losing its connection must NOT
+      // kill an in-flight agent turn. If a turn is running, DETACH this socket and
+      // let the run finish (it still persists on completion; a reconnect can
+      // re-subscribe). Only tear the harness down when the session is idle.
+      const turnActive = !!ses.harness && ses.status !== "done" && ses.status !== "error";
+      if (turnActive) {
+        // Restore the headless sink if this run began headless (POST /api/run) and a
+        // browser had subscribed over it; else detach to null. Send helpers are all
+        // readyState-guarded, so a null sink is a safe no-op. Keep the session and its
+        // running flag intact so completion + restart-resume still work.
+        ses.ws = ses._headlessSink || null;
+        ses._headlessSink = null;
+        console.log(`[WS] Browser disconnected from RUNNING session ${sid}; run continues (detached, not killed).`);
+        continue;
       }
+
+      if (ses.harness) {
+        try { ses.harness.disconnect(); } catch {}
+      }
+      // Idle session + owning socket closed → clear the resumable flag so it doesn't
+      // reopen showing a stale "interrupted / Resume" banner (Workstream D4). A hard
+      // server crash doesn't fire this handler, so restart-resume (which relies on
+      // run_state persisting in the DB) is unaffected.
+      try { db.clearSessionRunning(sid); } catch {}
+      activeSessions.delete(sid);
+      metricsManager.releaseSession(sid);
     }
   });
 });
@@ -1184,14 +1214,15 @@ async function handleStartTask(ws, userPrompt, sessionId, mode, systemPromptType
   // plan is reasoning, not "the plan": it feeds the reasoning accordion only, so
   // the Mission board (plan_state) stays the single canonical plan surface
   // (Workstream B2).
-  if (wantsPlan && !isChat && ws.queryNature === "task") {
-    sendLog(ws, "Sketching an approach...", true, sessionId);
-    const plan = await generatePlan(userPrompt, getConfig);
-    if (plan) {
-      sendLog(ws, "Planning notes ready.", true, sessionId);
-      sendWithSession(ws, { type: "reasoning_update", content: plan }, sessionId);
-    }
-  }
+  // NOTE: the separate pre-plan LLM call (generatePlan) was REMOVED here. It never
+  // drove generation — its output only populated a UI reasoning preview — while
+  // costing a full, uncapped ~35-60s round-trip that (when awaited) also gated the
+  // agent spawn. The agent now surfaces its OWN plan: it writes ./plans/plan.md,
+  // which Orbit parses after each tool call (syncPlansFromWorkspace) and streams as
+  // the live Mission board (plan_state). That is the authentic, scalable plan — a
+  // few steps for a simple task, phased for a complex one — with no extra call and
+  // no added latency. (generatePlan()/plan-generator.js are kept for reference/other
+  // callers but are no longer invoked on the task path.)
 
   // ── Initialize metrics ────────────────────────────────────
   // Restore prior cumulative metrics from the DB when this session has no live

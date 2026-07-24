@@ -46,9 +46,16 @@ vLLM, a LiteLLM proxy, …).
 | `LLM_API_KEY` | Upstream key. Held server-side; local agents never see it (they go through Orbit's internal `/llm/v1` gateway). |
 | `LLM_MODEL` | Default model. |
 | `ORBIT_GATEWAY_KEY` | App-local key agents use for the internal gateway. Auto-generated per boot if unset. |
+| `ORBIT_PLAN_MODEL` | Reasoning/plan model fallback. No hardcoded provider default — falls back to the normal model, then `LLM_MODEL`. Used for `deep`-effort reasoning and by the pre-plan generator if it is re-enabled (see note below). |
 
 Historical `LITELLM_*` / `OPENAI_*` names are read as fallbacks. Pick the actual
 response/reasoning models in Settings › Models.
+
+> **Planning:** the agent surfaces its own plan via the **Mission board**
+> (`plans/*.md`, streamed as `plan_state`); the separate pre-plan LLM call is **off by
+> default** (it never fed generation — it only populated a UI preview — and added a full
+> round-trip). `ORBIT_PLAN_MODEL` / `ORBIT_PLAN_MAX_TOKENS` / `ORBIT_PLAN_TIMEOUT_MS`
+> bound that call for deployments that re-enable it.
 
 ## Execution sandbox
 
@@ -84,7 +91,12 @@ The `orbit-build` `end_build` tool hands generated code to a **separate** test f
 
 | Var | Purpose |
 |---|---|
-| `ORBIT_SECRET` | Key for encrypting stored secrets + connection tokens (`crypto-store.js`). If unset, a random key is generated once and persisted to a gitignored file. **Pin it** to keep encrypted data readable across hosts/rebuilds. |
+| `ORBIT_SECRET` | Key for encrypting stored secrets + connection tokens (`crypto-store.js`). **Set this in Docker.** If unset, a random key is generated and written to a key file; unless that file is on a persistent volume, a container **rebuild/recreate mints a new key** and every previously-encrypted secret in the DB becomes undecryptable (`[Crypto] decrypt failed: Unsupported state or unable to authenticate data` on session init). Pin any strong string to keep encrypted data readable across hosts/rebuilds. |
+| `ORBIT_SECRET_FILE` | Path where the auto-generated key is persisted when `ORBIT_SECRET` is unset. Defaults to `$ORBIT_HOME/.orbit-secret` (the `/data` volume in Docker) so it survives recreates. |
+
+> If you see `[Crypto] decrypt failed` for a specific secret after changing/losing the
+> key, that value was encrypted under the old key and is unrecoverable — re-save it
+> (re-enter the secret / re-add the datasource) so it re-encrypts under the current key.
 
 ## Database
 

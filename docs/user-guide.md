@@ -35,12 +35,16 @@ call surfaces a suggestion to switch modes rather than silently failing.
 
 ### Effort
 
-The per-turn effort chip decides which model runs and how much pre-planning
-happens:
+The per-turn effort chip decides which model runs:
 
-- **fast** — response model, no pre-planning (chat / quick lookups).
-- **balanced** — response model, plans genuine multi-step work (default).
-- **deep** — reasoning model, plans multi-step work (dense reasoner).
+- **fast** — response model (chat / quick lookups).
+- **balanced** — response model (default).
+- **deep** — reasoning model (dense reasoner).
+
+The agent plans its own work and surfaces it as the **Mission board** (`plans/*.md`,
+streamed live). The old separate pre-plan LLM call is **off by default** — it never
+fed generation, only a UI preview, and added a full round-trip. It can be re-enabled
+via `ORBIT_PLAN_MODEL` (see [configuration](./configuration.md#llm-required)).
 
 ### Inspector tabs
 
