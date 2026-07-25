@@ -31,6 +31,17 @@ function loadKey() {
   if (env.isSet("APP_SECRET")) {
     return crypto.createHash("sha256").update(env.get("APP_SECRET")).digest(); // 32 bytes
   }
+  // Auto-migrate legacy .orbit-secret to .tether-secret
+  try {
+    const legacyPath = env.isSet("APP_HOME")
+      ? path.join(env.get("APP_HOME"), ".orbit-secret")
+      : path.join(__dirname, ".orbit-secret");
+    if (fs.existsSync(legacyPath) && !fs.existsSync(KEY_FILE)) {
+      fs.renameSync(legacyPath, KEY_FILE);
+      console.log(`[Crypto] Migrated legacy key file ${legacyPath} -> ${KEY_FILE}`);
+    }
+  } catch (e) {}
+
   try {
     const hex = fs.readFileSync(KEY_FILE, "utf-8").trim();
     if (hex.length === 64) return Buffer.from(hex, "hex");

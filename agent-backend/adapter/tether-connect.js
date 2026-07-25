@@ -499,10 +499,19 @@ function createJsonlSession(sessionId, spawnMsg, emit, scope, cfg) {
     const lines = st.buf.split('\n'); st.buf = lines.pop();
     for (const line of lines) { if (!line.trim()) continue; let item; try { item = JSON.parse(line); } catch { continue; } try { cfg.map(item, emit, st); } catch {} }
   });
-  child.stderr.on('data', (d) => { const t = d.toString().trim(); if (t) emit('stderr', { text: t }); });
+  let stderrBuf = '';
+  child.stderr.on('data', (d) => { const t = d.toString().trim(); if (t) { stderrBuf += (stderrBuf ? '\n' : '') + t; emit('stderr', { text: t }); } });
   child.on('error', (e) => { emit('error', { message: `${cfg.bin} failed to start: ${e.message}` }); if (st.turnActive) { st.turnActive = false; emit('agent_end', { accumulatedText: '' }); } });
   // If the process dies mid-turn, close out the turn so the console isn't stuck.
-  child.on('close', () => { if (st.turnActive) { st.turnActive = false; emit('agent_end', { accumulatedText: st.acc, accumulatedThinking: st.accThinking }); } });
+  child.on('close', (code) => {
+    if (st.turnActive) {
+      st.turnActive = false;
+      if (!st.acc && (code !== 0 || stderrBuf.includes('Error:') || stderrBuf.includes('Unknown option:'))) {
+        emit('error', { message: stderrBuf || `${cfg.bin} exited unexpectedly with code ${code}` });
+      }
+      emit('agent_end', { accumulatedText: st.acc, accumulatedThinking: st.accThinking });
+    }
+  });
 
   return {
     prompt: (text) => { st.turnActive = true; try { child.stdin.write(cfg.encodePrompt(text)); } catch (e) { emit('error', { message: e.message }); st.turnActive = false; emit('agent_end', { accumulatedText: st.acc }); } },
@@ -578,7 +587,7 @@ function piCapabilities(bin) {
         systemPrompt: has(/--system-prompt\b/),
         excludeTools: has(/--exclude-tools\b/) || has(/(^|\s)-xt\b/),
       }
-    : { sessionId: false, appendSystemPrompt: true, systemPrompt: true, excludeTools: true }; // help unreadable → assume modern
+    : { sessionId: false, appendSystemPrompt: true, systemPrompt: true, excludeTools: false }; // help unreadable → default excludeTools false to avoid crashing older CLI builds
   _piCapsCache.set(key, caps);
   return caps;
 }

@@ -1041,8 +1041,22 @@ wss.on("connection", (ws) => {
       
       // ── mode_switch_rerun ───────────────────────────────────
       else if (data.type === "mode_switch_rerun") {
-        const { sessionId, mode, prompt: rerunPrompt, systemPromptType: st, skills: rerunSkills } = data;
+        let { sessionId, mode, prompt: rerunPrompt, systemPromptType: st, skills: rerunSkills, effort, harnessId, excludeTools, profileId, sandbox, templateId } = data;
         const sid = sessionId || ws.activeSessionId;
+
+        if (profileId) {
+          const profile = await db.getProfile(profileId);
+          if (profile) {
+            mode = mode ?? profile.mode;
+            effort = effort ?? profile.effort;
+            st = st ?? profile.promptId;
+            rerunSkills = rerunSkills ?? profile.skills;
+            excludeTools = excludeTools ?? profile.toolPolicy?.excluded;
+            sandbox = sandbox ?? profile.sandbox;
+            templateId = templateId ?? profile.templateId;
+          }
+        }
+        ws.templateId = templateId || null;
 
         const ses = activeSessions.get(sid);
         if (ses?.harness) { try { ses.harness.disconnect(); } catch {} }
@@ -1060,7 +1074,7 @@ wss.on("connection", (ws) => {
         if (rerunPrompt) {
           sendLog(ws, `[Mode Switch Rerun] Re-sending prompt with mode "${mode}"`, false);
           const contextPrompt = `[System Note: You suggested switching to ${mode} mode. The user approved this request, switched the session permission mode to "${mode}", and re-submitted your prompt. Please review your active workspace plan under plans/ and resume your task. Original prompt: "${rerunPrompt}"]`;
-          await handleStartTask(ws, contextPrompt, sid, mode, st, rerunSkills);
+          await handleStartTask(ws, contextPrompt, sid, mode, st, rerunSkills, effort, harnessId, excludeTools, sandbox);
         }
       }
     } catch (err) {
@@ -1301,11 +1315,22 @@ async function handleStartTask(ws, userPrompt, sessionId, mode, systemPromptType
     // Sandbox 'remote' runs on a paired remote harness; an unknown (non-local)
     // harnessId does too. 'container' runs in an ephemeral Docker container.
     const wantRemote = activeSandbox === "remote" || (harnessId && !localHarnessType);
-    const remoteEntry = wantRemote
-      ? (harnessRegistry.get(harnessId) || harnessRegistry.list()[0] && harnessRegistry.get(harnessRegistry.list()[0].id))
-      : null;
+    let remoteEntry = null;
+    if (wantRemote) {
+      if (harnessId && harnessId !== "remote") {
+        remoteEntry = harnessRegistry.get(harnessId) || null;
+        if (!remoteEntry) {
+          sendLog(ws, `[Sandbox] Selected remote agent "${harnessId}" is not connected.`, false, sessionId);
+          sendWithSession(ws, { type: "error", message: `Selected remote agent "${harnessId}" is not connected or reachable. Check Fleet or re-pair.` }, sessionId);
+          sendStatus(ws, "error", sessionId);
+          return;
+        }
+      } else {
+        remoteEntry = harnessRegistry.list()[0] ? harnessRegistry.get(harnessRegistry.list()[0].id) : null;
+      }
+    }
     if (wantRemote && !remoteEntry) {
-      sendLog(ws, `[Sandbox] No remote harness connected for ${activeSandbox === "remote" ? "sandbox=remote" : `harness "${harnessId}"`}.`, false, sessionId);
+      sendLog(ws, `[Sandbox] No remote harness connected.`, false, sessionId);
       sendWithSession(ws, { type: "error", message: `No remote harness is connected. Pair one in Fleet, or pick host/container.` }, sessionId);
       sendStatus(ws, "error", sessionId);
       return;
@@ -1375,6 +1400,7 @@ async function handleStartTask(ws, userPrompt, sessionId, mode, systemPromptType
     } catch (err) {
       console.error(`[handleStartTask] Failed to spawn harness:`, err);
       sendLog(ws, `Failed to spawn agent: ${err.message}`, false, sessionId);
+      sendWithSession(ws, { type: "error", message: `Failed to spawn agent "${remoteEntry ? remoteEntry.id : (harnessId || "local")}": ${err.message}` }, sessionId);
       sendStatus(ws, "error", sessionId);
       return;
     }

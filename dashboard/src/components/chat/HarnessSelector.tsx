@@ -10,6 +10,7 @@ interface Harness {
   machine?: string;
   model?: string;
   provider?: string;
+  status?: string;
 }
 
 interface HarnessSelectorProps {
@@ -75,19 +76,24 @@ export default function HarnessSelector({ harnessId, onSetHarnessId }: HarnessSe
     }
   }, [harnesses, harnessId, onSetHarnessId, loaded]);
 
-  const active = harnesses.find((h) => h.id === (harnessId || 'local')) || harnesses[0];
+  const isSelectedMissing = Boolean(loaded && harnessId && harnessId !== 'local' && !harnesses.some((h) => h.id === harnessId));
+  const active = harnesses.find((h) => h.id === (harnessId || 'local')) || (harnessId ? { id: harnessId, name: harnessId, status: 'offline' } : harnesses[0]);
+  const isOffline = isSelectedMissing || (active && active.status === 'offline');
 
   return (
     <div ref={ref} className="relative shrink-0">
       <button
         onClick={() => setOpen((prev) => !prev)}
-        title="Harness — which agent runtime runs this session"
+        title={isOffline ? `Harness ${harnessId} is unreachable` : "Harness — which agent runtime runs this session"}
         aria-haspopup="menu"
         aria-expanded={open}
-        className="flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-[5px] text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted"
+        className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-[5px] text-xs font-semibold transition-colors ${
+          isOffline ? 'border-destructive/40 bg-destructive/10 text-destructive' : 'border-border text-muted-foreground hover:bg-muted'
+        }`}
       >
-        <span className="size-[6px] rounded-full bg-success" />
+        <span className={`size-[6px] rounded-full ${isOffline ? 'bg-destructive animate-pulse' : 'bg-success'}`} />
         {active?.name?.toUpperCase() || 'PI-CODE'}
+        {isOffline && <span className="text-[10px] font-normal uppercase text-destructive">(OFFLINE)</span>}
         <ChevronDown size={12} className="text-faint" />
       </button>
 

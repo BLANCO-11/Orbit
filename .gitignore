@@ -56,3 +56,7 @@ plans/
 
 # local agent config
 .pi/
+
+# graphify knowledge graph
+graphify-out/
+
