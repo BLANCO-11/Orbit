@@ -6,7 +6,7 @@ first.
 
 ```bash
 BASE=http://localhost:6800      # backend API port
-KEY=orb_live_…                  # a tenant member key (or the superadmin key)
+KEY=tth_live_…                  # a tenant member key (or the superadmin key)
 ```
 
 > In dev-mode (no `AUTH_SUPERADMIN_KEY`), any value for `KEY` works and you
@@ -53,7 +53,7 @@ curl -s "$BASE/api/workspace/file?session=$SID&path=$P" -H "x-api-key: $KEY"
 ```python
 import time, requests
 
-BASE, KEY = "http://localhost:6800", "orb_live_…"
+BASE, KEY = "http://localhost:6800", "tth_live_…"
 H = {"x-api-key": KEY, "Content-Type": "application/json"}
 TERMINAL = {"succeeded", "failed", "timeout", "error", "needs_review"}
 
@@ -96,7 +96,7 @@ if c["status"] == "succeeded":
 ## Node (fetch)
 
 ```js
-const BASE = "http://localhost:6800", KEY = "orb_live_…";
+const BASE = "http://localhost:6800", KEY = "tth_live_…";
 const H = { "x-api-key": KEY, "Content-Type": "application/json" };
 const TERMINAL = new Set(["succeeded", "failed", "timeout", "error", "needs_review"]);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));

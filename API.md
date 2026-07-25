@@ -26,7 +26,7 @@ Any of these credentials authenticates a request; each resolves to a **role** an
 | Credential | Role | Where it comes from |
 |---|---|---|
 | `AUTH_SUPERADMIN_KEY` | `superadmin` | env — the single operator |
-| Tenant **API key** (`orb_live_…`) | `admin` / `member` / `viewer` | minted in Admin › API Keys |
+| Tenant **API key** (`tth_live_…`) | `admin` / `member` / `viewer` | minted in Admin › API Keys |
 | **Session** token | user's role | issued after local (username+password) or OIDC sign-in |
 | Paired **device token** | derived from device scope | Fleet pairing |
 

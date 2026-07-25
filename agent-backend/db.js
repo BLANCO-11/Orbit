@@ -1175,7 +1175,7 @@ async function deleteTemplate(tenantId, id) {
 // ── Access control: tenants / API keys / SSO ────────────────────────
 const VALID_ROLES = new Set(["superadmin", "admin", "member", "viewer"]);
 const normalizeRole = (r) => (VALID_ROLES.has(r) ? r : "member");
-const API_KEY_PREFIX = "orb_live_";
+const { API_KEY_PREFIX } = require("./brand");
 
 // ── Tenants ──
 async function createTenant(name) {

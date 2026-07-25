@@ -7,7 +7,7 @@ Every request presents a credential, resolved to an identity
 
 1. **Superadmin env key** (`AUTH_SUPERADMIN_KEY`) → `superadmin`.
 2. **Paired device token** → role from the device scope (Fleet).
-3. **Tenant API key** (`orb_live_…`) → the key's role + tenant.
+3. **Tenant API key** (`tth_live_…`) → the key's role + tenant.
 4. **SSO browser session token** → the user's role + tenant.
 5. **No superadmin key set** → dev-mode: every caller is `superadmin`.
 
@@ -68,7 +68,7 @@ curl -s -X POST "$BASE/api/admin/keys" \
   -H "x-api-key: $ADMIN" -H 'Content-Type: application/json' \
   -d "{\"tenantId\":\"$TENANT\",\"label\":\"acme-server\",\"role\":\"member\"}" \
   | jq -r '.key.key'
-# → orb_live_xxxxxxxx…   (store it now; only the hash is kept)
+# → tth_live_xxxxxxxx…   (store it now; only the hash is kept)
 ```
 
 The response is `{ success, key: { id, tenantId, label, role, scope, keyPrefix, key } }`.

@@ -150,6 +150,32 @@ function testSlugAndProviderAreConsistent() {
   }
 }
 
+function testApiKeyPrefix() {
+  console.log("minted API keys carry the current brand prefix...");
+  // The prefix is cosmetic — lookup is by key_hash — so a stale one raises no
+  // error anywhere. It just ships the previous product's name to every user's
+  // clipboard, which is how it survived the last rebrand.
+  const dbSrc = fs.readFileSync(path.join(__dirname, "..", "agent-backend", "db.js"), "utf-8");
+  assert.ok(
+    /require\((["'])\.\/brand\1\)/.test(dbSrc),
+    "db.js should take API_KEY_PREFIX from brand.js, not spell it",
+  );
+  assert.ok(
+    !/["']\w+_live_["']/.test(dbSrc),
+    "db.js contains a literal <x>_live_ prefix — use brand.API_KEY_PREFIX",
+  );
+  assert.ok(
+    brand.API_KEY_PREFIX.endsWith("_live_"),
+    `API_KEY_PREFIX "${brand.API_KEY_PREFIX}" should keep the <abbrev>_live_ shape`,
+  );
+  // Abbreviation must plausibly come from the current brand, or it is a leftover.
+  const abbrev = brand.API_KEY_PREFIX.slice(0, -"_live_".length);
+  assert.ok(
+    brand.SLUG.startsWith(abbrev[0]) && [...abbrev].every((c) => brand.SLUG.includes(c)),
+    `API_KEY_PREFIX abbreviation "${abbrev}" does not derive from the slug "${brand.SLUG}"`,
+  );
+}
+
 function run() {
   testRegistryMatchesConstants();
   testFleetDispatchMatcher();
@@ -157,6 +183,7 @@ function run() {
   testNoStaleBrandInMatchers();
   testProviderExtensionMatches();
   testSlugAndProviderAreConsistent();
+  testApiKeyPrefix();
   console.log("\n✓ brand identifier tests passed");
 }
 

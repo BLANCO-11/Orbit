@@ -31,6 +31,17 @@ const PROVIDER_ID = "tether";
 const PROVIDER_NAME = BRAND;
 
 /**
+ * Prefix on every minted API key: `tth_live_<48 hex>`.
+ *
+ * Cosmetic, NOT a credential check — getApiKeyByToken matches on key_hash
+ * alone, so changing this leaves already-issued keys working and old/new
+ * prefixes simply coexist. What it does do is show up in `key_prefix` (the
+ * truncated form displayed in Admin › API Keys) and in every user's clipboard,
+ * so it is a name-bearing identifier and belongs here.
+ */
+const API_KEY_PREFIX = "tth_live_";
+
+/**
  * Built-in MCP servers, by role. The values are the names the agent sees, and
  * the keys are what code should reference.
  *
@@ -118,6 +129,7 @@ module.exports = {
   SLUG,
   PROVIDER_ID,
   PROVIDER_NAME,
+  API_KEY_PREFIX,
   MCP,
   mcpToolName,
   flatToolName,

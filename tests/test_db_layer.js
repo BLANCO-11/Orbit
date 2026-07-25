@@ -19,6 +19,7 @@ if (!USE_PG) {
 process.env.APP_HOME = process.env.APP_HOME || path.join(os.tmpdir(), `tether-home-${process.pid}`);
 
 const db = require("../agent-backend/db");
+const brand = require("../agent-backend/brand");
 
 async function main() {
   await db.init();
@@ -105,7 +106,7 @@ async function main() {
   const tenant = await db.createTenant("Acme");
   assert.ok(tenant.id);
   const apiKey = await db.createApiKey({ tenantId: tenant.id, label: "CI", role: "admin" });
-  assert.ok(apiKey.key.startsWith("orb_live_"), "raw key returned once");
+  assert.ok(apiKey.key.startsWith(brand.API_KEY_PREFIX), "raw key returned once");
   const keyRow = await db.getApiKeyByToken(apiKey.key);
   assert.strictEqual(keyRow.role, "admin", "api key resolvable by token");
   await db.revokeApiKey(apiKey.id);
