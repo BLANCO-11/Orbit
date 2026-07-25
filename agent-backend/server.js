@@ -310,7 +310,18 @@ function bucketToPayload(bucket) {
 
 
 // Anti-flail limits: stop a turn that's spinning without making progress.
-const MAX_TOOL_CALLS_PER_TURN = 40;        // hard runaway backstop
+//
+// Two budgets, because a chat turn and an autonomous run are different shapes of
+// work. 40 calls in a conversation is someone spinning; an API run has to write →
+// smoke-test → debug → verify → emit RESULT.json, and legitimately wants more. A
+// run was observed hitting the 40-call ceiling MID-DEBUG with a working script on
+// disk, losing everything because it couldn't spend two more calls on its report.
+//
+// The consecutive-unproductive check below is the real flail detector and is
+// deliberately NOT raised — it catches actual spirals without penalising slow,
+// productive work.
+const MAX_TOOL_CALLS_PER_TURN = env.get("AGENT_MAX_TOOL_CALLS");   // interactive
+const RUN_MAX_TOOL_CALLS = env.get("RUN_MAX_TOOL_CALLS");          // headless run
 const MAX_CONSECUTIVE_UNPRODUCTIVE = 6;    // repeated empty/errored tool results
 
 /** Heuristic: did a tool result fail to produce anything useful? */
@@ -1248,8 +1259,12 @@ async function handleStartTask(ws, userPrompt, sessionId, mode, systemPromptType
 
   metricsManager.recordInputTokens(sessionId, userPrompt);
   metricsManager.beginTurn(sessionId, userPrompt);
-  // Reset the anti-flail guard for the new turn.
-  turnGuards.set(sessionId, { calls: 0, consecutiveUnproductive: 0, stopped: false, halted: false });
+  // Reset the anti-flail guard for the new turn. The ceiling depends on who is
+  // driving: a headless run gets the larger budget (see the constants).
+  turnGuards.set(sessionId, {
+    calls: 0, consecutiveUnproductive: 0, stopped: false, halted: false,
+    budget: ws && ws.isRun ? RUN_MAX_TOOL_CALLS : MAX_TOOL_CALLS_PER_TURN,
+  });
 
   // ── Initialize subagent tracker ───────────────────────────
   // Restore prior sub-agent history for this session (if any was persisted)
@@ -1573,6 +1588,9 @@ async function startRun({ sessionId: reqSessionId, prompt, profileId, mode, effo
     source: source || "api",
     notify: (n) => broadcastNotification(n),
   });
+  // Marks every turn on this socket as headless, so the anti-flail guard applies
+  // the run budget rather than the interactive one.
+  socket.isRun = true;
   // Preserve prior transcript on a reused session; seed the new user turn.
   if (priorMessages && priorMessages.length) socket.seedMessages(priorMessages);
   socket.addUserMessage(prompt);
@@ -1631,8 +1649,13 @@ async function startRun({ sessionId: reqSessionId, prompt, profileId, mode, effo
     if (rec.lifecycle === "completed" && status !== "error" && !rec.nudged) {
       let result = null;
       try { result = runContract.readResultJson(workspacePaths.sessionDirs(sessionId).artifacts); } catch {}
-      const harnessAlive = !!(activeSessions.get(sessionId) && activeSessions.get(sessionId).harness);
-      if (result && (!result.present || !result.valid) && harnessAlive) {
+      // Deliberately NOT gated on the harness still being alive. The anti-flail
+      // guard cancels the harness outright, which used to skip this nudge and
+      // throw away a finished deliverable purely because the agent ran out of
+      // tool calls before it could file its report. handleStartTask spawns a
+      // harness when none is active and the workspace persists, so a fresh agent
+      // can read what's on disk, smoke-test it, and write RESULT.json.
+      if (result && (!result.present || !result.valid)) {
         rec.nudged = true;
         const NUDGE =
           "Before you finish: there is no valid ../artifacts/RESULT.json yet, which the run contract requires. " +
@@ -2097,9 +2120,13 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
     
     // Resolve all target paths relative to the session's workspace
     const sessionRoot = workspacePaths.sessionRoot(sessionId);
+    // Always NORMALIZE: an absolute path may still carry `..` segments (the agent
+    // really does emit `<sessionRoot>/../artifacts/x.py`). Returning it unresolved
+    // left a literal ".." in the string every downstream prefix comparison sees,
+    // so a path that escapes the session could still look like it starts with it.
     const resolveToolPath = (p) => {
-      if (p.startsWith("~")) return p.replace(/^~/, require("os").homedir());
-      if (path.isAbsolute(p)) return p;
+      if (p.startsWith("~")) return path.resolve(p.replace(/^~/, require("os").homedir()));
+      if (path.isAbsolute(p)) return path.resolve(p);
       return path.resolve(path.join(sessionRoot, "workspace", p));
     };
     const rawPaths = extractPathsFromArgs(args);
@@ -2180,6 +2207,44 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
     const isFileWriteTool = /^(write|edit|replace_file_content|multi_replace_file_content)$/.test(String(name).toLowerCase());
     if (isFileWriteTool && toolPaths.length === 0 && !hasPathField(args)) {
       isOutside = true;
+    }
+
+    // (2a) Hard session containment for HEADLESS RUNS.
+    //
+    // `write_outside` is "allow" in yolo, and /api/run defaults to yolo — so an
+    // escaping write is policy-permitted. That is right for an interactive yolo
+    // session (a human chose it and is watching) and wrong for a run: there is
+    // nobody to consent, and the result contract only ever reads
+    // <session>/artifacts, so an escaped deliverable is silently lost.
+    //
+    // Observed: the agent emitted `<sessionRoot>/../artifacts/fetch_news.py`,
+    // which resolves to the SHARED `<...>/sessions/artifacts/` — outside the
+    // session, visible to and overwritable by every other session. The run then
+    // reported needs_review with zero artifacts while the script sat in a
+    // directory nothing reads.
+    //
+    // Refused below the mode matrix so yolo cannot wave it through. Interactive
+    // sessions keep the existing behaviour untouched.
+    if (ws.isRun && toolWrites && outsidePaths.length > 0) {
+      if (guard) guard.halted = true;
+      const target = outsidePaths[0];
+      sendLog(ws, `[Policy] Run containment — "${name}" tried to write outside the session: ${target}`, false, sessionId);
+      sendWithSession(ws, {
+        type: "policy_blocked", toolName: name, capability: "write_outside", mode: activeMode,
+        suggestedMode: null,
+        reason: `Headless runs are confined to their session directory. "${target}" resolves outside ${sessionRoot}.`,
+      }, sessionId);
+      sendWithSession(ws, {
+        type: "tool_end", toolCallId: id, name,
+        result: `Blocked by Policy: "${target}" is outside this run's session directory. Write deliverables to ../artifacts/ relative to your working directory.`,
+        latencyMs: 0,
+      }, sessionId);
+      const ses = activeSessions.get(sessionId);
+      if (ses) ses.status = "done";
+      if (ses?.harness) { try { ses.harness.cancel(); } catch {} }
+      try { db.clearSessionRunning(sessionId); } catch {}
+      sendStatus(ws, "done", sessionId);
+      return;
     }
 
     const capability = policyEngine.toolToCapability(name, isOutside);
@@ -2294,14 +2359,14 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
         g.consecutiveUnproductive = isUnproductiveResult(isError, result)
           ? g.consecutiveUnproductive + 1
           : 0;
-        const runaway = g.calls >= MAX_TOOL_CALLS_PER_TURN;
+        const runaway = g.calls >= (g.budget || MAX_TOOL_CALLS_PER_TURN);
         const stuck = g.consecutiveUnproductive >= MAX_CONSECUTIVE_UNPRODUCTIVE;
         if (runaway || stuck) {
           g.stopped = true;
           g.halted = true; // also gate trailing tool_call_start emits
           const why = stuck
             ? `${g.consecutiveUnproductive} tool calls in a row returned nothing useful`
-            : `this turn hit ${g.calls} tool calls`;
+            : `this turn hit its ${g.budget || MAX_TOOL_CALLS_PER_TURN} tool-call ceiling`;
           sendLog(ws, `[Anti-flail] Stopping turn — ${why}.`, false, sessionId);
           const ses = activeSessions.get(sessionId);
           if (ses) ses.status = "done";

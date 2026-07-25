@@ -49,6 +49,7 @@ const CANONICAL = {
   LLM_FAST_MODEL:      { type: "str", default: "", group: "llm", desc: "Default model for the fast/balanced effort tiers." },
   LLM_REASONING_MODEL: { type: "str", default: "", group: "llm", desc: "Default model for the deep effort tier and plan generation. Falls back to LLM_FAST_MODEL." },
   LLM_CONFIG_LOCKED:   { type: "bool", default: false, group: "llm", desc: "Invert precedence: env wins over Settings, and the LLM fields render read-only. For locked-down deployments." },
+  LLM_THINKING:        { type: "str", default: "auto", group: "llm", desc: "Chain-of-thought policy applied at the internal gateway: auto (suppress for families that enable thinking by default, e.g. Qwen3.x) | off (always suppress) | on (never touch the request)." },
   LLM_PLAN_MAX_TOKENS: { type: "int", default: 600, group: "llm", desc: "Output cap for the optional pre-plan call." },
   LLM_PLAN_TIMEOUT_MS: { type: "int", default: 20000, group: "llm", desc: "Client timeout for the optional pre-plan call." },
 
@@ -68,6 +69,7 @@ const CANONICAL = {
   AGENT_API_URL:      { type: "str", default: "http://127.0.0.1:6800", group: "agent", desc: "Backend base URL an MCP server or adapter calls back on." },
   AGENT_API_KEY:      { type: "str", default: "", group: "agent", secret: true, desc: "Credential an MCP server or adapter presents on that callback." },
   AGENT_MODE:         { type: "str", default: "", group: "agent", desc: "Policy mode (chat|plan|edit|yolo) for a spawned agent." },
+  AGENT_MAX_TOOL_CALLS: { type: "int", default: 40, group: "agent", desc: "Anti-flail tool-call ceiling for an INTERACTIVE turn. Headless runs use RUN_MAX_TOOL_CALLS instead." },
   AGENT_CMD:          { type: "str", default: "", group: "agent", desc: "Override the agent binary the remote adapter launches." },
   AGENT_ARGS:         { type: "str", default: "", group: "agent", desc: "Extra args for that binary." },
   AGENT_CONNECT_KIND: { type: "str", default: "", group: "agent", desc: "Which agent kind the remote adapter connects as." },
@@ -102,6 +104,7 @@ const CANONICAL = {
   RUN_IDLE_MS:         { type: "int", default: 180000, group: "run", desc: "Abort a run after this long with no harness events (hang detection)." },
   RUN_MAX_MS:          { type: "int", default: 1200000, group: "run", desc: "Absolute backstop per run." },
   RUN_ASK_TIMEOUT_MS:  { type: "int", default: 600000, group: "run", desc: "How long a run parks at awaiting_input before returning a no-answer sentinel." },
+  RUN_MAX_TOOL_CALLS:  { type: "int", default: 100, group: "run", desc: "Anti-flail tool-call ceiling for a headless run turn. Higher than the interactive one: a run must write, smoke-test, debug and report." },
   RUN_TESTER_URL:      { type: "str", default: "", group: "run", desc: "External build+test facility /grade endpoint. Unset → the end_build handoff is inert." },
   RUN_TESTER_KEY:      { type: "str", default: "", group: "run", secret: true, desc: "Bearer token sent to that facility." },
 

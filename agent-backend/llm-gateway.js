@@ -19,6 +19,42 @@
 // streams SSE transparently, and serves /v1/models.
 
 const { Router } = require("express");
+const env = require("./env-config");
+
+// Model families whose chat template turns chain-of-thought ON by default, so it
+// has to be switched off EXPLICITLY rather than just left unrequested.
+//
+// Qwen3.x is why this exists. pi's provider classifier (picode/tether-provider.mjs
+// `classify()`) matches `qwq` but not `qwen3`, so Qwen3.x is registered as a
+// non-reasoning model. pi therefore sets thinkingLevel "off" and sends NO thinking
+// parameter at all — while the model thinks anyway, unbounded, inside the smaller
+// non-reasoning `maxTokens` budget. Observed consequence: a single call generated
+// 16,384 output tokens (exactly the cap) as one thinking block, hit
+// finish_reason "length", and returned no text and no tool call — 336 seconds
+// producing nothing.
+const THINK_BY_DEFAULT = /qwen-?3/i;
+
+/**
+ * Suppress chain-of-thought for models that enable it by default.
+ *
+ * vLLM/SGLang expose the chat-template switch as `chat_template_kwargs`.
+ * `reasoning_effort` is NOT honored by these servers (verified against the
+ * configured upstream: `reasoning_effort:"none"` still emitted full reasoning and
+ * still terminated on `length`), so it is deliberately not used as a fallback.
+ *
+ * Policy comes from LLM_THINKING: "auto" (default — suppress only for known
+ * think-by-default families) | "off" (always suppress) | "on" (never touch).
+ */
+function applyThinkingPolicy(body) {
+  let policy = "auto";
+  try { policy = String(env.get("LLM_THINKING") || "auto").toLowerCase(); } catch { /* default */ }
+  if (policy === "on") return;
+  if (policy === "auto" && !THINK_BY_DEFAULT.test(String(body.model || ""))) return;
+  // An explicit caller-set switch always wins — this only fills in a default.
+  const kw = body.chat_template_kwargs;
+  if (kw && typeof kw === "object" && "enable_thinking" in kw) return;
+  body.chat_template_kwargs = { ...(kw || {}), enable_thinking: false };
+}
 
 /**
  * @param {object} deps
@@ -119,6 +155,9 @@ function createLlmGateway({ getConfig, gatewayKey, resolveScopedToken, onUsage }
     const deviceId = dev ? dev.deviceId : null;
 
     const body = (req.body && typeof req.body === "object") ? { ...req.body } : {};
+    // Fill in the thinking switch before forwarding — harness children can't set
+    // it themselves (pi's registerProvider has no extra-body hook).
+    if (upstreamPath === "/chat/completions") applyThinkingPolicy(body);
     const streaming = body.stream === true;
     // Ask the upstream to include usage in the final stream chunk so we can meter
     // real tokens even on streamed responses.

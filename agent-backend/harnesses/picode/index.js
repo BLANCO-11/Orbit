@@ -129,7 +129,8 @@ class PiCodeHarness extends HarnessInterface {
       `- Use relative paths from your current working directory to access these folders (e.g. write code files to \`my_script.py\` and write finished deliverables to \`../artifacts/my_report.pdf\`). Do NOT use absolute paths like \`~/...\` or \`/home/...\`.\n` +
       `- Do not create a folder named \`artifacts\` or \`tmp\` inside your working directory; write to the sibling directories (\`../artifacts/\` and \`../tmp/\`) instead.\n` +
       `- Prefer the \`write\` tool over \`bash\` redirects/heredocs for creating files.\n` +
-      `- Accessing folders outside the session root directory is blocked or requires manual user approval.\n` +
+      `- NEVER join an absolute directory with \`..\` (e.g. \`${dirs.root}/../artifacts/f.py\`) — that escapes the session entirely and the file is lost. Either the plain relative form \`../artifacts/f.py\`, or the full absolute path \`${dirs.artifacts}/f.py\`. Never a mix of the two.\n` +
+      `- Accessing folders outside the session root directory is blocked or requires manual user approval, and is refused outright when this session is an API run.\n` +
       `Keep things tidy — this layout is how the user tracks and manages your work.`;
 
     // Compose the full system prompt via the SHARED composer (same code the
