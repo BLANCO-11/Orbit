@@ -1,6 +1,6 @@
 // agent-backend/ws/harness.js
-// Remote-harness transport. An `orbit-adapter` process (see
-// agent-backend/adapter/orbit-adapter.js), running on any machine, dials in
+// Remote-harness transport. A `tether-adapter` process (see
+// agent-backend/adapter/tether-adapter.js), running on any machine, dials in
 // here over an authenticated WebSocket. Once registered it becomes a harness
 // the console can run sessions on, exactly like the local pi child process —
 // the RemoteHarness (harnesses/remote/index.js) bridges over this socket.
@@ -29,7 +29,7 @@ function createHarnessRegistry() {
     // The PUBLIC origin this harness actually reached us on (honoring an nginx
     // x-forwarded-proto). This is demonstrably routable from the harness — it
     // just dialed in over it — so it's what we hand back as the LLM gateway base
-    // URL when the harness runs on Orbit's own LLM (RemoteHarness.connect).
+    // URL when the harness runs on Tether's own LLM (RemoteHarness.connect).
     const origin = (() => {
       try {
         const host = (request.headers["x-forwarded-host"] || request.headers.host || "").split(",")[0].trim();

@@ -1,13 +1,13 @@
 {
-  "litellm": {
-    "baseURL": "",
+  "llm": {
+    "baseUrl": "",
     "apiKey": "",
-    "selectedNormalModel": "",
-    "selectedReasoningModel": ""
+    "fastModel": "",
+    "reasoningModel": ""
   },
   "fileSystem": {
     "allowedReadPaths": ["~"],
-    "allowedWritePaths": ["~/.orbit"],
+    "allowedWritePaths": ["~/.tether"],
     "blockedPaths": ["~/.ssh", "~/.aws", "~/.gnupg", "~/.gemini", "/etc", "/boot", "/sys"],
     "writeBlockedPaths": []
   },

@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useCallback, useEffect } from 'react';
-import { useOrbitState, useOrbitDispatch, actions } from '@/providers/OrbitProvider';
+import { useTetherState, useTetherDispatch, actions } from '@/providers/TetherProvider';
 
 // Releases a queue item's object URL exactly once, so it doesn't linger for the
 // life of the tab (blob URLs are never garbage-collected on their own).
@@ -18,8 +18,8 @@ function revokeItem(item) {
  * Manages sentence splitting, TTS API fetching, and sequential playback.
  */
 export function useTTS(selectedVoice = 'alba') {
-  const { voiceState } = useOrbitState();
-  const dispatch = useOrbitDispatch();
+  const { voiceState } = useTetherState();
+  const dispatch = useTetherDispatch();
   // Belt-and-suspenders: speech can be triggered from long-lived closures (WS
   // handlers). Read voiceState through a ref so the mute check always sees the
   // CURRENT state, not whatever was captured when the callback was created.

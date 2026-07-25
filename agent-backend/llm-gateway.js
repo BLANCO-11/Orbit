@@ -15,14 +15,14 @@
 //
 // This is a thin pass-through, not a router: v1 has no multi-provider
 // failover/aliasing (a documented non-goal). It forwards to the single
-// configured OpenAI-compatible upstream (getConfig().litellm.baseURL + apiKey),
+// configured OpenAI-compatible upstream (getConfig().llm.baseUrl + apiKey),
 // streams SSE transparently, and serves /v1/models.
 
 const { Router } = require("express");
 
 /**
  * @param {object} deps
- * @param {() => object} deps.getConfig        — resolves { litellm: { baseURL, apiKey } }
+ * @param {() => object} deps.getConfig        — resolves { llm: { baseUrl, apiKey } }
  * @param {string}       deps.gatewayKey        — app-local bearer key the child must present
  * @param {(token: string) => ({deviceId: string, tenantId?: string|null, budget?: number|null, used?: number}|null)} [deps.resolveScopedToken]
  *        — resolve a SCOPED per-device token (presented by an off-box paired
@@ -40,8 +40,8 @@ function createLlmGateway({ getConfig, gatewayKey, resolveScopedToken, onUsage }
     let baseURL = "";
     let apiKey = "";
     try {
-      const l = (getConfig && getConfig().litellm) || {};
-      baseURL = (l.baseURL || "").replace(/\/+$/, "");
+      const l = (getConfig && getConfig().llm) || {};
+      baseURL = (l.baseUrl || "").replace(/\/+$/, "");
       apiKey = l.apiKey || "";
     } catch {}
     return { baseURL, apiKey };
@@ -72,7 +72,7 @@ function createLlmGateway({ getConfig, gatewayKey, resolveScopedToken, onUsage }
         if (scoped.budget != null && (scoped.used || 0) >= scoped.budget) {
           return res.status(402).json({ error: { message: "device LLM budget exhausted", type: "insufficient_quota" } });
         }
-        req._orbitDevice = scoped;
+        req._tetherDevice = scoped;
         return next();
       }
     }
@@ -111,11 +111,11 @@ function createLlmGateway({ getConfig, gatewayKey, resolveScopedToken, onUsage }
         error: { message: "no LLM upstream configured (set an endpoint + key in .env or Settings)", type: "server_error" },
       });
     }
-    const sessionId = req.get("x-orbit-session") || null;
+    const sessionId = req.get("x-tether-session") || null;
     // For a scoped device token, trust the token's binding for tenant/device — a
     // remote can't spoof a tenant via header. Local children keep the header path.
-    const dev = req._orbitDevice || null;
-    const tenantId = dev ? (dev.tenantId || null) : (req.get("x-orbit-tenant") || null);
+    const dev = req._tetherDevice || null;
+    const tenantId = dev ? (dev.tenantId || null) : (req.get("x-tether-tenant") || null);
     const deviceId = dev ? dev.deviceId : null;
 
     const body = (req.body && typeof req.body === "object") ? { ...req.body } : {};

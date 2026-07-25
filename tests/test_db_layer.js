@@ -1,6 +1,6 @@
 // End-to-end test of the async db.js layer. Runs against SQLite by default
 // (temp file). To exercise Postgres, run with a live server:
-//   DATABASE_URL=postgres://user:pass@localhost:5432/orbit_test node tests/test_db_layer.js
+//   DATABASE_URL=postgres://user:pass@localhost:5432/tether_test node tests/test_db_layer.js
 // (Point it at a THROWAWAY database — the test writes real rows.)
 
 const assert = require("assert");
@@ -8,15 +8,15 @@ const os = require("os");
 const path = require("path");
 const fs = require("fs");
 
-const USE_PG = !!process.env.DATABASE_URL && process.env.ORBIT_DB_DRIVER !== "sqlite";
+const USE_PG = !!process.env.DATABASE_URL && process.env.DB_DRIVER !== "sqlite";
 let tmp;
 if (!USE_PG) {
-  tmp = path.join(os.tmpdir(), `orbit-dblayer-test-${process.pid}.db`);
+  tmp = path.join(os.tmpdir(), `tether-dblayer-test-${process.pid}.db`);
   for (const s of ["", "-wal", "-shm"]) { try { fs.unlinkSync(tmp + s); } catch {} }
-  process.env.ORBIT_DB_DRIVER = "sqlite";
-  process.env.ORBIT_DB_PATH = tmp;
+  process.env.DB_DRIVER = "sqlite";
+  process.env.DB_PATH = tmp;
 }
-process.env.ORBIT_HOME = process.env.ORBIT_HOME || path.join(os.tmpdir(), `orbit-home-${process.pid}`);
+process.env.APP_HOME = process.env.APP_HOME || path.join(os.tmpdir(), `tether-home-${process.pid}`);
 
 const db = require("../agent-backend/db");
 

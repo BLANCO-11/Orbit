@@ -13,7 +13,7 @@ const workspacePaths = require("../workspace-paths");
 const db = require("../db");
 
 // The explorer is scoped to the CURRENT session's own tree
-// (~/.orbit/sessions/<id>/ → workspace/ · artifacts/ · tmp/), passed as ?session=.
+// (~/.tether/sessions/<id>/ → workspace/ · artifacts/ · tmp/), passed as ?session=.
 // No session → the sessions base dir (lists all sessions, read-only). The display
 // prefix "/workspace" maps to whichever root is in effect.
 function rootFor(req) {

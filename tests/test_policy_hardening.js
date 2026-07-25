@@ -110,8 +110,8 @@ function testHardBlocklistPaths() {
   const blocked = ["/home/user/.ssh", "/etc"];
   assert.strictEqual(isPathBlocked("/home/user/.ssh/id_rsa", blocked), true, "secret is blocked");
   assert.strictEqual(isPathBlocked("/home/user/project/file.txt", blocked), false, "ordinary path not blocked");
-  const zones = ["/home/user/.orbit/sessions/abc"];
-  assert.strictEqual(isPathInZones("/home/user/.orbit/sessions/abc/workspace/f", zones), true, "in-zone");
+  const zones = ["/home/user/.tether/sessions/abc"];
+  assert.strictEqual(isPathInZones("/home/user/.tether/sessions/abc/workspace/f", zones), true, "in-zone");
   assert.strictEqual(isPathInZones("/home/user/other", zones), false, "out-of-zone");
   console.log("  ok");
 }

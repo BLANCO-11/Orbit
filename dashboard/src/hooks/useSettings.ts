@@ -3,10 +3,10 @@
 import { useState, useCallback, useEffect } from 'react';
 
 const DEFAULT_SETTINGS = {
-  baseURL: '',
+  baseUrl: '',
   apiKey: '',
-  selectedNormalModel: '',
-  selectedReasoningModel: '',
+  fastModel: '',
+  reasoningModel: '',
   selectedVoice: 'alba',
   autoCompactEnabled: true,
   autoCompactThreshold: 70,
@@ -30,9 +30,13 @@ export function useSettings() {
   const [models, setModels] = useState([]);
   const [voices, setVoices] = useState([]);
   const [systemPromptType, setSystemPromptType] = useState('standard');
-  // LLM connection status (Workstream F4). configured: has baseURL+key;
+  // LLM connection status (Workstream F4). configured: has baseUrl+key;
   // connected: null (untested) | true | false; error: message when failed.
   const [llmStatus, setLlmStatus] = useState({ configured: null, connected: null, error: null, models: [] });
+  // Which LLM fields the ENVIRONMENT supplies, and whether env is authoritative.
+  // The four LLM_* vars are the app's onboarding defaults; a value saved here
+  // wins unless LLM_CONFIG_LOCKED is set, in which case the fields are read-only.
+  const [llmEnv, setLlmEnv] = useState({ locked: false, fromEnv: {} });
   // Save feedback for the Settings save bar: 'idle' | 'saving' | 'saved' | 'error'.
   const [saveState, setSaveState] = useState({ status: 'idle', message: '' });
 
@@ -84,12 +88,15 @@ export function useSettings() {
       .then(data => {
         setSecurityConfig(data);
         const ttsInfo = data.tts || {};
-        if (data.litellm) {
+        if (data.llmEnv) setLlmEnv({ locked: !!data.llmEnv.locked, fromEnv: data.llmEnv.fromEnv || {} });
+        // /api/config returns llm already RESOLVED against the environment, so
+        // these fields are pre-filled with the env defaults on a fresh install.
+        if (data.llm) {
           updateSettings({
-            baseURL: data.litellm.baseURL || '',
-            apiKey: data.litellm.apiKey || '',
-            selectedNormalModel: data.litellm.selectedNormalModel || '',
-            selectedReasoningModel: data.litellm.selectedReasoningModel || '',
+            baseUrl: data.llm.baseUrl || '',
+            apiKey: data.llm.apiKey || '',
+            fastModel: data.llm.fastModel || '',
+            reasoningModel: data.llm.reasoningModel || '',
             ttsURL: ttsInfo.url || '',
             ttsKey: ttsInfo.apiKey || '',
           });
@@ -111,11 +118,11 @@ export function useSettings() {
     const updatedConfig = {
       ...securityConfig,
       systemPromptType,
-      litellm: {
-        baseURL: settings.baseURL,
+      llm: {
+        baseUrl: settings.baseUrl,
         apiKey: settings.apiKey,
-        selectedNormalModel: settings.selectedNormalModel,
-        selectedReasoningModel: settings.selectedReasoningModel,
+        fastModel: settings.fastModel,
+        reasoningModel: settings.reasoningModel,
       },
       tts: {
         url: settings.ttsURL,
@@ -181,7 +188,7 @@ export function useSettings() {
     systemPromptType, setSystemPromptType,
     fetchConfig, fetchModels, fetchVoices,
     saveAllSettings, addConfigItem, removeConfigItem,
-    llmStatus, testLlm,
+    llmStatus, testLlm, llmEnv,
     saveState,
   };
 }

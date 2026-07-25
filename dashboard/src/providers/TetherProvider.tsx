@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useReducer, useCallback, useEffect } from 'react';
 
-const VOICE_STATE_KEY = 'orbit:voiceState';
+const VOICE_STATE_KEY = 'tether:voiceState';
 
 // Monotonic message id. Used as the React list key so bubbles keep their identity
 // across the windowed slice(-visibleCount) — index keys remounted every visible
@@ -90,7 +90,7 @@ const RESET_RUN = 'RESET_RUN';
 // Reducer
 // ═══════════════════════════════════════════════════════════
 
-function orbitReducer(state, action) {
+function tetherReducer(state, action) {
   switch (action.type) {
     case SET_STATUS:
       return { ...state, status: action.payload };
@@ -305,11 +305,11 @@ function orbitReducer(state, action) {
 // Context + Provider
 // ═══════════════════════════════════════════════════════════
 
-const OrbitStateContext = createContext(null);
-const OrbitDispatchContext = createContext(null);
+const TetherStateContext = createContext(null);
+const TetherDispatchContext = createContext(null);
 
-export function OrbitProvider({ children }) {
-  const [state, dispatch] = useReducer(orbitReducer, initialState);
+export function TetherProvider({ children }) {
+  const [state, dispatch] = useReducer(tetherReducer, initialState);
 
   // Persist the voice state across reloads. Read on mount (client-only, so no
   // hydration mismatch) and write back whenever it changes — mute is now sticky
@@ -327,11 +327,11 @@ export function OrbitProvider({ children }) {
   }, [state.voiceState]);
 
   return (
-    <OrbitStateContext.Provider value={state}>
-      <OrbitDispatchContext.Provider value={dispatch}>
+    <TetherStateContext.Provider value={state}>
+      <TetherDispatchContext.Provider value={dispatch}>
         {children}
-      </OrbitDispatchContext.Provider>
-    </OrbitStateContext.Provider>
+      </TetherDispatchContext.Provider>
+    </TetherStateContext.Provider>
   );
 }
 
@@ -339,20 +339,20 @@ export function OrbitProvider({ children }) {
 // Hooks
 // ═══════════════════════════════════════════════════════════
 
-export function useOrbitState() {
-  const ctx = useContext(OrbitStateContext);
-  if (!ctx) throw new Error('useOrbitState must be used within OrbitProvider');
+export function useTetherState() {
+  const ctx = useContext(TetherStateContext);
+  if (!ctx) throw new Error('useTetherState must be used within TetherProvider');
   return ctx;
 }
 
-export function useOrbitDispatch() {
-  const ctx = useContext(OrbitDispatchContext);
-  if (!ctx) throw new Error('useOrbitDispatch must be used within OrbitProvider');
+export function useTetherDispatch() {
+  const ctx = useContext(TetherDispatchContext);
+  if (!ctx) throw new Error('useTetherDispatch must be used within TetherProvider');
   return ctx;
 }
 
-export function useOrbit() {
-  return [useOrbitState(), useOrbitDispatch()];
+export function useTether() {
+  return [useTetherState(), useTetherDispatch()];
 }
 
 // ═══════════════════════════════════════════════════════════

@@ -1,7 +1,7 @@
-# Integration guide — driving Orbit from your app
+# Integration guide — driving Tether from your app
 
-Orbit's backend is a headless service. An external **parent app** can, with only
-an Orbit API key, register its datasources, submit a task, and read back a typed
+Tether's backend is a headless service. An external **parent app** can, with only
+a Tether API key, register its datasources, submit a task, and read back a typed
 result — without a browser or the dashboard.
 
 - [Authentication & tenants](./authentication.md)
@@ -19,13 +19,13 @@ For the exhaustive endpoint + WebSocket protocol reference, see
 - **Auth:** send your key as `x-api-key: <key>` or `Authorization: Bearer <key>`.
   WebSocket takes it as a query param: `ws://<host>:6800/api/ws?key=<key>`.
 
-If no `ORBIT_SUPERADMIN_KEY` is configured, Orbit runs in loopback **dev-mode**
+If no `AUTH_SUPERADMIN_KEY` is configured, Tether runs in loopback **dev-mode**
 (every caller is superadmin) — handy for local prototyping. Set the key before
-exposing Orbit or going multi-tenant.
+exposing Tether or going multi-tenant.
 
 ## The parent-app flow
 
-The headline use case: your app hands Orbit a task and gets back a runnable,
+The headline use case: your app hands Tether a task and gets back a runnable,
 smoke-tested artifact plus a machine-readable verdict.
 
 ```

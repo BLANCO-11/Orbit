@@ -191,7 +191,7 @@ export default function FleetView() {
                 {pairing.bootstrapCommand && (
                   <div className="mt-4">
                     <div className="mb-1 text-[10px] font-bold uppercase tracking-[0.08em] text-faint">
-                      Orbit adapter — paste this command
+                      Tether adapter — paste this command
                     </div>
                     <CopyBox value={pairing.bootstrapCommand} label="bootstrap" />
                   </div>

@@ -1,6 +1,6 @@
-# Orbit Headless API & Protocol Specification
+# Tether Headless API & Protocol Specification
 
-Orbit can run as a headless backend service (`agent-backend`), allowing third-party developers to build custom dashboards, command-line interfaces, or integrations.
+Tether can run as a headless backend service (`agent-backend`), allowing third-party developers to build custom dashboards, command-line interfaces, or integrations.
 
 ---
 
@@ -9,22 +9,23 @@ Orbit can run as a headless backend service (`agent-backend`), allowing third-pa
 By default, in development mode, the API binds to loopback (`127.0.0.1:6800`) and does not enforce authentication (dev-mode treats every caller as **superadmin** — ideal for a single-user / household deploy).
 
 ### Superadmin key
-To lock Orbit down, set the `ORBIT_SUPERADMIN_KEY` environment variable on the backend:
+To lock Tether down, set the `AUTH_SUPERADMIN_KEY` environment variable on the backend:
 ```bash
-export ORBIT_SUPERADMIN_KEY="your-secure-api-token"
+export AUTH_SUPERADMIN_KEY="your-secure-api-token"
 ```
 When set:
 - **REST requests** must include the token as `Authorization: Bearer <token>` **or** `x-api-key: <token>`.
 - **WebSocket connections** must append it as a query parameter: `ws://localhost:6800/api/ws?key=<token>`.
 
-(`ORBIT_API_KEY` and `AEGIS_API_KEY` are still accepted as fallbacks so older `.env` files keep working.)
+(`AUTH_SUPERADMIN_KEY` is the only name read. Older aliases were removed — the
+server now fails at boot naming the replacement rather than silently falling back.)
 
 ### Credentials & roles (RBAC)
 Any of these credentials authenticates a request; each resolves to a **role** and optional **tenant**:
 
 | Credential | Role | Where it comes from |
 |---|---|---|
-| `ORBIT_SUPERADMIN_KEY` | `superadmin` | env — the single operator |
+| `AUTH_SUPERADMIN_KEY` | `superadmin` | env — the single operator |
 | Tenant **API key** (`orb_live_…`) | `admin` / `member` / `viewer` | minted in Admin › API Keys |
 | **Session** token | user's role | issued after local (username+password) or OIDC sign-in |
 | Paired **device token** | derived from device scope | Fleet pairing |
@@ -55,7 +56,7 @@ All REST endpoints are prefixed with `/api`.
     "generatedAt": "2026-07-13T07:15:00.000Z",
     "capabilities": {
       "llm": { "configured": true, "connected": null, "detail": "model gemini-3.5-flash via litellm" },
-      "web_search": { "configured": true, "connected": true, "detail": "orbit-search MCP" },
+      "web_search": { "configured": true, "connected": true, "detail": "tether-search MCP" },
       "web_browse": { "configured": true, "connected": null, "detail": "Lightpanda browser enabled" },
       "telegram": { "configured": false, "connected": false, "detail": "no bot token" }
     }
@@ -75,7 +76,7 @@ Authorization-Code + PKCE against any OIDC IdP (Entra/Azure AD, Okta, Google, Au
 - **`GET /api/auth/sso/status`** *(public)* — `{ enabled, configured }` for the login screen.
 - **`GET /api/auth/sso/login`** *(public)* — redirects to the IdP.
 - **`GET /api/auth/sso/callback`** *(public)* — verifies the `id_token`, provisions the user, mints an SSO session, and redirects to `<DASHBOARD_ORIGIN>/?ssoToken=…` (the SPA stores it as the request credential).
-- **`POST /api/auth/local`** *(public)* — local account sign-in: `{ username, password }` → `{ token }` (a session token; the client stores it as its credential). The superadmin account is seeded at boot from `ORBIT_SUPERADMIN_USERNAME`/`ORBIT_SUPERADMIN_PASSWORD` (or a generated password printed to the log). This is separate from `ORBIT_SUPERADMIN_KEY`, which is the bearer credential for programmatic API access.
+- **`POST /api/auth/local`** *(public)* — local account sign-in: `{ username, password }` → `{ token }` (a session token; the client stores it as its credential). The superadmin account is seeded at boot from `AUTH_SUPERADMIN_USERNAME`/`AUTH_SUPERADMIN_PASSWORD` (or a generated password printed to the log). This is separate from `AUTH_SUPERADMIN_KEY`, which is the bearer credential for programmatic API access.
 - **`POST /api/auth/logout`** *(public)* — revokes the presented session token.
 - **`GET /api/auth/whoami`** *(authed)* — the caller's identity (see §1).
 
@@ -97,7 +98,7 @@ Submit a structured task and read back a typed, validated **result contract** �
 - **`POST /api/run/:runId/cancel`**: Abort an in-flight run.
 - **`POST /api/run/:runId/answer`**: Answer a run that is paused at `awaiting_input` (the agent called the built-in `ask_questions` tool). Body `{ questionId?, answers }` where `answers` is keyed by question id → the selected label(s) or text. Resolves the parked tool call; the run resumes (`running`). While a run is `awaiting_input` its idle watchdog is suspended (the absolute backstop still applies). `GET /api/run/:id` surfaces the pending questions: `{ status:"awaiting_input", pendingQuestions:[…], questionId }`.
 
-The result contract may also carry (when applicable): a **`build`** block (from the `orbit-build` `end_build` handoff — `{ buildId, submitted, status, tester?, artifacts }`; a definitive tester `failed` flips the run to `failed`) and a **`templateCompliance`** block (audit-only — `{ templateId, ok, violations[] }`).
+The result contract may also carry (when applicable): a **`build`** block (from the `tether-build` `end_build` handoff — `{ buildId, submitted, status, tester?, artifacts }`; a definitive tester `failed` flips the run to `failed`) and a **`templateCompliance`** block (audit-only — `{ templateId, ok, violations[] }`).
 
 **Result contract shape** (`{ success, run: … }`):
 ```jsonc
@@ -123,7 +124,7 @@ Status is derived from the run lifecycle merged with the agent-authored `artifac
 - **`POST /api/config/ui`**: Set UI visibility configuration.
 
 ### Connectors & Harnesses
-MCP connectors are **tenant-scoped**: one registered by an API key is isolated to that key's tenant and is composed into only that tenant's session sandboxes (`<workspace>/.pi/mcp.json`) at spawn. Orbit's own servers (fleet/notify/search/…) and OAuth-wired providers are **shared** across tenants and shown read-only.
+MCP connectors are **tenant-scoped**: one registered by an API key is isolated to that key's tenant and is composed into only that tenant's session sandboxes (`<workspace>/.pi/mcp.json`) at spawn. Tether's own servers (fleet/notify/search/…) and OAuth-wired providers are **shared** across tenants and shown read-only.
 - **`GET /api/connectors`**: List connectors — shared ones (`shared: true`) plus this tenant's own (`shared: false`).
 - **`POST /api/connectors`** *(member+)*: Register or update one of the caller's tenant connectors. Accepts a JSON body:
   ```json
@@ -219,7 +220,7 @@ Base system prompts compiled and fed to the agent at spawn time.
     "content": "# Persona\nYou are an operations coordinator..."
   }
   ```
-- **`DELETE /api/prompts/:id`**: Delete a base prompt (protected defaults like `standard` and `orbit-system` cannot be deleted).
+- **`DELETE /api/prompts/:id`**: Delete a base prompt (protected defaults like `standard` and `tether-system` cannot be deleted).
 
 ### Reusable Skills
 Skills are reusable instruction manuals appended to system prompts.
@@ -356,7 +357,7 @@ Emitted when a tool call completes.
 ```
 
 #### 4. Plan State Update
-Pushes updated session plans whenever mutated by the `orbit-plan` tool.
+Pushes updated session plans whenever mutated by the `tether-plan` tool.
 ```json
 {
   "type": "plan_state",
@@ -414,7 +415,7 @@ Emitted when the agent calls the built-in `ask_questions` tool; the turn blocks 
 ```
 
 #### 8. Build State
-Emitted by the `orbit-build` tools as a build is handed to the external test facility (`building` → `submitting` → `passed|failed|error|skipped`).
+Emitted by the `tether-build` tools as a build is handed to the external test facility (`building` → `submitting` → `passed|failed|error|skipped`).
 ```json
 { "type": "build_state", "sessionId": "session-12345", "build": { "buildId": "bld_1", "status": "building" } }
 ```
@@ -423,7 +424,7 @@ Emitted by the `orbit-build` tools as a build is handed to the external test fac
 
 ## 4. Harness Pairing & Protocol v1
 
-A **harness** is any process that runs agent turns for the console (the local pi child, or a remote `orbit-adapter` dialing in from another machine). Pairing turns a short-lived code into a durable device token; the harness then holds an authenticated WebSocket open and services `spawn`/`prompt`/`cancel`. The same contract serves Orbit's own adapter and any third-party harness — they differ only in how they consume the descriptor below.
+A **harness** is any process that runs agent turns for the console (the local pi child, or a remote `tether-adapter` dialing in from another machine). Pairing turns a short-lived code into a durable device token; the harness then holds an authenticated WebSocket open and services `spawn`/`prompt`/`cancel`. The same contract serves Tether's own adapter and any third-party harness — they differ only in how they consume the descriptor below.
 
 ### A. Minting a code (operator-only)
 - **`POST /api/pair/start`** (authenticated). Body: `{ label?, scope? }` where `scope ∈ {full, chat_voice, read_only}`. Returns:
@@ -439,7 +440,7 @@ A **harness** is any process that runs agent turns for the console (the local pi
     "security": { "uncontained": true, "level": "warning", "title": "…", "detail": "…" }
   }
   ```
-  The code is **6 chars, 5-minute TTL, single-use, scoped**. `connectUrl` / `bootstrapCommand` are built from the **public origin of the request** (honoring `x-forwarded-proto`), so they work off-box behind nginx. `security` is a **host-trust advisory** — non-null only for `full` scope — flagging that a paired remote runs arbitrary shell on **its own machine**, where Orbit's container isolation does not reach; surface it before the operator confirms pairing (`null` for the non-shell scopes).
+  The code is **6 chars, 5-minute TTL, single-use, scoped**. `connectUrl` / `bootstrapCommand` are built from the **public origin of the request** (honoring `x-forwarded-proto`), so they work off-box behind nginx. `security` is a **host-trust advisory** — non-null only for `full` scope — flagging that a paired remote runs arbitrary shell on **its own machine**, where Tether's container isolation does not reach; surface it before the operator confirms pairing (`null` for the non-shell scopes).
 
 ### B. Redeeming a code (open, code-gated, rate-limited)
 Each of these redeems the code **atomically and single-use** — a second consumer of the same code gets `410 { error: "code_expired" }`. All three are rate-limited per IP (20/min).
@@ -459,7 +460,7 @@ Each of these redeems the code **atomically and single-use** — a second consum
   }
   ```
   (`security` is the same host-trust advisory as `/pair/start` — non-null only for `full` scope.)
-- **`GET /api/pair/bootstrap?code=CODE`** → a runnable Node installer (Orbit adapter): it persists the descriptor to `~/.orbit/adapter-credentials.json`, downloads the adapter, and launches it. Intended for `… | node`.
+- **`GET /api/pair/bootstrap?code=CODE`** → a runnable Node installer (Tether adapter): it persists the descriptor to `~/.tether/adapter-credentials.json`, downloads the adapter, and launches it. Intended for `… | node`.
 - **`POST /api/pair/redeem`** (body `{ code, label? }`) → `{ success, device: { id, label, token, scope } }`. The bare-token path for a harness that builds its own WS URL.
 
 > **The raw token is returned exactly once**, at redemption, and only its SHA-256 hash is stored. It rides in the URL/body, so **HTTPS/WSS is mandatory** for any non-loopback use.
@@ -477,7 +478,7 @@ The server replies `{ "type": "registered", "harnessId": "remote-…" }`. A reje
 ### D. Staying connected
 - **Heartbeat:** the harness sends WS `ping` frames every `heartbeat.intervalMs` to hold the socket through proxy idle timeouts; the server auto-pongs.
 - **Reconnect:** on a *transient* dropped socket the harness retries with `reconnect.backoffMs` + up to `maxJitterMs` jitter, then re-`register`s (a fresh `harnessId`). An **operator disconnect** (`DELETE /api/harnesses/:id`) is different — the server sends a `shutdown` and closes with code **4001**, and the adapter treats that as terminal (kills its agents and exits, no reconnect).
-- **Restart:** the persisted token in `~/.orbit/adapter-credentials.json` (keyed by server host, chmod 600) lets a restarted harness reconnect with **no re-pairing** — the expired code is irrelevant.
+- **Restart:** the persisted token in `~/.tether/adapter-credentials.json` (keyed by server host, chmod 600) lets a restarted harness reconnect with **no re-pairing** — the expired code is irrelevant.
 - **Revocation:** `DELETE /api/devices/:id` marks the token revoked; the next WS upgrade returns 401 and the adapter drops its stored credential and exits "re-pair required."
 
 `protocolVersion` is advisory today (best-effort); it is surfaced so future breaking changes to the register/event shape can be negotiated.
@@ -486,4 +487,4 @@ The server replies `{ "type": "registered", "harnessId": "remote-…" }`. A reje
 
 ## 5. Stability & Versioning
 
-The endpoints listed under `/api/sessions`, `/api/capabilities`, and `/api/config` represent the stable public surface of Orbit Backend v2. Custom frontends built against these structures are guaranteed to remain compatible across patch releases.
+The endpoints listed under `/api/sessions`, `/api/capabilities`, and `/api/config` represent the stable public surface of Tether Backend v2. Custom frontends built against these structures are guaranteed to remain compatible across patch releases.

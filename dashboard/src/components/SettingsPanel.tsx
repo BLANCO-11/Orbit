@@ -178,10 +178,24 @@ export default function SettingsPanel({
   onSetSessionMode,
   uiConfig,
   onUiConfigChange,
+  llmEnv,
 }) {
   const { devices, pairing, startPairing, clearPairing, revokeDevice } = useDevices();
   const [newDeviceLabel, setNewDeviceLabel] = useState("");
   const [activeTab, setActiveTab] = useState("general");
+
+  // The four LLM_* env vars are the app's onboarding DEFAULTS: on a fresh
+  // install these fields arrive pre-filled from the environment, and clearing
+  // one falls back to the env value rather than to nothing. Say so, otherwise a
+  // pre-filled field looks like something the user typed and forgot.
+  const llmLocked = llmEnv?.locked === true;
+  const fromEnv = llmEnv?.fromEnv || {};
+  const envHint = (field: string, varName: string) => {
+    if (!fromEnv[field]) return "";
+    return llmLocked
+      ? ` Set by ${varName}; locked.`
+      : ` Default from ${varName} — clear this field to use it.`;
+  };
 
   const SECTIONS = [
     { id: "general", label: "General", icon: Settings },
@@ -278,8 +292,8 @@ export default function SettingsPanel({
                 <div className="flex flex-col gap-4">
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <div>
-                      <FieldLabel>Response Model</FieldLabel>
-                      <Select value={settings.selectedNormalModel} onValueChange={(v) => onSettingsChange({ selectedNormalModel: v })}>
+                      <FieldLabel>Fast Model</FieldLabel>
+                      <Select value={settings.fastModel} onValueChange={(v) => onSettingsChange({ fastModel: v })} disabled={llmLocked}>
                         <SelectTrigger className="h-9 w-full text-sm"><SelectValue placeholder="Select model" /></SelectTrigger>
                         <SelectContent>
                           {models.length > 0 ? (
@@ -290,12 +304,12 @@ export default function SettingsPanel({
                         </SelectContent>
                       </Select>
                       <p className="mt-1 text-[11px] leading-relaxed text-faint">
-                        Fast output — chat, Q&amp;A, quick lookups.
+                        Fast output — chat, Q&amp;A, quick lookups.{envHint("fastModel", "LLM_FAST_MODEL")}
                       </p>
                     </div>
                     <div>
                       <FieldLabel>Reasoning Model</FieldLabel>
-                      <Select value={settings.selectedReasoningModel} onValueChange={(v) => onSettingsChange({ selectedReasoningModel: v })}>
+                      <Select value={settings.reasoningModel} onValueChange={(v) => onSettingsChange({ reasoningModel: v })} disabled={llmLocked}>
                         <SelectTrigger className="h-9 w-full text-sm"><SelectValue placeholder="Select model" /></SelectTrigger>
                         <SelectContent>
                           {models.length > 0 ? (
@@ -306,7 +320,7 @@ export default function SettingsPanel({
                         </SelectContent>
                       </Select>
                       <p className="mt-1 text-[11px] leading-relaxed text-faint">
-                        Reasoned output — used when Effort is set to Reasoned.
+                        Reasoned output — used when Effort is set to Reasoned.{envHint("reasoningModel", "LLM_REASONING_MODEL")}
                       </p>
                     </div>
                   </div>
@@ -404,15 +418,22 @@ export default function SettingsPanel({
           {/* ── KEYS & PROVIDERS ── */}
           {activeTab === "keys" && (
             <div className="flex flex-col gap-4 animate-fade-in">
-              <SectionCard title="LLM Provider" desc="OpenAI-compatible endpoint the agent runs against (LiteLLM works).">
+              <SectionCard title="LLM Provider" desc="Any OpenAI-compatible endpoint the agent runs against.">
                 <div className="flex flex-col gap-4">
+                  {llmLocked && (
+                    <p className="text-[11px] leading-relaxed text-faint">
+                      LLM configuration is locked to the environment (LLM_CONFIG_LOCKED). These fields are read-only.
+                    </p>
+                  )}
                   <div>
                     <FieldLabel>LLM Base Endpoint</FieldLabel>
-                    <Input value={settings.baseURL} onChange={(e) => onSettingsChange({ baseURL: e.target.value })} className="h-9 text-sm font-mono" placeholder="http://localhost:4000/v1" />
+                    <Input value={settings.baseUrl} onChange={(e) => onSettingsChange({ baseUrl: e.target.value })} className="h-9 text-sm font-mono" placeholder="http://localhost:4000/v1" disabled={llmLocked} />
+                    <p className="mt-1 text-[11px] leading-relaxed text-faint">{envHint("baseUrl", "LLM_BASE_URL") || " "}</p>
                   </div>
                   <div>
                     <FieldLabel>LLM API Key</FieldLabel>
-                    <Input type="password" value={settings.apiKey} onChange={(e) => onSettingsChange({ apiKey: e.target.value })} className="h-9 text-sm font-mono" placeholder="sk-..." />
+                    <Input type="password" value={settings.apiKey} onChange={(e) => onSettingsChange({ apiKey: e.target.value })} className="h-9 text-sm font-mono" placeholder="sk-..." disabled={llmLocked} />
+                    <p className="mt-1 text-[11px] leading-relaxed text-faint">{envHint("apiKey", "LLM_API_KEY") || " "}</p>
                   </div>
                 </div>
               </SectionCard>
@@ -529,7 +550,7 @@ export default function SettingsPanel({
           {/* ── PAIRED DEVICES ── */}
           {activeTab === "devices" && (
             <div className="flex flex-col gap-4 animate-fade-in">
-              <SectionCard title="Paired Devices" desc="Phones and consoles authorized to drive this Orbit.">
+              <SectionCard title="Paired Devices" desc="Phones and consoles authorized to drive this Tether.">
                 <div className="flex flex-col gap-2">
                   {devices.filter(d => !d.revoked).length === 0 ? (
                     <div className="rounded-xl border border-dashed border-border bg-muted/5 p-3 text-center text-xs italic text-muted-foreground">No paired devices found.</div>

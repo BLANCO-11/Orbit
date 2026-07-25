@@ -464,7 +464,7 @@ export default function AdminView({ auth }: { auth: AuthIdentity }) {
         <h2 className="text-lg font-semibold">Admin</h2>
         <p className="mb-5 mt-0.5 text-[13px] text-muted-foreground">
           Multi-tenant access control, API keys, usage and enterprise sign-in.
-          {auth.devMode && ' Running in local dev-mode — set ORBIT_SUPERADMIN_KEY to lock this down.'}
+          {auth.devMode && ' Running in local dev-mode — set AUTH_SUPERADMIN_KEY to lock this down.'}
         </p>
 
         <div className="mb-5 flex flex-wrap gap-1 border-b border-border">

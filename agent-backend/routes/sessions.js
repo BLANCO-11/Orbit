@@ -65,7 +65,7 @@ function createSessionsRouter() {
       const scope = scopeOf(req);
       const all = scope ? await db.getSessionsScoped(scope) : await db.getAllSessions();
       res.setHeader("Content-Type", "application/json");
-      res.setHeader("Content-Disposition", "attachment; filename=orbit-sessions-export.json");
+      res.setHeader("Content-Disposition", "attachment; filename=tether-sessions-export.json");
       res.json(all);
     } catch (err) { next(err); }
   });

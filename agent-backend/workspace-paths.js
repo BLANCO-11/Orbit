@@ -1,10 +1,10 @@
 // agent-backend/workspace-paths.js
 //
 // Per-session directory layout — the isolation + tracking backbone. Every
-// session gets its own tree under Orbit's home, OFF the source repo, so the
-// agent never writes into Orbit's own code and sessions can't see each other.
+// session gets its own tree under Tether's home, OFF the source repo, so the
+// agent never writes into Tether's own code and sessions can't see each other.
 //
-//   ~/.orbit/
+//   ~/.tether/
 //   └── sessions/<sessionId>/        ← one session = one boundary (the SAFE ZONE)
 //       ├── workspace/               ← agent cwd + default writes (all task work)
 //       ├── artifacts/               ← deliverables to keep (never auto-wiped)
@@ -17,9 +17,10 @@
 const fs = require("fs");
 const path = require("path");
 const os = require("os");
+const env = require("./env-config");
 
-const ORBIT_HOME = process.env.ORBIT_HOME || path.join(os.homedir(), ".orbit");
-const SESSIONS_DIR = path.join(ORBIT_HOME, "sessions");
+const APP_HOME = env.get("APP_HOME") || path.join(os.homedir(), ".tether");
+const SESSIONS_DIR = path.join(APP_HOME, "sessions");
 
 /** Filesystem-safe session id (defensive — ids are server-generated, but never trust a path segment). */
 function safeId(sessionId) {
@@ -58,6 +59,6 @@ function removeSessionDirs(sessionId) {
 }
 
 module.exports = {
-  ORBIT_HOME, SESSIONS_DIR,
+  APP_HOME, SESSIONS_DIR,
   safeId, sessionRoot, sessionDirs, ensureSessionDirs, removeSessionDirs,
 };

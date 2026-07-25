@@ -7,7 +7,7 @@
 // LoginPage), so a keyed backend shows the login page instead of silently
 // authenticating.
 
-const DEVICE_TOKEN_KEY = 'orbit-device-token';
+const DEVICE_TOKEN_KEY = 'tether:device-token';
 
 export function getDeviceToken() {
   if (typeof window === 'undefined') return null;
@@ -29,7 +29,7 @@ export function clearDeviceToken() {
 // all stored in the same slot (see setDeviceToken). No build-time key fallback:
 // login is explicit, so when the backend requires auth the app shows the login
 // page instead of silently authenticating from a bundled key. In dev-mode (no
-// ORBIT_SUPERADMIN_KEY) the backend allows unauthenticated access, so a null
+// AUTH_SUPERADMIN_KEY) the backend allows unauthenticated access, so a null
 // credential still lands straight in.
 export function getActiveCredential() {
   return getDeviceToken() || null;

@@ -32,7 +32,8 @@ curl -s -X POST "$BASE/api/secrets" -H "x-api-key: $KEY" \
 ### How a secret reaches the script
 
 At session spawn, **all** of the tenant's secrets are injected as env vars into
-the sandbox (reserved provider/gateway/system names — `ORBIT_*`, `OPENAI_*`,
+the sandbox (reserved provider/gateway/system names — every variable declared in
+`agent-backend/env-config.js`, plus
 `PATH`, `HOME`, … — are protected so a secret can't hijack them). Then:
 
 - In the **prompt**, tell the agent the variable name:
@@ -48,7 +49,7 @@ stored prompt, the transcript, or the logs.
 
 Register the MCP servers that expose your datasources. A connector you add is
 isolated to your tenant and composed into only your sessions' `.pi/mcp.json` at
-spawn. Orbit's own servers (fleet/notify/search/…) and OAuth-wired providers are
+spawn. Tether's own servers (fleet/notify/search/…) and OAuth-wired providers are
 **shared** and shown read-only.
 
 ### API

@@ -92,7 +92,7 @@ function createAuthSsoRouter({ db, getOrigin, authMiddleware }) {
 
   // ── POST /local (public) ────────────────────────────────────────
   // Local account sign-in with username + password (a real account, seeded at
-  // boot — see server.js — NOT the ORBIT_SUPERADMIN_KEY, which stays a bearer
+  // boot — see server.js — NOT the AUTH_SUPERADMIN_KEY, which stays a bearer
   // credential for programmatic API access). On success we mint a session token
   // and return it; the client stores THAT (never the password) as its request
   // credential, resolved via getSsoSessionByToken in middleware/auth.js.
@@ -180,7 +180,7 @@ function createAuthSsoRouter({ db, getOrigin, authMiddleware }) {
       if (!email) throw new Error("no email/preferred_username claim in id_token");
       if (!domainAllowed(email)) throw new Error(`domain not allowed for ${email}`);
 
-      // 3. Provision/refresh the user and mint an Orbit session token.
+      // 3. Provision/refresh the user and mint a Tether session token.
       const user = await db.upsertUser({ email, sub: payload.sub, role: await roleForEmail(db, email) });
       const { token } = await db.createSsoSession(user.id);
 

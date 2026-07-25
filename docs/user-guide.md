@@ -1,6 +1,6 @@
 # User guide
 
-Using the Orbit console (the dashboard at `http://localhost:6801`). For the
+Using the Tether console (the dashboard at `http://localhost:6801`). For the
 concepts referenced here, see [Concepts](./concepts.md).
 
 ## Navigation
@@ -44,7 +44,7 @@ The per-turn effort chip decides which model runs:
 The agent plans its own work and surfaces it as the **Mission board** (`plans/*.md`,
 streamed live). The old separate pre-plan LLM call is **off by default** — it never
 fed generation, only a UI preview, and added a full round-trip. It can be re-enabled
-via `ORBIT_PLAN_MODEL` (see [configuration](./configuration.md#llm-required)).
+via `LLM_REASONING_MODEL` (see [configuration](./configuration.md#llm-required)).
 
 ### Inspector tabs
 
@@ -58,14 +58,14 @@ via `ORBIT_PLAN_MODEL` (see [configuration](./configuration.md#llm-required)).
 
 ### Mission board
 
-The agent's structured plan (via the `orbit-plan` tool) rendered as a live
+The agent's structured plan (via the `tether-plan` tool) rendered as a live
 checklist with dependencies — the canonical "what's the plan" surface.
 
 ## Connectors
 
 Register MCP tool servers the agent can call. Each connector is **stdio**
 (`command` + `args` + `env`) or **remote** (`url`). Connectors you add are
-scoped to your tenant; Orbit's own servers (fleet/notify/search/…) show as
+scoped to your tenant; Tether's own servers (fleet/notify/search/…) show as
 shared. Connector `env` can reference `${secret:NAME}` — see below.
 
 ## Policies
@@ -82,7 +82,7 @@ Changes hot-reload on the next turn.
 - **Profiles** — named templates bundling harness type, mode, effort, prompt,
   skills, tool policy, and sandbox. Load one per session to avoid re-selecting.
 - **Prompt library** — swap the base system prompt (`prompts/*.md`). `standard`
-  and `orbit-system` are protected defaults.
+  and `tether-system` are protected defaults.
 - **Skills** — reusable instruction packs (`skills/<name>/SKILL.md`) attached per
   session and inherited by sub-agents. (The [Run API](./integration/run-api.md)
   auto-attaches the `script-gen` skill.)

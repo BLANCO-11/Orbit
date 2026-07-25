@@ -6,12 +6,12 @@
 //  Inbound  — long-polls getUpdates; an AUTHORIZED chat's message runs the agent
 //             and the reply is sent back. Unknown chats are refused and must
 //             pair first: they send `/pair <code>`, where <code> is shown only
-//             in the Orbit console (GET /api/telegram/status). This is the
+//             in the Tether console (GET /api/telegram/status). This is the
 //             security gate — a public bot means anyone can find it, so nobody
 //             drives your agent until you authorize their chat.
 //  Outbound — notify() pushes a message to every authorized chat; wired to the
 //             app's notification bus so task-done / build-failed alerts (and
-//             anything via ./orbit-notify) also reach Telegram.
+//             anything via ./tether-notify) also reach Telegram.
 //
 // The token is read fresh each poll cycle, so setting/clearing it in the UI is
 // picked up without a restart. Authorized chats + pairing code + poll offset
@@ -104,25 +104,25 @@ function createTelegramBridge({ db, decrypt, dispatch, log = console }) {
         const given = text.split(/\s+/)[1];
         if (given && given === (await pairingCode())) {
           await authorize(chatId);
-          await sink.send(chatId, "✅ Paired. You can now chat with Orbit from here.");
+          await sink.send(chatId, "✅ Paired. You can now chat with Tether from here.");
         } else {
-          await sink.send(chatId, "❌ Wrong or missing code. Open the Orbit console to get your pairing code, then send: /pair <code>");
+          await sink.send(chatId, "❌ Wrong or missing code. Open the Tether console to get your pairing code, then send: /pair <code>");
         }
       } else {
-        await sink.send(chatId, "🔒 This chat isn't authorized to drive Orbit. Send /pair <code> — the code is shown in the Orbit console.");
+        await sink.send(chatId, "🔒 This chat isn't authorized to drive Tether. Send /pair <code> — the code is shown in the Tether console.");
       }
       return;
     }
 
     // Authorized.
-    if (text === "/start") { await sink.send(chatId, "Orbit is connected. Send me anything and I'll run it."); return; }
+    if (text === "/start") { await sink.send(chatId, "Tether is connected. Send me anything and I'll run it."); return; }
     // Run the agent in the conservative default (chat) mode; the policy matrix
     // still governs every tool. Reply with the final answer.
     try {
       const { output, status } = await sink.run({ device: "local", prompt: text, mode: "chat", source: "telegram", titlePrefix: "📱" });
       await sink.send(chatId, output || `(no output · ${status || "done"})`);
     } catch (e) {
-      await sink.send(chatId, `⚠️ Orbit couldn't run that: ${e.message}`);
+      await sink.send(chatId, `⚠️ Tether couldn't run that: ${e.message}`);
     }
   }
 

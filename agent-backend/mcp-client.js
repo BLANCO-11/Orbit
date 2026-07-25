@@ -1,6 +1,7 @@
 const { Client } = require("@modelcontextprotocol/sdk/client/index.js");
 const { StdioClientTransport } = require("@modelcontextprotocol/sdk/client/stdio.js");
 const path = require("path");
+const env = require("./env-config");
 
 class LightpandaMcpClient {
   constructor() {
@@ -23,12 +24,12 @@ class LightpandaMcpClient {
         args: [serverPath],
         env: {
           ...process.env,
-          LIGHTPANDA_WS: process.env.LIGHTPANDA_WS || "ws://127.0.0.1:9222"
+          LIGHTPANDA_WS: env.get("LIGHTPANDA_WS")
         }
       });
 
       this.client = new Client(
-        { name: "orbit-agent-backend", version: "1.0.0" },
+        { name: "tether-agent-backend", version: "1.0.0" },
         { capabilities: {} }
       );
 

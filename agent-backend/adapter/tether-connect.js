@@ -1,31 +1,31 @@
 #!/usr/bin/env node
 'use strict';
-// orbit-connect.js — zero-dependency, AGENT-AGNOSTIC Orbit connector.
+// tether-connect.js — zero-dependency, AGENT-AGNOSTIC Tether connector.
 //
-// Connect ANY machine's already-installed agent to an Orbit runtime — no
+// Connect ANY machine's already-installed agent to a Tether runtime — no
 // `npm install`, one self-contained file, stock Node (20+; built-in global
 // `fetch` + `WebSocket`). Typical flow:
 //
 //     curl -fsSL 'https://HOST/api/pair/bootstrap?code=ABC123' | node
 //
 // which serves this file with the pairing descriptor baked in. It pairs, then
-// becomes a harness the Orbit console drives — spawn/prompt/cancel come down the
+// becomes a harness the Tether console drives — spawn/prompt/cancel come down the
 // socket, standardized events stream back — indistinguishable from local pi.
 //
 // AGENT MODEL (see the "agent adapters" section):
-//   • Orbit is the ORCHESTRATING brain — it sends a plan/context/task.
+//   • Tether is the ORCHESTRATING brain — it sends a plan/context/task.
 //   • The remote runs its OWN agent, which does its OWN inference with its OWN
-//     provider/auth and executes its OWN tools. Orbit never supplies inference.
+//     provider/auth and executes its OWN tools. Tether never supplies inference.
 //   • A per-agent ADAPTER is a pure relay/translator: it converts the agent's
-//     native wire format ⇄ Orbit's standardized events. It drives no tools and
+//     native wire format ⇄ Tether's standardized events. It drives no tools and
 //     holds no LLM. Adapters auto-detect by PATH. Built in: pi + Claude Code
 //     (rich, persistent JSON-lines events), OpenCode / Codex / Gemini CLI / Aider
-//     (per-turn text streaming), and a `custom` adapter driven by ORBIT_AGENT_CMD
+//     (per-turn text streaming), and a `custom` adapter driven by AGENT_CMD
 //     for anything else.
 //   • A box with no recognized agent is NOT a harness and won't connect — unless
 //     you explicitly force the built-in generic OpenAI tool loop with
-//     ORBIT_CONNECT_AGENT=generic (that escape-hatch path DOES need its own
-//     OPENAI_BASE_URL / OPENAI_API_KEY / OPENAI_MODEL and runs a minimal
+//     AGENT_CONNECT_KIND=generic (that escape-hatch path DOES need its own
+//     LLM_BASE_URL / LLM_API_KEY / LLM_FAST_MODEL and runs a minimal
 //     read/write/edit/bash/ls loop on this machine).
 
 const fs = require('fs');
@@ -42,7 +42,7 @@ const BASH_TIMEOUT_MS = 120000;
 
 // Descriptor baked in by /api/pair/bootstrap (globalThis so a standalone run,
 // where it's absent, doesn't ReferenceError).
-const INJECTED = (typeof globalThis !== 'undefined' && globalThis.__ORBIT_DESCRIPTOR__) || null;
+const INJECTED = (typeof globalThis !== 'undefined' && globalThis.__TETHER_DESCRIPTOR__) || null;
 
 // ── args ──────────────────────────────────────────────────────────────────
 function parseArgs(argv) {
@@ -60,7 +60,7 @@ function parseArgs(argv) {
 // ── credential persistence (map keyed by server host) ───────────────────────
 function credentialsPath(args) {
   if (args.credentials) return args.credentials;
-  const home = process.env.ORBIT_ADAPTER_HOME || path.join(os.homedir(), '.orbit');
+  const home = process.env.AGENT_ADAPTER_HOME || path.join(os.homedir(), '.tether');
   return path.join(home, 'adapter-credentials.json');
 }
 function loadStore(p) { try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch { return {}; } }
@@ -124,7 +124,7 @@ async function resolveDescriptor(args, credsPath, label) {
 }
 
 // Save this connector's source to disk so a service/supervisor can RELAUNCH it
-// with the persisted token (`node ~/.orbit/orbit-connect.js`) — the durable
+// with the persisted token (`node ~/.tether/tether-connect.js`) — the durable
 // restart must NOT re-run the single-use bootstrap. Only relevant when we came in
 // via `curl … | node` (source piped over stdin, no file on disk). Best-effort.
 async function saveConnectorSource(descriptor) {
@@ -134,20 +134,24 @@ async function saveConnectorSource(descriptor) {
     const res = await fetch(`${origin}/api/pair/adapter`);
     if (!res.ok) return null;
     const src = await res.text();
-    const home = process.env.ORBIT_ADAPTER_HOME || path.join(os.homedir(), '.orbit');
+    const home = process.env.AGENT_ADAPTER_HOME || path.join(os.homedir(), '.tether');
     fs.mkdirSync(home, { recursive: true });
-    const dest = path.join(home, 'orbit-connect.js');
+    const dest = path.join(home, 'tether-connect.js');
     fs.writeFileSync(dest, src);
     return dest;
   } catch { return null; }
 }
 
 // ── LLM config (bring-your-own; spawn-provided is a fallback) ────────────────
+// This file is a STANDALONE script shipped to remote machines — it cannot
+// require env-config, so the canonical names are spelled out here. Keep them in
+// sync with agent-backend/env-config.js (LLM_* group). The OPENAI_* aliases are
+// gone: they meant both "this machine's upstream" and "the agent's own creds".
 function resolveLlm(spawnLlm) {
   const e = process.env;
-  const baseURL = e.OPENAI_BASE_URL || e.LLM_BASE_URL || e.OPENAI_API_BASE || (spawnLlm && spawnLlm.baseURL) || '';
-  const apiKey = e.OPENAI_API_KEY || e.LLM_API_KEY || (spawnLlm && spawnLlm.apiKey) || '';
-  const model = e.OPENAI_MODEL || e.LLM_MODEL || (spawnLlm && spawnLlm.model) || '';
+  const baseURL = e.LLM_BASE_URL || (spawnLlm && spawnLlm.baseURL) || '';
+  const apiKey = e.LLM_API_KEY || (spawnLlm && spawnLlm.apiKey) || '';
+  const model = e.LLM_FAST_MODEL || (spawnLlm && spawnLlm.model) || '';
   return { baseURL: baseURL.replace(/\/+$/, ''), apiKey, model };
 }
 function providerLabel(baseURL) { try { return new URL(baseURL).host; } catch { return 'openai-compatible'; } }
@@ -163,7 +167,7 @@ const TOOL_SCHEMAS = [
 
 // Tools that create/modify files or run commands. Non-`full` device scopes and
 // the central policy's excludeTools can strip these — defense-in-depth, since a
-// remote executes tools locally (Orbit's tool_call_start gate can observe but
+// remote executes tools locally (Tether's tool_call_start gate can observe but
 // can't veto mid-turn, so the connector must also refuse).
 const MUTATING_TOOLS = new Set(['write', 'edit', 'bash']);
 
@@ -233,7 +237,7 @@ async function execTool(workspace, name, args, onChild) {
 
 // ── the agent loop (one OpenAI-compatible chat session) ──────────────────────
 function createSession(sessionId, spawnMsg, emit, scope) {
-  const home = process.env.ORBIT_ADAPTER_HOME || path.join(os.homedir(), '.orbit');
+  const home = process.env.AGENT_ADAPTER_HOME || path.join(os.homedir(), '.tether');
   const workspace = path.join(home, 'workspaces', sessionId);
   fs.mkdirSync(workspace, { recursive: true });
 
@@ -322,10 +326,10 @@ async function runTurn(session, userText, emit) {
 }
 
 // ── agent adapters ───────────────────────────────────────────────────────────
-// An adapter connects Orbit to ONE kind of already-installed agent (pi, Claude
-// Code, OpenCode, …). It is a PURE RELAY/TRANSLATOR: Orbit's request goes in, the
+// An adapter connects Tether to ONE kind of already-installed agent (pi, Claude
+// Code, OpenCode, …). It is a PURE RELAY/TRANSLATOR: Tether's request goes in, the
 // agent runs it with ITS OWN brain + ITS OWN tools, and the adapter only
-// translates the agent's native wire format ⇄ Orbit's standardized events. The
+// translates the agent's native wire format ⇄ Tether's standardized events. The
 // adapter NEVER executes tools itself (that's the agent's job) and never supplies
 // an LLM (the agent uses its own provider/auth).
 //
@@ -337,7 +341,7 @@ async function runTurn(session, userText, emit) {
 //
 // The `generic` adapter (the built-in OpenAI tool loop above) is NOT auto-
 // selected — a box with no real agent isn't a harness. It's available only when
-// explicitly forced (ORBIT_CONNECT_AGENT=generic), as an escape hatch.
+// explicitly forced (AGENT_CONNECT_KIND=generic), as an escape hatch.
 
 // Resolve a command to its ABSOLUTE path via PATH, or null. We spawn the agent
 // with `cwd: <session workspace>`, so we must NOT rely on spawn's own PATH lookup
@@ -392,21 +396,21 @@ function spawnNativeAgent(binName, args, { cwd, env } = {}) {
 function stripAnsi(s) { return String(s || '').replace(/\x1b\[[0-9;]*m/g, ''); }
 
 function sessionWorkspace(sessionId) {
-  const home = process.env.ORBIT_ADAPTER_HOME || path.join(os.homedir(), '.orbit');
+  const home = process.env.AGENT_ADAPTER_HOME || path.join(os.homedir(), '.tether');
   const workspace = path.join(home, 'workspaces', sessionId);
   fs.mkdirSync(workspace, { recursive: true });
   return workspace;
 }
 
-// ── read-only workspace file RPC (the "remote server" half of Orbit's explorer)
-// Orbit's dashboard asks the connector to list/read files in a session's
+// ── read-only workspace file RPC (the "remote server" half of Tether's explorer)
+// Tether's dashboard asks the connector to list/read files in a session's
 // workspace ON THIS machine — on demand, VS-Code-style, no sync. Strictly
 // sandboxed to the session workspace root; read-only; text + a size cap.
 const FS_HIDDEN = new Set(['.git', 'node_modules', '.DS_Store']);
 const FS_MAX_READ = 500 * 1024;
 function fsWorkspaceRoot(sessionId) {
   // Don't mkdir here — browsing must have no side effects.
-  const home = process.env.ORBIT_ADAPTER_HOME || path.join(os.homedir(), '.orbit');
+  const home = process.env.AGENT_ADAPTER_HOME || path.join(os.homedir(), '.tether');
   return path.resolve(path.join(home, 'workspaces', String(sessionId || '')));
 }
 function fsResolveWithin(root, rel) {
@@ -445,7 +449,7 @@ function handleFsRequest(msg, send) {
 
 // ── operator console RPC — run a command in a session's workspace ON THIS box.
 // This is the OPERATOR's shell into the agent's runtime (not the agent's own
-// gated tools). Authed at Orbit; the remote is a paired, trusted device.
+// gated tools). Authed at Tether; the remote is a paired, trusted device.
 const CONSOLE_TIMEOUT_MS = 20000;
 const CONSOLE_MAX_OUTPUT = 200 * 1024;
 function handleConsole(msg, send) {
@@ -478,16 +482,16 @@ function workspaceNote(workspace) {
 // buffering, prompt/cancel encoding, lifecycle — so each such agent is just a
 // small `cfg`: { bin, buildArgs, map(item,emit,st), encodePrompt, encodeCancel }.
 // The agent runs its OWN brain + OWN tools; `map` only translates its native
-// events into Orbit's standardized ones. st = { acc, accThinking, turnActive }.
+// events into Tether's standardized ones. st = { acc, accThinking, turnActive }.
 function createJsonlSession(sessionId, spawnMsg, emit, scope, cfg) {
   const workspace = sessionWorkspace(sessionId);
   const system = (spawnMsg.systemPrompt || 'You are a capable coding agent.') + workspaceNote(workspace);
   const excluded = computeExcluded(scope, spawnMsg.excludeTools);
   const args = cfg.buildArgs({ sessionId, system, excluded, workspace });
-  // ORBIT_SESSION_ID lets the agent's Orbit MCP tools (fleet/notify) identify the
-  // lead session; ORBIT_API + ORBIT_API_KEY (set process-wide at connect from the
-  // pairing descriptor) let them authenticate back to Orbit as this device.
-  const { child } = spawnNativeAgent(cfg.bin, args, { cwd: workspace, env: { ORBIT_SESSION_ID: sessionId, ...(cfg.env || {}) } });
+  // AGENT_SESSION_ID lets the agent's Tether MCP tools (fleet/notify) identify the
+  // lead session; AGENT_API_URL + AGENT_API_KEY (set process-wide at connect from the
+  // pairing descriptor) let them authenticate back to Tether as this device.
+  const { child } = spawnNativeAgent(cfg.bin, args, { cwd: workspace, env: { AGENT_SESSION_ID: sessionId, ...(cfg.env || {}) } });
   const st = { acc: '', accThinking: '', buf: '', turnActive: false };
 
   child.stdout.on('data', (d) => {
@@ -509,7 +513,7 @@ function createJsonlSession(sessionId, spawnMsg, emit, scope, cfg) {
 
 // ── Engine B: per-turn text agent ────────────────────────────────────────────
 // For agents whose headless mode is "take a prompt, stream text, exit" (opencode
-// run, gemini -p, codex exec, aider --message, or any ORBIT_AGENT_CMD). One
+// run, gemini -p, codex exec, aider --message, or any AGENT_CMD). One
 // process PER turn; stdout is relayed as text (no granular tool/usage events —
 // those agents don't emit a machine-readable stream). The agent still runs its
 // own brain + tools; we just can't see inside. Stateless across turns.
@@ -522,7 +526,7 @@ function createTextSession(sessionId, spawnMsg, emit, scope, cfg) {
     prompt: (text) => new Promise((resolve) => {
       let acc = '', done = false, child;
       const end = () => { if (done) return; done = true; current = null; emit('agent_end', { accumulatedText: acc }); resolve(); };
-      try { ({ child } = spawnNativeAgent(cfg.bin, cfg.buildArgs({ prompt: text, system, workspace, excluded, sessionId }), { cwd: workspace, env: { ORBIT_SESSION_ID: sessionId } })); }
+      try { ({ child } = spawnNativeAgent(cfg.bin, cfg.buildArgs({ prompt: text, system, workspace, excluded, sessionId }), { cwd: workspace, env: { AGENT_SESSION_ID: sessionId } })); }
       catch (e) { emit('error', { message: `${cfg.bin} failed: ${e.message}` }); return end(); }
       current = child;
       if (cfg.stdinPrompt) { try { child.stdin.write(text); child.stdin.end(); } catch {} }
@@ -587,14 +591,14 @@ function createPiSession(sessionId, spawnMsg, emit, scope, bin) {
       // Session id only when this pi supports it (older builds don't → pi manages
       // its own in-process session, which is all we need per spawn).
       if (caps.sessionId) a.push('--session-id', sessionId);
-      // System prompt: Orbit's is ~18KB — as an inline arg it overflows the Windows
+      // System prompt: Tether's is ~18KB — as an inline arg it overflows the Windows
       // cmd.exe command-line limit ("The command line is too long"). pi's
       // `--append-system-prompt` reads a FILE PATH, so offload to a file (tiny
       // command line, every OS). Fall back to inline only if that flag is absent.
       let promptRef = null;
       if (caps.appendSystemPrompt) {
         try {
-          const home = process.env.ORBIT_ADAPTER_HOME || path.join(os.homedir(), '.orbit');
+          const home = process.env.AGENT_ADAPTER_HOME || path.join(os.homedir(), '.tether');
           const promptDir = path.join(home, 'prompts');
           fs.mkdirSync(promptDir, { recursive: true });
           const f = path.join(promptDir, `${sessionId}.md`);
@@ -616,7 +620,7 @@ function createPiSession(sessionId, spawnMsg, emit, scope, bin) {
 // ── Claude Code: persistent stream-json (rich events) ────────────────────────
 // `claude -p --input-format stream-json --output-format stream-json --verbose`.
 // claude uses its OWN auth/model + OWN tools. Flags/schema are version-sensitive;
-// if a version differs, override via ORBIT_AGENT_CMD (text mode) — see custom.
+// if a version differs, override via AGENT_CMD (text mode) — see custom.
 const CLAUDE_TOOL_MAP = { bash: 'Bash', write: 'Write', edit: 'Edit', read: 'Read', ls: 'LS' };
 function claudeMap(item, emit, st) {
   const emitUsage = (u) => { if (!u) return; const input = u.input_tokens || 0, output = u.output_tokens || 0, cacheRead = u.cache_read_input_tokens || 0; if (input || output) emit('usage', { input, output, reasoning: 0, cacheRead }); };
@@ -658,19 +662,19 @@ function createClaudeSession(sessionId, spawnMsg, emit, scope, bin) {
 function textAgent(bin, buildArgs, opts = {}) {
   return (sid, msg, emit, scope) => createTextSession(sid, msg, emit, scope, { bin, buildArgs, ...opts });
 }
-// Prompt as an arg is the common shape. Orbit's system prompt is NOT injected for
+// Prompt as an arg is the common shape. Tether's system prompt is NOT injected for
 // text agents (arg-size/quoting + each agent has its own) — they get the task.
 const OPENCODE_CREATE = textAgent('opencode', ({ prompt }) => ['run', prompt]);
 const GEMINI_CREATE   = textAgent('gemini',   ({ prompt }) => ['-p', prompt]);
 const CODEX_CREATE     = textAgent('codex',    ({ prompt }) => ['exec', prompt]);
 const AIDER_CREATE     = textAgent('aider',    ({ prompt }) => ['--yes-always', '--no-auto-commits', '--message', prompt]);
 
-// Custom escape hatch: ORBIT_AGENT_CMD=<bin>, ORBIT_AGENT_ARGS="run --json {prompt}"
+// Custom escape hatch: AGENT_CMD=<bin>, AGENT_ARGS="run --json {prompt}"
 // ({prompt} is substituted; if absent, the prompt is appended). Drives ANY agent
 // via the text engine — no code change needed for an agent we don't ship.
 function createCustomSession(sid, msg, emit, scope) {
-  const bin = process.env.ORBIT_AGENT_CMD;
-  const tmpl = (process.env.ORBIT_AGENT_ARGS || '').trim();
+  const bin = process.env.AGENT_CMD;
+  const tmpl = (process.env.AGENT_ARGS || '').trim();
   return createTextSession(sid, msg, emit, scope, {
     bin,
     buildArgs: ({ prompt }) => {
@@ -693,11 +697,11 @@ function createGenericSession(sessionId, spawnMsg, emit, scope) {
   };
 }
 
-// Registry, in detection priority order. `custom` wins when ORBIT_AGENT_CMD is
+// Registry, in detection priority order. `custom` wins when AGENT_CMD is
 // set; otherwise the first agent found on PATH. `generic` is never auto-selected.
 const TEXT_CAPS = ['chat', 'plan', 'edit', 'yolo', 'tools'];
 const ADAPTERS = [
-  { kind: 'custom', detect: () => !!process.env.ORBIT_AGENT_CMD, capabilities: TEXT_CAPS, describe: () => ({ model: '', provider: `${process.env.ORBIT_AGENT_CMD || 'custom'} (custom)` }), tools: () => [], create: createCustomSession },
+  { kind: 'custom', detect: () => !!process.env.AGENT_CMD, capabilities: TEXT_CAPS, describe: () => ({ model: '', provider: `${process.env.AGENT_CMD || 'custom'} (custom)` }), tools: () => [], create: createCustomSession },
   { kind: 'pi', detect: () => commandExists('pi'), capabilities: ['chat', 'plan', 'edit', 'yolo', 'subagents', 'tools', 'browser'], describe: () => ({ model: '', provider: 'pi (native)' }), tools: () => ['read', 'write', 'edit', 'bash', 'grep', 'find'].map((n) => ({ id: n, name: n, source: 'pi', description: `pi built-in ${n}`, enabledByDefault: true })), create: (sid, msg, emit, scope) => createPiSession(sid, msg, emit, scope, 'pi') },
   { kind: 'claude', detect: () => commandExists('claude'), capabilities: ['chat', 'plan', 'edit', 'yolo', 'subagents', 'tools'], describe: () => ({ model: '', provider: 'claude code (native)' }), tools: () => [], create: (sid, msg, emit, scope) => createClaudeSession(sid, msg, emit, scope, 'claude') },
   { kind: 'opencode', detect: () => commandExists('opencode'), capabilities: TEXT_CAPS, describe: () => ({ model: '', provider: 'opencode (native)' }), tools: () => [], create: OPENCODE_CREATE },
@@ -711,15 +715,15 @@ const GENERIC_ADAPTER = {
   detect: () => true,
   capabilities: ['chat', 'plan', 'edit', 'yolo', 'tools'],
   describe: () => { const llm = resolveLlm(null); return { model: llm.model || '', provider: llm.baseURL ? providerLabel(llm.baseURL) : '' }; },
-  tools: () => TOOL_SCHEMAS.map((t) => ({ id: t.function.name, name: t.function.name, source: 'orbit-connect', description: t.function.description, enabledByDefault: true })),
+  tools: () => TOOL_SCHEMAS.map((t) => ({ id: t.function.name, name: t.function.name, source: 'tether-connect', description: t.function.description, enabledByDefault: true })),
   create: (sid, msg, emit, scope) => createGenericSession(sid, msg, emit, scope),
 };
 
-// Pick the adapter for this box. `ORBIT_CONNECT_AGENT` / `--agent` forces one
+// Pick the adapter for this box. `AGENT_CONNECT_KIND` / `--agent` forces one
 // (including `generic`); otherwise auto-detect a real agent by PATH. Returns null
 // when no real agent is present (→ the box isn't a harness; it won't connect).
 function resolveAdapter(forced) {
-  const want = forced || process.env.ORBIT_CONNECT_AGENT || 'auto';
+  const want = forced || process.env.AGENT_CONNECT_KIND || 'auto';
   if (want && want !== 'auto') {
     if (want === 'generic') return GENERIC_ADAPTER;
     const a = ADAPTERS.find((a) => a.kind === want);
@@ -737,17 +741,17 @@ function connectSupervised(descriptor, { name, machine, credsPath, persisted, ad
   const sessions = new Map();
   let attempt = 0, stopped = false;
 
-  // Hand spawned agents the credentials to call Orbit's own API back (fixes the
-  // remote agent's Orbit MCP tools — fleet/notify — getting "Unauthorized"):
-  //   ORBIT_API     = Orbit's PUBLIC origin (derived from the wsUrl we dialed),
-  //   ORBIT_API_KEY = this device's token (a valid Orbit credential; scoped +
+  // Hand spawned agents the credentials to call Tether's own API back (fixes the
+  // remote agent's Tether MCP tools — fleet/notify — getting "Unauthorized"):
+  //   AGENT_API_URL     = Tether's PUBLIC origin (derived from the wsUrl we dialed),
+  //   AGENT_API_KEY = this device's token (a valid Tether credential; scoped +
   //                   revocable). Set process-wide so every agent inherits them;
-  //                   ORBIT_SESSION_ID is added per-spawn.
+  //                   AGENT_SESSION_ID is added per-spawn.
   try {
     const u = new URL(descriptor.wsUrl);
     const httpProto = u.protocol === 'wss:' ? 'https:' : 'http:';
-    process.env.ORBIT_API = `${httpProto}//${u.host}`;
-    if (descriptor.token) process.env.ORBIT_API_KEY = descriptor.token;
+    process.env.AGENT_API_URL = `${httpProto}//${u.host}`;
+    if (descriptor.token) process.env.AGENT_API_KEY = descriptor.token;
   } catch {}
 
   function scheduleReconnect() {
@@ -755,7 +759,7 @@ function connectSupervised(descriptor, { name, machine, credsPath, persisted, ad
     const base = backoff[Math.min(attempt, backoff.length - 1)];
     const delay = base + Math.floor(Math.random() * maxJitter);
     attempt++;
-    console.log(`[orbit-connect] Reconnecting in ${Math.round(delay)}ms (attempt ${attempt})…`);
+    console.log(`[tether-connect] Reconnecting in ${Math.round(delay)}ms (attempt ${attempt})…`);
     setTimeout(connect, delay);
   }
 
@@ -768,7 +772,7 @@ function connectSupervised(descriptor, { name, machine, credsPath, persisted, ad
     ws.addEventListener('open', () => {
       attempt = 0;
       const desc = adapter.describe ? adapter.describe() : { model: '', provider: adapter.kind };
-      console.log(`[orbit-connect] Connected to ${descriptor.wsUrl}. Registering as "${name}" (adapter: ${adapter.kind}).`);
+      console.log(`[tether-connect] Connected to ${descriptor.wsUrl}. Registering as "${name}" (adapter: ${adapter.kind}).`);
       send({
         type: 'register', name, machine,
         model: desc.model || '', provider: desc.provider || adapter.kind,
@@ -785,7 +789,7 @@ function connectSupervised(descriptor, { name, machine, credsPath, persisted, ad
       const sessionId = msg.sessionId;
       const emit = (event, data) => send({ type: 'event', sessionId, event, data });
 
-      if (msg.type === 'registered') { console.log(`[orbit-connect] Registered as harness ${msg.harnessId}. Ready.`); return; }
+      if (msg.type === 'registered') { console.log(`[tether-connect] Registered as harness ${msg.harnessId}. Ready.`); return; }
       if (msg.type === 'list_tools') { send({ type: 'tools_list', reqId: msg.reqId, tools: adapter.tools ? adapter.tools() : [] }); return; }
       if (msg.type === 'fs_request') { handleFsRequest(msg, send); return; }
       if (msg.type === 'console_request') { handleConsole(msg, send); return; }
@@ -796,13 +800,13 @@ function connectSupervised(descriptor, { name, machine, credsPath, persisted, ad
         catch (e) { emit('error', { message: `adapter (${adapter.kind}) failed: ${e.message}` }); emit('agent_end', { accumulatedText: '' }); return; }
         // The generic escape-hatch loop is the only path needing a local model.
         if (adapter.kind === 'generic' && session._generic && (!session._generic.llm.baseURL || !session._generic.llm.model)) {
-          emit('error', { message: 'No OpenAI-compatible model configured on this machine. Set OPENAI_BASE_URL / OPENAI_API_KEY / OPENAI_MODEL, or install a supported agent (pi).' });
+          emit('error', { message: 'No OpenAI-compatible model configured on this machine. Set LLM_BASE_URL / LLM_API_KEY / LLM_FAST_MODEL, or install a supported agent (pi).' });
           emit('agent_end', { accumulatedText: '' });
           try { session.dispose(); } catch {}
           return;
         }
         sessions.set(sessionId, session);
-        console.log(`[orbit-connect] Session ${sessionId} ready via the ${adapter.kind} adapter.`);
+        console.log(`[tether-connect] Session ${sessionId} ready via the ${adapter.kind} adapter.`);
         return;
       }
       if (msg.type === 'prompt') { const s = sessions.get(sessionId); if (s) await s.prompt(msg.message); return; }
@@ -812,7 +816,7 @@ function connectSupervised(descriptor, { name, machine, credsPath, persisted, ad
       // this machine and exit the adapter — do NOT reconnect. (A transient network
       // drop, by contrast, keeps `stopped` false and reconnects via close handler.)
       if (msg.type === 'shutdown') {
-        console.log('[orbit-connect] Shutdown requested by operator — killing agents and exiting.');
+        console.log('[tether-connect] Shutdown requested by operator — killing agents and exiting.');
         for (const s of sessions.values()) { try { s.dispose(); } catch {} }
         sessions.clear();
         stopped = true;
@@ -824,7 +828,7 @@ function connectSupervised(descriptor, { name, machine, credsPath, persisted, ad
 
     // A 401 on upgrade → token revoked/rotated. If it came from stored creds,
     // drop them and exit (retrying a dead token loops forever).
-    ws.addEventListener('error', (e) => { console.error('[orbit-connect] socket error:', e?.message || 'error'); });
+    ws.addEventListener('error', (e) => { console.error('[tether-connect] socket error:', e?.message || 'error'); });
     ws.addEventListener('close', (ev) => {
       if (heartbeat) clearInterval(heartbeat);
       for (const s of sessions.values()) { try { s.dispose(); } catch {} }
@@ -833,16 +837,16 @@ function connectSupervised(descriptor, { name, machine, credsPath, persisted, ad
       // Operator disconnect (Fleet UI) closes with 4001 — terminal, no reconnect.
       // Fallback for when the `shutdown` message wasn't processed before close.
       if (ev && ev.code === 4001) {
-        console.log('[orbit-connect] Disconnected by operator — exiting (will not reconnect).');
+        console.log('[tether-connect] Disconnected by operator — exiting (will not reconnect).');
         stopped = true; process.exit(0);
         return;
       }
       if (ev && ev.code === 4401 || ev?.reason === 'unauthorized') {
-        console.error('[orbit-connect] Token rejected. Re-pair with a fresh code.');
+        console.error('[tether-connect] Token rejected. Re-pair with a fresh code.');
         if (persisted) dropCredential(credsPath, descriptor.wsUrl);
         stopped = true; process.exit(1);
       }
-      console.log('[orbit-connect] Disconnected.');
+      console.log('[tether-connect] Disconnected.');
       scheduleReconnect();
     });
   }
@@ -855,7 +859,7 @@ function connectSupervised(descriptor, { name, machine, credsPath, persisted, ad
 
 async function main() {
   if (typeof WebSocket === 'undefined') {
-    console.error('[orbit-connect] This Node has no global WebSocket. Use Node 20+ (recommended 22+).');
+    console.error('[tether-connect] This Node has no global WebSocket. Use Node 20+ (recommended 22+).');
     process.exit(1);
   }
   const args = parseArgs(process.argv.slice(2));
@@ -866,7 +870,7 @@ async function main() {
 
   let descriptor;
   try { descriptor = await resolveDescriptor(args, credsPath, name); }
-  catch (e) { console.error(`[orbit-connect] ${e.message}`); process.exit(1); }
+  catch (e) { console.error(`[tether-connect] ${e.message}`); process.exit(1); }
 
   // Pick the agent this box will run as a harness. A real installed agent (pi,
   // …) wins; the agent uses ITS OWN provider + tools. If none is found and the
@@ -874,22 +878,22 @@ async function main() {
   // a harness.
   const adapter = resolveAdapter(typeof args.agent === 'string' ? args.agent : null);
   if (!adapter) {
-    console.error('[orbit-connect] No supported agent found on this machine.');
-    console.error('               Install one (e.g. `pi`) so Orbit can drive it with its own brain + tools,');
-    console.error('               or run with ORBIT_CONNECT_AGENT=generic (or --agent generic) to use the built-in model loop');
-    console.error('               (that path needs OPENAI_BASE_URL / OPENAI_API_KEY / OPENAI_MODEL set here).');
+    console.error('[tether-connect] No supported agent found on this machine.');
+    console.error('               Install one (e.g. `pi`) so Tether can drive it with its own brain + tools,');
+    console.error('               or run with AGENT_CONNECT_KIND=generic (or --agent generic) to use the built-in model loop');
+    console.error('               (that path needs LLM_BASE_URL / LLM_API_KEY / LLM_FAST_MODEL set here).');
     process.exit(1);
   }
   if (adapter.kind === 'generic') {
     const llm = resolveLlm(null);
     if (!llm.baseURL || !llm.model) {
-      console.warn('[orbit-connect] generic adapter: no local model yet. Set OPENAI_BASE_URL / OPENAI_API_KEY / OPENAI_MODEL,');
+      console.warn('[tether-connect] generic adapter: no local model yet. Set LLM_BASE_URL / LLM_API_KEY / LLM_FAST_MODEL,');
       console.warn('               or the console can supply one at spawn.');
     } else {
-      console.log(`[orbit-connect] generic adapter model: ${llm.model} via ${providerLabel(llm.baseURL)}.`);
+      console.log(`[tether-connect] generic adapter model: ${llm.model} via ${providerLabel(llm.baseURL)}.`);
     }
   } else {
-    console.log(`[orbit-connect] Driving native agent "${adapter.kind}" (it uses its own provider + tools).`);
+    console.log(`[tether-connect] Driving native agent "${adapter.kind}" (it uses its own provider + tools).`);
   }
 
   // Came in via `curl … | node` (no file on disk)? Save the connector so a
@@ -897,13 +901,13 @@ async function main() {
   // `node <path>` (no code; the bootstrap code is single-use).
   if (INJECTED) {
     const saved = await saveConnectorSource(descriptor);
-    if (saved) console.log(`[orbit-connect] Saved connector to ${saved}. For a durable service, run: node ${saved}`);
+    if (saved) console.log(`[tether-connect] Saved connector to ${saved}. For a durable service, run: node ${saved}`);
   }
 
   connectSupervised(descriptor, { name, machine, credsPath, persisted, adapter });
 }
 
-// Run when executed directly (`node orbit-connect.js …`) OR when the bootstrap
+// Run when executed directly (`node tether-connect.js …`) OR when the bootstrap
 // injected a descriptor and piped us into `node` via stdin — in the stdin case
 // `require.main` is `undefined`, so the usual `require.main === module` guard is
 // false and main() would silently never run (the script would just exit). Only

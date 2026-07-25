@@ -76,7 +76,7 @@ POST /api/run/:runId/answer
 
 `answers` is keyed by question id → the selected label(s) (single/multi) or text.
 The parked tool call resolves and the run resumes `running`. Unanswered within
-`ORBIT_ASK_TIMEOUT_MS` (default 10 min), the tool returns a "no answer" sentinel
+`RUN_ASK_TIMEOUT_MS` (default 10 min), the tool returns a "no answer" sentinel
 and the run continues.
 
 ## Version history
@@ -112,7 +112,7 @@ survive when v2 rewrites the workspace.
 
 - **`build`** — present when the agent ran the `end_build` handoff. A definitive
   tester `failed` flips the run status to `failed`; `skipped` means the external
-  facility isn't configured (`ORBIT_TESTER_URL` unset).
+  facility isn't configured (`RUN_TESTER_URL` unset).
 - **`templateCompliance`** — present when the run used a `templateId`. **Audit-only:**
   violations are reported but do **not** change the run status.
 

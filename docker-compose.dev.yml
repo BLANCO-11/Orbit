@@ -8,11 +8,11 @@
 # being shadowed by the host bind-mount.
 
 services:
-  orbit:
+  tether:
     build:
       context: .
       target: dev
-    image: orbit:dev
+    image: tether:dev
     # Publish the dashboard here too, so dev works even if this file is run alone.
     # (Still run WITH the base file so Lightpanda + env_file + pi mounts apply:
     #  docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build)

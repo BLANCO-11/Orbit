@@ -82,9 +82,9 @@ export default function AppShell({
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sidebarWidth, startSidebarResize, sidebarDragging] =
-    useResizableWidth('orbit_sidebar_w', 264, 208, 360, false);
+    useResizableWidth('tether:sidebar-w', 264, 208, 360, false);
   const [inspectorWidth, startInspectorResize, inspectorDragging] =
-    useResizableWidth('orbit_inspector_w', 372, 300, 560, true);
+    useResizableWidth('tether:inspector-w', 372, 300, 560, true);
 
   // Smaller desktops: the inspector yields its width back automatically;
   // the header toggle overrides on demand.

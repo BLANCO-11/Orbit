@@ -1,39 +1,29 @@
 // agent-backend/env.js
-// Startup environment validation + Pi binary path discovery
+// Startup environment validation + Pi binary path discovery.
+//
+// The canonical env table, typed accessors and the legacy-name tripwire live in
+// env-config.js. This file is the boot-time *policy* layer on top of it.
 
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
+const env = require("./env-config");
 
-// Nothing is hard-required at boot anymore: the app must start even with no LLM
+// Nothing is hard-required at boot: the app must start even with no LLM
 // configured so the "No LLM configured — add a provider" UI can guide the user
 // (Workstream F4). Missing config is surfaced as warnings + capability state.
 const REQUIRED_VARS = [];
 const RECOMMENDED_VARS = ["LOCAL_TTS_KEY", "LIGHTPANDA_WS"];
 
-// Provider-agnostic LLM env resolution (Workstream F1). Neutral `LLM_*` names
-// are primary; the historical `LITELLM_*` / `OPENAI_*` names are read as
-// fallbacks so existing installs keep working. Any OpenAI-compatible endpoint
+// Provider-agnostic LLM env resolution. Any OpenAI-compatible endpoint
 // (OpenAI, Groq, OpenRouter, Together, Ollama, vLLM, a LiteLLM proxy, …) works
-// — Orbit only ever speaks `/v1` HTTP against baseURL + apiKey + model.
+// — the app only ever speaks `/v1` HTTP against baseUrl + apiKey + model.
+//
+// There is exactly ONE fallback chain now, in env-config.llm(). The previous
+// three-alias-deep chain (LLM_* → LITELLM_* → OPENAI_*) was re-implemented in
+// four places, one of which never read LLM_* at all.
 function resolveLlmEnv() {
-  return {
-    baseURL:
-      process.env.LLM_BASE_URL ||
-      process.env.LITELLM_BASE_URL ||
-      process.env.OPENAI_BASE_URL ||
-      "",
-    apiKey:
-      process.env.LLM_API_KEY ||
-      process.env.LITELLM_KEY ||
-      process.env.OPENAI_API_KEY ||
-      "",
-    model:
-      process.env.LLM_MODEL ||
-      process.env.LITELLM_MODEL ||
-      process.env.OPENAI_MODEL ||
-      "",
-  };
+  return env.llm();
 }
 
 function resolveFromPath(binName) {
@@ -51,9 +41,12 @@ function resolveFromPath(binName) {
 }
 
 function discoverPiBinaries() {
-  const nodePath = process.env.PI_NODE_PATH || process.env.NODE_PATH;
-  const piPath = process.env.PI_CLI_PATH;
-  
+  // Deliberately NOT falling back to Node's own NODE_PATH: that variable means
+  // "module resolution roots", not "the node binary", and inheriting it here
+  // used to point the harness at a directory.
+  const nodePath = env.get("HARNESS_NODE_PATH");
+  const piPath = env.get("HARNESS_PI_PATH");
+
   if (!nodePath || !piPath) {
     const homeDir = os.homedir();
     const candidates = [
@@ -97,6 +90,12 @@ function isPlaceholderKey(value) {
 }
 
 function validateEnv() {
+  // Fail closed on a stale .env BEFORE anything reads config. A legacy name we
+  // no longer read is not a cosmetic problem: a TETHER_-era superadmin key left
+  // in place leaves AUTH_SUPERADMIN_KEY unset, which is the documented auth-bypass
+  // dev-mode — i.e. a silently wide-open deployment.
+  env.checkLegacyEnv();
+
   const missing = REQUIRED_VARS.filter(v => !process.env[v]);
   if (missing.length > 0) {
     console.error(`[FATAL] Missing required environment variables: ${missing.join(", ")}`);
@@ -109,7 +108,7 @@ function validateEnv() {
   // confusing lazy error at first prompt.
   const { apiKey } = resolveLlmEnv();
   if (!apiKey) {
-    console.warn("[WARN] No LLM API key found in env (LLM_API_KEY / LITELLM_KEY / OPENAI_API_KEY).");
+    console.warn("[WARN] No LLM API key found in env (LLM_API_KEY).");
     console.warn("       Configure a provider in .env or Settings, or the UI will prompt you to add one.");
   } else if (isPlaceholderKey(apiKey)) {
     console.warn(`[WARN] LLM API key is still the placeholder value ("${apiKey}").`);
@@ -138,7 +137,7 @@ function probePiBinary(piPath) {
   if (ok) {
     console.log(`[Harness] pi CLI found at ${resolved}.`);
   } else {
-    console.warn("[WARN] No local pi harness found on PATH (PI_CLI_PATH unset too).");
+    console.warn("[WARN] No local pi harness found on PATH (HARNESS_PI_PATH unset too).");
     console.warn("       Local agent sessions can't start until pi is installed — see setup.sh /");
     console.warn("       the README. You can still run headless or drive a paired remote harness.");
   }

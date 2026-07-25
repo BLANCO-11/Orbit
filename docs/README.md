@@ -1,6 +1,6 @@
-# Orbit Documentation
+# Tether Documentation
 
-Orbit is a local-first agent-operations console: it orchestrates coding/agent
+Tether is a local-first agent-operations console: it orchestrates coding/agent
 harnesses (pi, OpenCode, remote devices), enforces a policy matrix, gives you
 real observability, and exposes a **headless backend** so external apps can run
 agent tasks and read back typed results.
@@ -12,17 +12,17 @@ protocol spec, see [`../API.md`](../API.md).
 
 | If you want to… | Read |
 |---|---|
-| Install and run Orbit for the first time | [Getting started](./getting-started.md) |
+| Install and run Tether for the first time | [Getting started](./getting-started.md) |
 | Understand the moving parts (sessions, runs, tenants, sandbox, policy) | [Concepts](./concepts.md) |
 | See the system design — components, data flows, diagrams (architect view) | [Architecture](./architecture.md) |
 | Use the app day-to-day (console, modes, connectors, policies, fleet) | [User guide](./user-guide.md) |
-| Configure Orbit (env vars, settings, database, sandbox) | [Configuration](./configuration.md) |
-| Drive Orbit from your own application | [Integration guide](./integration/README.md) |
+| Configure Tether (env vars, settings, database, sandbox) | [Configuration](./configuration.md) |
+| Drive Tether from your own application | [Integration guide](./integration/README.md) |
 | Fix something that's not working | [Troubleshooting](./troubleshooting.md) |
 
 ## Integration (headless backend) docs
 
-For building a "parent app" that submits tasks to Orbit with only an API key:
+For building a "parent app" that submits tasks to Tether with only an API key:
 
 - [Overview & the parent-app flow](./integration/README.md)
 - [Authentication & tenants](./integration/authentication.md)
@@ -30,7 +30,7 @@ For building a "parent app" that submits tasks to Orbit with only an API key:
 - [Secrets & connectors](./integration/secrets-and-connectors.md)
 - [End-to-end examples (curl / Python / Node)](./integration/examples.md)
 
-## Two ways to use Orbit
+## Two ways to use Tether
 
 1. **The console (UI).** A Next.js dashboard for driving agents interactively —
    chat, plan, edit, and yolo modes; a live Mission board and Trace; connectors,

@@ -268,7 +268,7 @@ export default function PoliciesView() {
         <div className="mt-4 rounded-xl border border-border-soft bg-card px-4 py-3 mb-6">
           <div className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Per-Session Workspace Safe Zone</div>
           <p className="mt-1 text-[13px] text-muted-foreground">
-            Every session gets its own isolated tree under <code className="font-mono bg-muted px-1.5 py-0.5 rounded text-[12px]">~/.orbit/sessions/&lt;sessionId&gt;/</code>.
+            Every session gets its own isolated tree under <code className="font-mono bg-muted px-1.5 py-0.5 rounded text-[12px]">~/.tether/sessions/&lt;sessionId&gt;/</code>.
             The agent runs inside <code className="font-mono bg-muted px-1.5 py-0.5 rounded text-[12px]">workspace/</code>, puts deliverables in <code className="font-mono bg-muted px-1.5 py-0.5 rounded text-[12px]">artifacts/</code>, and scratch files in <code className="font-mono bg-muted px-1.5 py-0.5 rounded text-[12px]">tmp/</code>.
           </p>
         </div>
@@ -342,7 +342,7 @@ export default function PoliciesView() {
           <div className="rounded-xl border border-border-soft bg-card p-4">
             <div className="text-[12.5px] font-semibold text-warning">Write-Blocked Paths (writeBlockedPaths)</div>
             <p className="text-[11.5px] text-muted-foreground mb-3">
-              Paths where reads are allowed but writes are blocked (e.g. to prevent the agent from changing Orbit's own source code).
+              Paths where reads are allowed but writes are blocked (e.g. to prevent the agent from changing Tether's own source code).
             </p>
             <div className="space-y-2 mb-3">
               {fileSystem.writeBlockedPaths.length === 0 ? (

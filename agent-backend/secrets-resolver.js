@@ -50,14 +50,27 @@ function resolveDeep(value, secrets) {
 }
 
 // Inject each secret as an env var (NAME=value) into `env` (mutated + returned).
-// `reserved` (a RegExp) protects names the harness owns — a secret must never be
-// able to hijack the provider/gateway/system env. Skipped names are returned so
-// the caller can warn (by NAME only — never the value).
+// `reserved` protects names the harness owns — a secret must never be able to
+// hijack the provider/gateway/system env. Skipped names are returned so the
+// caller can warn (by NAME only — never the value).
+//
+// `reserved` may be a Set of exact names (preferred — env-config.reservedNames()
+// derives it from the canonical table, so a newly declared var is protected
+// automatically) or a RegExp (the older prefix-fence form). A prefix fence was
+// tidy when every app var shared one brand prefix; with nine functional
+// prefixes it both under- and over-matches, so the Set is the real guard.
 function injectIntoEnv(env, secrets, reserved = null) {
   const injected = [];
   const skipped = [];
+  const isReserved = (name) => {
+    if (!reserved) return false;
+    if (reserved instanceof RegExp) return reserved.test(name);
+    if (reserved instanceof Set) return reserved.has(String(name).toUpperCase());
+    if (typeof reserved === "function") return Boolean(reserved(name));
+    return false;
+  };
   for (const [name, value] of Object.entries(secrets)) {
-    if (reserved && reserved.test(name)) { skipped.push(name); continue; }
+    if (isReserved(name)) { skipped.push(name); continue; }
     env[name] = value;
     injected.push(name);
   }

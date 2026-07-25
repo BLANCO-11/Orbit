@@ -1,21 +1,21 @@
-// agent-backend/harnesses/picode/orbit-provider.mjs
+// agent-backend/harnesses/picode/tether-provider.mjs
 //
 // pi provider extension (loaded per-spawn via `pi -e <this file>`). Registers a
-// single NATIVE, OpenAI-compatible provider named "orbit" — no bespoke
+// single NATIVE, OpenAI-compatible provider named "tether" — no bespoke
 // `pi-provider-litellm` extension required. pi speaks plain `/v1` HTTP to
-// whatever `ORBIT_LLM_BASE_URL` points at:
+// whatever `GATEWAY_BASE_URL` points at:
 //
 //   • local (app-owned) pi → the app's internal LLM gateway
 //     (http://127.0.0.1:<PORT>/llm/v1), authenticated with an app-local key.
 //     The real upstream key stays in the app; the child only ever sees the
 //     gateway key.
-//   • remote (orbit-adapter) pi → the remote's OWN OpenAI-compatible upstream,
+//   • remote (tether-adapter) pi → the remote's OWN OpenAI-compatible upstream,
 //     using that machine's own credentials (bring-your-own-LLM).
 //
 // Env read from the child process (set by PiCodeHarness.connect):
-//   ORBIT_LLM_BASE_URL  — the /v1 base URL to talk to
-//   ORBIT_LLM_KEY       — bearer key (gateway key locally; upstream key remotely)
-//   ORBIT_LLM_MODEL     — the model id the app selected (always registered)
+//   GATEWAY_BASE_URL  — the /v1 base URL to talk to
+//   GATEWAY_API_KEY       — bearer key (gateway key locally; upstream key remotely)
+//   GATEWAY_MODEL     — the model id the app selected (always registered)
 //
 // Model METADATA: a standalone `-e` extension can't import pi's built-in model
 // catalog (`@earendil-works/pi-ai` doesn't resolve outside pi's own tree), so we
@@ -25,7 +25,7 @@
 // thinking behaviour is wired the same way on paired remote harnesses. The
 // `compat` shape ({ supportsStore:false }, Anthropic cache markers for Claude
 // routes) matches the proven-working config for LiteLLM-style gateways. If a
-// /v1/models entry ever carries an `orbit` metadata block, we prefer it.
+// /v1/models entry ever carries a `tether` metadata block, we prefer it.
 
 // Heuristic model classifier. Conservative on purpose: reasoning:true only for
 // families that actually support extended thinking, so a first `hello` never
@@ -62,19 +62,19 @@ function classify(id) {
 }
 
 export default async function (pi) {
-  const baseUrl = process.env.ORBIT_LLM_BASE_URL;
-  const configuredModel = process.env.ORBIT_LLM_MODEL;
-  if (!baseUrl) return; // nothing configured — pi starts with no orbit models
+  const baseUrl = process.env.GATEWAY_BASE_URL;
+  const configuredModel = process.env.GATEWAY_MODEL;
+  if (!baseUrl) return; // nothing configured — pi starts with no tether models
 
   // id → raw /v1/models entry (may be undefined for the configured model if
   // discovery fails). We always keep the configured model so `--model
-  // orbit/<model>` resolves even when the upstream is slow/unreachable at spawn.
+  // tether/<model>` resolves even when the upstream is slow/unreachable at spawn.
   const entries = new Map();
   if (configuredModel) entries.set(configuredModel, null);
 
   try {
     const res = await fetch(baseUrl.replace(/\/+$/, "") + "/models", {
-      headers: process.env.ORBIT_LLM_KEY ? { authorization: "Bearer " + process.env.ORBIT_LLM_KEY } : {},
+      headers: process.env.GATEWAY_API_KEY ? { authorization: "Bearer " + process.env.GATEWAY_API_KEY } : {},
     });
     if (res.ok) {
       const payload = await res.json();
@@ -88,7 +88,7 @@ export default async function (pi) {
   if (!entries.size) return;
 
   const models = [...entries.entries()].map(([id, raw]) => {
-    const meta = raw && raw.orbit ? raw.orbit : classify(id);
+    const meta = raw && raw.tether ? raw.tether : classify(id);
     return {
       id,
       name: (raw && raw.name) || id,
@@ -102,10 +102,13 @@ export default async function (pi) {
     };
   });
 
-  pi.registerProvider("orbit", {
-    name: "Orbit",
+  // The id here MUST equal brand.PROVIDER_ID (picode/index.js passes it as
+  // --provider). This file is an ESM extension loaded by pi and cannot import
+  // the CJS constant, so the pair is asserted in tests/test_brand_identifiers.js.
+  pi.registerProvider("tether", {
+    name: "Tether",
     baseUrl,
-    apiKey: "$ORBIT_LLM_KEY",
+    apiKey: "$GATEWAY_API_KEY",
     api: "openai-completions",
     authHeader: true,
     models,

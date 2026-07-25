@@ -5,7 +5,7 @@
 Every request presents a credential, resolved to an identity
 (`{ role, tenantId, … }`) in priority order:
 
-1. **Superadmin env key** (`ORBIT_SUPERADMIN_KEY`) → `superadmin`.
+1. **Superadmin env key** (`AUTH_SUPERADMIN_KEY`) → `superadmin`.
 2. **Paired device token** → role from the device scope (Fleet).
 3. **Tenant API key** (`orb_live_…`) → the key's role + tenant.
 4. **SSO browser session token** → the user's role + tenant.
@@ -42,12 +42,12 @@ read-only).
 
 ## Dev-mode vs enforced
 
-- **Dev-mode** — no `ORBIT_SUPERADMIN_KEY`: the backend is loopback-only and
+- **Dev-mode** — no `AUTH_SUPERADMIN_KEY`: the backend is loopback-only and
   treats every caller as superadmin. Zero-config for local prototyping. In this
   mode, tenant is `null` (the shared local bucket) — secrets/connectors you
   create live there.
-- **Enforced** — set `ORBIT_SUPERADMIN_KEY`: the API and WebSocket now require a
-  valid credential. Do this before exposing Orbit beyond loopback.
+- **Enforced** — set `AUTH_SUPERADMIN_KEY`: the API and WebSocket now require a
+  valid credential. Do this before exposing Tether beyond loopback.
 
 ## Minting tenant API keys
 

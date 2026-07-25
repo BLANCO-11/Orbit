@@ -1,5 +1,5 @@
 // agent-backend/server.js
-// Orbit Backend — entry point
+// Tether Backend — entry point
 // Modular architecture: routes, WebSocket, harness abstraction, middleware
 
 require("dotenv").config();
@@ -11,8 +11,10 @@ const path = require("path");
 const crypto = require("crypto");
 const EventEmitter = require("events");
 
-const { validateEnv, discoverPiBinaries, probePiBinary, resolveLlmEnv } = require("./env");
-const { loadConfig, saveConfig } = require("./config");
+const { validateEnv, discoverPiBinaries, probePiBinary } = require("./env");
+const { loadConfig, saveConfig, getResolvedConfig } = require("./config");
+const env = require("./env-config");
+const { BRAND, MCP, isFleetDispatch, FLEET_DISPATCH_NAMES } = require("./brand");
 const db = require("./db");
 const { metricsManager } = require("./metrics");
 const { SubagentTracker, STATUS } = require("./subagent-tracker");
@@ -73,13 +75,13 @@ const { startScheduler } = require("./channel-scheduler");
 validateEnv();
 
 // ── Shared State ────────────────────────────────────────────────────
-const PORT = process.env.PORT || 6800;
+const PORT = env.get("PORT");
 // Bind host. Defaults to loopback (safe: only reachable on-box / by a co-located
 // nginx). Set HOST=0.0.0.0 (or a specific interface IP) to expose the backend to
 // an nginx/reverse-proxy running on a DIFFERENT host (Workstream G3). When you do
-// this the port is reachable off-box, so ORBIT_API_KEY becomes mandatory and the
+// this the port is reachable off-box, so AGENT_API_KEY becomes mandatory and the
 // port should be firewalled to the proxy host.
-const HOST = process.env.HOST || "127.0.0.1";
+const HOST = env.get("HOST");
 
 // ── Internal LLM gateway credential ─────────────────────────────────
 // Local, app-spawned harnesses (pi/OpenCode) reach the upstream LLM only
@@ -87,13 +89,13 @@ const HOST = process.env.HOST || "127.0.0.1";
 // key — the REAL upstream key never enters a child process. Generated per boot
 // unless pinned via env; both are published on process.env so the picode
 // harness (and the container sandbox) can thread them into the child env.
-const GATEWAY_KEY = process.env.ORBIT_GATEWAY_KEY || crypto.randomBytes(24).toString("hex");
-process.env.ORBIT_GATEWAY_KEY = GATEWAY_KEY;
-process.env.ORBIT_GATEWAY_URL = process.env.ORBIT_GATEWAY_URL || `http://127.0.0.1:${PORT}/llm/v1`;
+const GATEWAY_KEY = env.get("GATEWAY_KEY") || crypto.randomBytes(24).toString("hex");
+env.set("GATEWAY_KEY", GATEWAY_KEY);
+env.set("GATEWAY_URL", env.get("GATEWAY_URL") || `http://127.0.0.1:${PORT}/llm/v1`);
 const activeSessions = new Map();    // sessionId → { harness, ws, mode, subagentTracker }
 const pendingApprovals = new Map();  // toolCallId → resolve callback
 const pendingQuestions = new Map();  // questionId → { resolve, sessionId, runId, questions } — ask_questions park/await
-const activeBuilds = new Map();      // buildId → { sessionId, runId, status, block } — orbit-build handoff
+const activeBuilds = new Map();      // buildId → { sessionId, runId, status, block } — tether-build handoff
 const turnGuards = new Map();         // sessionId → anti-flail counters for the active turn
 const sessionPlans = new Map();       // sessionId → structured plan steps (the live Mission checklist)
 
@@ -325,43 +327,9 @@ const sessionAllowedPaths = new Map(); // sessionId → Set<allowedPaths>
 // Previously this returned a single startup snapshot, so POST /api/config
 // wrote the file but nothing in-process ever saw the new values.
 loadConfig(); // fail fast at boot if the config file is missing/corrupt
-const getConfig = () => {
-  const config = loadConfig();
-  // `llm` is the neutral config key (Workstream F1); `litellm` is the historical
-  // one. Merge llm over litellm so either works, keeping `litellm` as the
-  // canonical internal shape the rest of the code already reads.
-  if (config.llm && typeof config.llm === "object") {
-    config.litellm = { ...(config.litellm || {}), ...config.llm };
-  }
-  if (!config.litellm) config.litellm = {};
-  // Env fallbacks: LLM_* → LITELLM_* → OPENAI_* (see env.resolveLlmEnv).
-  // NOTE: no hardcoded baseURL default. A non-empty placeholder here (the old
-  // "http://127.0.0.1:5000/v1") is truthy, so the `if (!baseURL)` guard below
-  // would never fall back to the env value — that's exactly the Docker "app
-  // ignores LLM_BASE_URL / dials 127.0.0.1:5000" bug. Leave it empty when
-  // nothing is configured so the "no LLM configured" state stays honest and the
-  // env value is actually used.
-  const llmEnv = resolveLlmEnv();
-  if (!config.litellm.baseURL) {
-    config.litellm.baseURL = llmEnv.baseURL || "";
-  }
-  if (!config.litellm.apiKey) {
-    config.litellm.apiKey = llmEnv.apiKey || "";
-  }
-  if (!config.litellm.selectedNormalModel) {
-    config.litellm.selectedNormalModel = llmEnv.model || "";
-  }
-  // Reasoning/plan model: NO hardcoded provider default (the old "deepseek-v4-flash"
-  // 401s on gateways that don't serve it — the generatePlan failure). Fall back to
-  // an explicit ORBIT_PLAN_MODEL env, else the normal model / LLM_MODEL, so plan-gen
-  // uses whatever the runtime actually has access to. A distinct reasoner can still
-  // be set via config or ORBIT_PLAN_MODEL.
-  if (!config.litellm.selectedReasoningModel) {
-    config.litellm.selectedReasoningModel =
-      process.env.ORBIT_PLAN_MODEL || config.litellm.selectedNormalModel || llmEnv.model || "";
-  }
-  return config;
-};
+// `config.llm` is resolved against the environment by config.getResolvedConfig
+// — one implementation, shared with the /api/config and /api/models routes.
+const getConfig = getResolvedConfig;
 const { nodePath, piPath } = discoverPiBinaries();
 probePiBinary(piPath);
 
@@ -381,7 +349,7 @@ if (!OPENCODE_AVAILABLE) {
 
 // ── Express App ─────────────────────────────────────────────────────
 const app = express();
-app.use(cors({ origin: process.env.DASHBOARD_ORIGIN || "http://localhost:6801" }));
+app.use(cors({ origin: env.get("DASHBOARD_ORIGIN") }));
 // Capture the raw body so webhook HMAC signatures (GitHub/Slack) can be
 // verified against the exact bytes, not a re-serialized object.
 app.use(express.json({ limit: "50mb", verify: (req, _res, buf) => { req.rawBody = buf; } }));
@@ -393,7 +361,7 @@ app.use(requestIdMiddleware);
 // (the gateway key), and its clients are the app's own harness children, not
 // dashboard users. Per-session token metering stays on the harness `usage`
 // event (real provider usage); the onUsage hook here is the seam for
-// authoritative per-tenant accounting (see [[orbit-admin-rbac-sso]]).
+// authoritative per-tenant accounting (see [[tether-admin-rbac-sso]]).
 const createLlmGateway = require("./llm-gateway");
 app.use("/llm/v1", createLlmGateway({
   getConfig,
@@ -422,13 +390,13 @@ app.use("/llm/v1", createLlmGateway({
 // ── MCP Connector Registry ──────────────────────────────────────────
 // Owns .pi/mcp.json (the servers the agent reaches) and keeps a backend-side
 // client to each for live status + tool listing.
-ensureOrbitMcpServersRegistered();
+ensureBuiltinMcpServersRegistered();
 const mcpRegistry = new McpRegistry();
 mcpRegistry.connectAll().catch(err => console.error("MCP registry connect failed:", err.message));
 
 // ── HTTP + WebSocket Server ─────────────────────────────────────────
 const server = http.createServer(app);
-const harnessRegistry = createHarnessRegistry(); // remote orbit-adapter connections
+const harnessRegistry = createHarnessRegistry(); // remote tether-adapter connections
 const wss = createWebSocketServer(server, db, harnessRegistry);
 
 // ── Notification bus ────────────────────────────────────────────────
@@ -442,7 +410,7 @@ notifyBus.registerSink("web", ({ title, body, severity, timestamp }) => {
 });
 notifyBus.registerSink("desktop", ({ title, body, severity }) => {
   const { exec } = require("child_process");
-  const t = String(title || "Orbit").replace(/"/g, '\\"');
+  const t = String(title || "Tether").replace(/"/g, '\\"');
   const m = String(body || "").replace(/"/g, '\\"');
   const urgency = severity === "error" ? "critical" : severity === "warning" ? "normal" : "low";
   exec(`notify-send -u ${urgency} "${t}" "${m}"`, (err) => {
@@ -454,30 +422,30 @@ notifyBus.registerSink("desktop", ({ title, body, severity }) => {
 const authMiddleware = createAuthMiddleware(db);
 const authEnforced = !!createAuthMiddleware.getSuperadminKey();
 if (!authEnforced) {
-  console.warn("[SECURITY] ORBIT_SUPERADMIN_KEY is not set — the API and WebSocket are UNAUTHENTICATED (dev-mode: every caller is treated as superadmin).");
-  console.warn("[SECURITY] Fine for local-only / single-user dev; set ORBIT_SUPERADMIN_KEY before exposing this server beyond 127.0.0.1.");
+  console.warn("[SECURITY] AUTH_SUPERADMIN_KEY is not set — the API and WebSocket are UNAUTHENTICATED (dev-mode: every caller is treated as superadmin).");
+  console.warn("[SECURITY] Fine for local-only / single-user dev; set AUTH_SUPERADMIN_KEY before exposing this server beyond 127.0.0.1.");
 }
 
 // Seed the local superadmin ACCOUNT used by the browser login form (username +
-// password — distinct from ORBIT_SUPERADMIN_KEY, which is the bearer credential
+// password — distinct from AUTH_SUPERADMIN_KEY, which is the bearer credential
 // for programmatic API access). Only relevant when auth is enforced or a
 // password is explicitly configured; skipped in pure dev-mode (no login shown).
-if (authEnforced || process.env.ORBIT_SUPERADMIN_PASSWORD) {
+if (authEnforced || env.isSet("AUTH_SUPERADMIN_PASSWORD")) {
   // Runs the schema init first, then seeds the account. Fire-and-forget: it
   // completes well before a human can hit the login form, and db calls await
   // init() internally regardless.
   (async () => {
-    const saUser = process.env.ORBIT_SUPERADMIN_USERNAME || "admin";
-    let saPass = process.env.ORBIT_SUPERADMIN_PASSWORD || "";
+    const saUser = env.get("AUTH_SUPERADMIN_USERNAME");
+    let saPass = env.get("AUTH_SUPERADMIN_PASSWORD");
     try {
       await db.init();
       if (!(await db.getUserByUsername(saUser)) && !saPass) {
         // No account yet and no password configured — generate one and print it
-        // once so the operator can sign in. Set ORBIT_SUPERADMIN_PASSWORD to control it.
+        // once so the operator can sign in. Set AUTH_SUPERADMIN_PASSWORD to control it.
         saPass = require("crypto").randomBytes(9).toString("base64url");
         await db.ensureSuperadminAccount({ username: saUser, password: saPass });
         console.warn(`[Auth] Seeded superadmin account "${saUser}" with a GENERATED password: ${saPass}`);
-        console.warn(`[Auth] Change it after login, or set ORBIT_SUPERADMIN_PASSWORD to manage it.`);
+        console.warn(`[Auth] Change it after login, or set AUTH_SUPERADMIN_PASSWORD to manage it.`);
       } else {
         await db.ensureSuperadminAccount({ username: saUser, password: saPass || undefined });
         console.log(`[Auth] Superadmin login account "${saUser}" ready${saPass ? " (password from env)" : ""}.`);
@@ -512,7 +480,7 @@ app.use("/api/templates", authMiddleware, createTemplatesRouter({ db }));
 // Run API (Gap 1/2). startRun + cancelRun are defined below in this file; the
 // router captures them by reference (they're hoisted function declarations).
 app.use("/api/run", authMiddleware, createRunRouter({ db, startRun: (...a) => startRun(...a), cancelRun: (...a) => cancelRun(...a), answerRun: (...a) => answerRun(...a) }));
-// ask_questions sink: the orbit-ask MCP tool POSTs here and blocks until the
+// ask_questions sink: the tether-ask MCP tool POSTs here and blocks until the
 // user answers (browser question_response) or the parent app answers
 // (POST /api/run/:id/answer). askQuestion is a hoisted fn defined below.
 app.post("/api/ask", authMiddleware, async (req, res) => {
@@ -523,7 +491,7 @@ app.post("/api/ask", authMiddleware, async (req, res) => {
     res.status(400).json({ success: false, error: e.message });
   }
 });
-// Build handoff sinks: the orbit-build MCP tools POST here. startBuild/endBuild
+// Build handoff sinks: the tether-build MCP tools POST here. startBuild/endBuild
 // are hoisted fns defined below.
 app.post("/api/build/start", authMiddleware, async (req, res) => {
   try {
@@ -562,14 +530,14 @@ app.get("/api/sessions/:id/runs", authMiddleware, async (req, res) => {
 // public and self-protect with state + PKCE.
 const { connectionsRouter, oauthRouter } = createConnectionsRouters({
   db, mcpRegistry, encrypt, decrypt,
-  getOrigin: () => process.env.DASHBOARD_ORIGIN || "http://localhost:6801",
+  getOrigin: () => env.get("DASHBOARD_ORIGIN"),
 });
 app.use("/api/connections", authMiddleware, connectionsRouter);
 app.use("/api/oauth", oauthRouter);
 
 // Admin console (multi-tenant API keys, RBAC, observability, SSO toggle). Authed;
 // each handler further gates on role (requireRole) inside the router.
-const adminOrigin = () => process.env.DASHBOARD_ORIGIN || "http://localhost:6801";
+const adminOrigin = () => env.get("DASHBOARD_ORIGIN");
 app.use("/api/admin", authMiddleware, createAdminRouter(db, { getOrigin: adminOrigin }));
 
 // Auth: SSO login/callback/logout are public (browser-navigated); /whoami is
@@ -578,7 +546,7 @@ app.use("/api/auth", createAuthSsoRouter({ db, getOrigin: adminOrigin, authMiddl
 
 // Channels: CRUD + test-fire are authed; the /:id/webhook receiver is public
 // (external senders can't present a device token) and self-verifies per channel.
-const channelOrigin = () => process.env.DASHBOARD_ORIGIN || "http://localhost:6801";
+const channelOrigin = () => env.get("DASHBOARD_ORIGIN");
 const channelsRouter = createChannelsRouter({ db, runProfileHeadless, getOrigin: channelOrigin });
 app.use("/api/channels", (req, res, next) => {
   // Let the public webhook path through without auth; gate everything else.
@@ -587,7 +555,7 @@ app.use("/api/channels", (req, res, next) => {
 }, channelsRouter);
 
 // Fleet: orchestrated-lead dispatch. The lead agent delegates tasks to other
-// devices via the `orbit-fleet` MCP tools, which call these routes; each
+// devices via the `tether-fleet` MCP tools, which call these routes; each
 // dispatch runs a headless turn on the target device's harness (handleStartTask
 // is hoisted, defined below). Authed like any other API surface.
 const createFleet = require("./fleet");
@@ -658,7 +626,7 @@ app.get("/api/telegram/status", authMiddleware, async (req, res) => {
   res.json({ success: true, ...(await telegramBridge.status()) });
 });
 
-// Capability manifest — the single source of truth for "what can Orbit do right
+// Capability manifest — the single source of truth for "what can Tether do right
 // now?" (config + env + connectors + connections + telegram + fleet). Shared by
 // the dynamic prompt injection, the list_capabilities MCP tool, and headless
 // clients that want to hydrate the full app state (Workstreams D2/E/J).
@@ -692,20 +660,20 @@ notifyBus.registerSink("channel", ({ title, body, severity }) => {
 });
 
 // Harness registry: the always-present local pi-code plus any connected remote
-// orbit-adapters. Sessions can target a specific harness by id on start_task.
+// tether-adapters. Sessions can target a specific harness by id on start_task.
 app.get("/api/harnesses", authMiddleware, (req, res) => {
   // The local pi child's LLM is app-owned: it runs through the internal gateway,
   // so the model is whatever the app has configured. Surface it read-only, same
   // shape as remotes, so Fleet + the chat header can show it uniformly.
-  const llmCfg = getConfig().litellm || {};
+  const llmCfg = getConfig().llm || {};
   const local = {
     id: "local",
     name: "pi-code",
     machine: "local",
     transport: "local",
     status: "connected",
-    model: llmCfg.selectedNormalModel || "",
-    provider: llmCfg.baseURL ? "orbit gateway" : "",
+    model: llmCfg.fastModel || "",
+    provider: llmCfg.baseUrl ? `${BRAND} gateway` : "",
     capabilities: ["chat", "plan", "edit", "yolo", "subagents", "tools", "browser"],
     activeSessions: [...activeSessions.values()].filter(s => !s.harnessId || s.harnessId === "local").length,
   };
@@ -717,8 +685,8 @@ app.get("/api/harnesses", authMiddleware, (req, res) => {
     machine: "local",
     transport: "local",
     status: "connected",
-    model: llmCfg.selectedNormalModel || "",
-    provider: llmCfg.baseURL ? "orbit gateway" : "",
+    model: llmCfg.fastModel || "",
+    provider: llmCfg.baseUrl ? `${BRAND} gateway` : "",
     capabilities: ["chat", "plan", "edit", "yolo", "tools"],
     activeSessions: [...activeSessions.values()].filter(s => s.harnessId === "opencode").length,
   } : null;
@@ -796,7 +764,7 @@ app.get("/api/harnesses/:id/tools", authMiddleware, async (req, res) => {
   }
 });
 app.use("/api/health", createHealthRouter({ db, mcpRegistry, getConfig, activeSessions }));
-app.use("/api", createDevicesRouter(db, authMiddleware, () => process.env.DASHBOARD_ORIGIN || "http://localhost:6801"));
+app.use("/api", createDevicesRouter(db, authMiddleware, () => env.get("DASHBOARD_ORIGIN")));
 
 // Error handler (must be last middleware)
 app.use(errorHandler);
@@ -1198,11 +1166,11 @@ async function handleStartTask(ws, userPrompt, sessionId, mode, systemPromptType
   //   fast:     response model,  no pre-planning        (chat / QA / quick lookups)
   //   balanced: response model,  plans genuine multi-step work   (the default)
   //   deep:     reasoning model, plans genuine multi-step work   (dense reasoner)
-  const litellmConfig = getConfig().litellm || {};
+  const effortLlm = getConfig().llm || {};
   const isReasoned = effort === "deep";
   const activeModelName = isReasoned
-    ? litellmConfig.selectedReasoningModel || litellmConfig.selectedNormalModel
-    : litellmConfig.selectedNormalModel;
+    ? effortLlm.reasoningModel || effortLlm.fastModel
+    : effortLlm.fastModel;
   // Pre-plan on every lane except the pure "fast" one.
   const wantsPlan = effort !== "fast";
 
@@ -1218,7 +1186,7 @@ async function handleStartTask(ws, userPrompt, sessionId, mode, systemPromptType
   // drove generation — its output only populated a UI reasoning preview — while
   // costing a full, uncapped ~35-60s round-trip that (when awaited) also gated the
   // agent spawn. The agent now surfaces its OWN plan: it writes ./plans/plan.md,
-  // which Orbit parses after each tool call (syncPlansFromWorkspace) and streams as
+  // which Tether parses after each tool call (syncPlansFromWorkspace) and streams as
   // the live Mission board (plan_state). That is the authentic, scalable plan — a
   // few steps for a simple task, phased for a complex one — with no extra call and
   // no added latency. (generatePlan()/plan-generator.js are kept for reference/other
@@ -1315,19 +1283,19 @@ async function handleStartTask(ws, userPrompt, sessionId, mode, systemPromptType
 
   // ── Spawn or reuse harness ────────────────────────────────
   // A session may target a specific harness by id: "local" (or unset) runs the
-  // local pi child process; a remote id runs on the connected orbit-adapter of
+  // local pi child process; a remote id runs on the connected tether-adapter of
   // that id, via RemoteHarness. Both implement the same interface downstream.
   let sessionItem = activeSessions.get(sessionId);
   if (!sessionItem || !sessionItem.harness) {
-    // Per-request sandbox wins; otherwise the deployment default (ORBIT_DEFAULT_
+    // Per-request sandbox wins; otherwise the deployment default (SANDBOX_
     // SANDBOX = host | container | remote), else "host". Unset env → "host", so
     // existing deploys are unchanged; operators harden by setting it to
     // "container". An unavailable choice (e.g. container w/o Docker) is caught by
     // the guards just below and surfaces a clear error rather than silently
     // downgrading.
-    const activeSandbox = sandbox || process.env.ORBIT_DEFAULT_SANDBOX || "host";
+    const activeSandbox = sandbox || env.get("SANDBOX_DEFAULT");
     // Local harness types run on THIS host (a child process). Anything else is a
-    // remote harness id (a paired orbit-adapter).
+    // remote harness id (a paired tether-adapter).
     const LOCAL_HARNESSES = { local: "picode", "pi-code": "picode", picode: "picode", opencode: "opencode" };
     const localHarnessType = LOCAL_HARNESSES[harnessId || "local"];
     // Sandbox 'remote' runs on a paired remote harness; an unknown (non-local)
@@ -1490,8 +1458,8 @@ async function runProfileHeadless({ profileId, prompt, title, source }) {
 // sent; the parent app polls GET /api/run/:id for the contract.
 const activeRuns = new Map(); // runId → { sessionId, lifecycle, idleTimer, maxTimer, done }
 const TERMINAL_RUN_STATUSES = new Set(["succeeded", "failed", "timeout", "error", "needs_review"]);
-const DEFAULT_IDLE_MS = Number(process.env.ORBIT_RUN_IDLE_MS || 180_000);   // 3 min of silence → hang
-const DEFAULT_MAX_RUN_MS = Number(process.env.ORBIT_RUN_MAX_MS || 1_200_000); // 20 min absolute backstop
+const DEFAULT_IDLE_MS = env.get("RUN_IDLE_MS");     // 3 min of silence → hang
+const DEFAULT_MAX_RUN_MS = env.get("RUN_MAX_MS");   // 20 min absolute backstop
 
 function clampMs(v, dflt, min = 1000, max = 3_600_000) {
   const n = Number(v);
@@ -1546,7 +1514,7 @@ async function startRun({ sessionId: reqSessionId, prompt, profileId, mode, effo
   const effExclude = profile?.toolPolicy?.excluded || null;
   // Runs default to the CONTAINER sandbox (network-on smoke tests, Gap 5) when a
   // deployment default isn't set — an override chain keeps host/remote reachable.
-  let effSandbox = sandbox || profile?.sandbox || process.env.ORBIT_RUN_SANDBOX || process.env.ORBIT_DEFAULT_SANDBOX || "container";
+  let effSandbox = sandbox || profile?.sandbox || env.get("RUN_SANDBOX") || env.get("SANDBOX_DEFAULT") || "container";
   // Never hard-fail a run just because Docker is absent: downgrade container →
   // host (still network-on) so the caller always gets a terminal contract.
   if (effSandbox === "container" && !ContainerHarness.dockerAvailable()) {
@@ -1724,10 +1692,10 @@ function cancelRun(runId) {
 }
 
 // ── ask_questions (baked-in HITL clarification) ─────────────────────
-// The orbit-ask MCP tool POSTs /api/ask and BLOCKS; we park a promise and
+// The tether-ask MCP tool POSTs /api/ask and BLOCKS; we park a promise and
 // resolve it from EITHER a browser `question_response` (interactive) OR a
 // headless POST /api/run/:id/answer (parent app). Bounded so a turn never hangs.
-const ASK_TIMEOUT_MS = Number(process.env.ORBIT_ASK_TIMEOUT_MS || 600_000); // 10 min
+const ASK_TIMEOUT_MS = env.get("RUN_ASK_TIMEOUT_MS"); // 10 min
 
 function normalizeQuestions(input) {
   const arr = Array.isArray(input) ? input : [];
@@ -1830,18 +1798,18 @@ function answerRun(runId, { questionId, answers } = {}) {
   return resolveQuestion(qid, answers);
 }
 
-// ── orbit-build (build handoff notifiers → external test facility) ──
+// ── tether-build (build handoff notifiers → external test facility) ──
 // start_build / end_build are lifecycle notifiers the agent calls once a script
 // is written, to hand it off to the EXTERNAL build+test facility (a separate
-// service, out of Orbit's scope). start_build marks the boundary + emits an
+// service, out of Tether's scope). start_build marks the boundary + emits an
 // event; end_build submits the artifacts to the tester and merges the returned
 // verdict into the run contract.
 //
 // NOTE: the external tester HTTP client is a STUB here — the facility is built
 // and owned separately (see plans/external-testing-facility.md). When
-// ORBIT_TESTER_URL is unset, end_build returns a `skipped` verdict rather than
+// RUN_TESTER_URL is unset, end_build returns a `skipped` verdict rather than
 // failing, so the handoff is inert until the facility is wired.
-const TESTER_URL = process.env.ORBIT_TESTER_URL || "";
+const TESTER_URL = env.get("RUN_TESTER_URL");
 
 // Emit a build lifecycle event to the session's live browser clients + the
 // in-app notification bell (so parent-app progress UIs and the console see it).
@@ -1885,7 +1853,7 @@ async function endBuild({ sessionId, buildId, summary, notes }) {
     // Facility not wired — inert, non-failing handoff.
     block = {
       buildId: bId, submitted: false, status: "skipped",
-      summary: summary || "external test facility not configured (ORBIT_TESTER_URL unset)",
+      summary: summary || "external test facility not configured (RUN_TESTER_URL unset)",
       artifacts,
     };
   } else {
@@ -1894,7 +1862,7 @@ async function endBuild({ sessionId, buildId, summary, notes }) {
     emitBuildState(sessionId, { buildId: bId, status: "submitting" });
     try {
       const headers = { "Content-Type": "application/json" };
-      if (process.env.ORBIT_TESTER_KEY) headers["Authorization"] = `Bearer ${process.env.ORBIT_TESTER_KEY}`;
+      if (env.isSet("RUN_TESTER_KEY")) headers["Authorization"] = `Bearer ${env.get("RUN_TESTER_KEY")}`;
       const resp = await fetch(`${TESTER_URL.replace(/\/$/, "")}/grade`, {
         method: "POST", headers,
         body: JSON.stringify({ submissionId: bId, sessionId, notes: notes || "", artifacts }),
@@ -1926,12 +1894,11 @@ function broadcastNotification({ title, body, severity }) {
   notifyBus.notify({ title, body, severity, sinks: ["web", "desktop"], source: "system" });
 }
 
-// A fleet delegation shows up as a normal tool call named for the orbit-fleet
-// dispatch tool (pi prefixes MCP tools, e.g. `mcp_orbit-fleet_dispatch_to_device`),
-// so match on the suffix regardless of prefix spelling.
-function isFleetDispatchTool(name) {
-  return typeof name === "string" && /dispatch_to_device$/.test(name);
-}
+// A fleet delegation shows up as a normal tool call named for the fleet dispatch
+// tool. pi prefixes MCP tools, so the same tool arrives under several spellings
+// — they are all derived in brand.js rather than re-matched here, because this
+// check silently stops tracking delegations if it falls out of sync.
+const isFleetDispatchTool = isFleetDispatch;
 
 // The single source of sub-agent data for the UI: the rich tracker summary
 // (all agents incl. completed, each with task/tools/reasoning/currentAction),
@@ -2126,7 +2093,7 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
     // (1) Hard blocklist — sits BELOW the permission layer: user consent cannot
     // override it. Two tiers:
     //   • blockedPaths      — no READ and no WRITE (secrets: ~/.ssh, ~/.aws, …).
-    //   • writeBlockedPaths — no WRITE, reads OK (Orbit's own source: the agent
+    //   • writeBlockedPaths — no WRITE, reads OK (Tether's own source: the agent
     //     may read/explain its code but never modify it). `bash` counts as write.
     const blockedPaths = (cfg.fileSystem && cfg.fileSystem.blockedPaths) || [];
     const writeBlockedPaths = (cfg.fileSystem && cfg.fileSystem.writeBlockedPaths) || [];
@@ -2164,7 +2131,7 @@ function createHarnessEventEmitter(ws, sessionId, mode, subagentTracker) {
       return;
     }
 
-    // (2) Safe zone = THIS session's root (~/.orbit/sessions/<id>) + the durable
+    // (2) Safe zone = THIS session's root (~/.tether/sessions/<id>) + the durable
     // allow-list + any path the user granted this session. Writes elsewhere are
     // "outside" → require consent. Sessions are isolated: another session's root
     // is not in this zone, so cross-session writes also ask.
@@ -2575,27 +2542,39 @@ process.on("SIGTERM", () => shutdown("SIGTERM"));
 process.on("SIGINT", () => shutdown("SIGINT"));
 
 // ── Start ───────────────────────────────────────────────────────────
-// Ensure Orbit's own MCP servers are registered in .pi/mcp.json so the agent
-// gets its platform tools: `orbit-fleet` (delegate-to-device) and `orbit-notify`
-// (message the user / raise alerts — a network capability, so no bash needed).
-// Written on boot (not committed with a hard-coded path) so command + API key +
-// port always match THIS install.
-function ensureOrbitMcpServersRegistered() {
+// Ensure our own MCP servers are registered in .pi/mcp.json so the agent gets
+// its platform tools: fleet (delegate-to-device) and notify (message the user /
+// raise alerts — a network capability, so no bash needed). Written on boot (not
+// committed with a hard-coded path) so command + API key + port always match
+// THIS install.
+//
+// Server NAMES come from brand.MCP — they are matched as literal strings by
+// security code (see brand.js), so they must not be spelled out here as well.
+//
+// `builtin: true` marks a server the app itself owns. It is NOT written into
+// .pi/mcp.json — that file belongs to pi and gets only keys pi defines. The
+// harness instead recognises built-ins via brand.builtinMcpNames(), the same
+// constant these entries are keyed by, so the two cannot drift.
+//
+// This replaced a `name.startsWith("tether-")` check that decided whether a
+// session id was injected — a security-relevant behaviour silently coupled to
+// the product name, which a rebrand would have broken with no error anywhere.
+function ensureBuiltinMcpServersRegistered() {
   const servers = {
     // Platform tool shims — native to the backend (thin MCP wrappers over
     // notify-bus.js / fleet.js; MCP is the only way to expose a tool to pi).
-    "orbit-fleet": { path: path.join(__dirname, "./mcp/fleet-mcp.js") },
-    "orbit-notify": { path: path.join(__dirname, "./mcp/notify-mcp.js") },
+    [MCP.fleet]: { path: path.join(__dirname, "./mcp/fleet-mcp.js"), builtin: true },
+    [MCP.notify]: { path: path.join(__dirname, "./mcp/notify-mcp.js"), builtin: true },
     // Baked-in clarification (ask the user, incl. MCQ) + build handoff notifiers.
-    "orbit-ask": { path: path.join(__dirname, "./mcp/ask-mcp.js") },
-    "orbit-build": { path: path.join(__dirname, "./mcp/build-mcp.js") },
+    [MCP.ask]: { path: path.join(__dirname, "./mcp/ask-mcp.js"), builtin: true },
+    [MCP.build]: { path: path.join(__dirname, "./mcp/build-mcp.js"), builtin: true },
     // External capability servers — live under the top-level mcp-servers/ folder.
-    "orbit-transcript": { path: path.join(__dirname, "../mcp-servers/transcript/index.js") },
-    "orbit-search": { path: path.join(__dirname, "../mcp-servers/search/index.js") },
+    [MCP.transcript]: { path: path.join(__dirname, "../mcp-servers/transcript/index.js"), builtin: true },
+    [MCP.search]: { path: path.join(__dirname, "../mcp-servers/search/index.js"), builtin: true },
     "lightpanda": {
       path: path.join(__dirname, "../mcp-servers/lightpanda/index.js"),
-      env: { LIGHTPANDA_WS: process.env.LIGHTPANDA_WS || "ws://127.0.0.1:9222" }
-    }
+      env: { LIGHTPANDA_WS: env.get("LIGHTPANDA_WS") },
+    },
   };
   try {
     const fs = require("fs");
@@ -2606,12 +2585,6 @@ function ensureOrbitMcpServersRegistered() {
     cfg.mcpServers = cfg.mcpServers || {};
     let changed = false;
 
-    if (cfg.mcpServers["orbit-plan"]) {
-      delete cfg.mcpServers["orbit-plan"];
-      changed = true;
-      console.log("[Orbit MCP] Removed orbit-plan from .pi/mcp.json");
-    }
-
     for (const [id, entry] of Object.entries(servers)) {
       const desired = {
         command: "node",
@@ -2619,15 +2592,15 @@ function ensureOrbitMcpServersRegistered() {
         transport: "stdio",
         lifecycle: "eager",
         env: {
-          ORBIT_API: `http://127.0.0.1:${PORT}`,
-          ...(process.env.ORBIT_API_KEY ? { ORBIT_API_KEY: process.env.ORBIT_API_KEY } : {}),
-          ...(entry.env || {})
+          AGENT_API_URL: `http://127.0.0.1:${PORT}`,
+          ...(env.isSet("AGENT_API_KEY") ? { AGENT_API_KEY: env.get("AGENT_API_KEY") } : {}),
+          ...(entry.env || {}),
         },
       };
       if (JSON.stringify(cfg.mcpServers[id]) !== JSON.stringify(desired)) {
         cfg.mcpServers[id] = desired;
         changed = true;
-        console.log(`[Orbit MCP] Registered ${id} in .pi/mcp.json`);
+        console.log(`[${BRAND} MCP] Registered ${id} in .pi/mcp.json`);
       }
     }
     if (changed) {
@@ -2635,15 +2608,15 @@ function ensureOrbitMcpServersRegistered() {
       fs.writeFileSync(MCP_CONFIG_PATH, JSON.stringify(cfg, null, 2) + "\n");
     }
   } catch (e) {
-    console.error("[Orbit MCP] Could not register Orbit MCP servers:", e.message);
+    console.error(`[${BRAND} MCP] Could not register built-in MCP servers:`, e.message);
   }
 }
 
 server.listen(PORT, HOST, async () => {
   const exposed = HOST !== "127.0.0.1" && HOST !== "localhost";
-  console.log(`Orbit Backend Server listening on ${HOST}:${PORT}${exposed ? " (EXPOSED off-loopback)" : " (internal only)"}`);
-  if (exposed && !process.env.ORBIT_API_KEY) {
-    console.warn(`[SECURITY] HOST=${HOST} exposes the API/WS off-loopback but ORBIT_API_KEY is NOT set — anyone who can reach ${HOST}:${PORT} can drive the agent. Set ORBIT_API_KEY and firewall this port to the proxy host.`);
+  console.log(`Tether Backend Server listening on ${HOST}:${PORT}${exposed ? " (EXPOSED off-loopback)" : " (internal only)"}`);
+  if (exposed && !env.isSet("AGENT_API_KEY")) {
+    console.warn(`[SECURITY] HOST=${HOST} exposes the API/WS off-loopback but AGENT_API_KEY is NOT set — anyone who can reach ${HOST}:${PORT} can drive the agent. Set AGENT_API_KEY and firewall this port to the proxy host.`);
   }
   // Essential service: the Lightpanda browser is the mandatory default browser
   // for every agent. Ensure its container is up with an auto-restart policy so

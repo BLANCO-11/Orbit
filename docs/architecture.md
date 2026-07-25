@@ -1,7 +1,7 @@
-# Orbit — Technical Architecture
+# Tether — Technical Architecture
 
 > Audience: engineers and architects integrating with, operating, or extending
-> Orbit. This document describes the system at the component and data-flow level,
+> Tether. This document describes the system at the component and data-flow level,
 > the cross-cutting concerns (security, isolation, observability, persistence),
 > deployment topologies, and the deliberate trade-offs. For task-oriented usage
 > see the [user guide](./user-guide.md) and [integration guide](./integration/README.md);
@@ -9,7 +9,7 @@
 
 ## 1. Architectural overview
 
-Orbit is a **local-first agent-operations platform**. It puts a controlled,
+Tether is a **local-first agent-operations platform**. It puts a controlled,
 observable, policy-governed layer between a caller (a human at the console or an
 external application) and one or more **agent harnesses** (CLI coding agents such
 as `pi`, or remote/containerised runtimes) that actually execute work.
@@ -38,7 +38,7 @@ flowchart TB
         TG["Telegram"]
     end
 
-    subgraph orbit["Orbit platform"]
+    subgraph tether["Tether platform"]
         DASH["Dashboard<br/>(Next.js, :6801)"]
         BE["Backend<br/>(Express, :6800)"]
     end
@@ -155,7 +155,7 @@ flowchart TB
 | **Secrets store + resolver** | Tenant-scoped, encrypted-at-rest credentials; resolves `${secret:NAME}` and injects env at spawn. |
 | **Data layer** (`db.js` + `db/adapter.js`) | Dialect-agnostic async persistence over SQLite or Postgres. |
 | **run-contract** (`run-contract.js`) | Assembles + schema-validates the result contract; snapshots per-run artifacts. |
-| **workspace-paths** | Per-session `~/.orbit/sessions/<id>/{workspace,artifacts,tmp}` isolation. |
+| **workspace-paths** | Per-session `~/.tether/sessions/<id>/{workspace,artifacts,tmp}` isolation. |
 
 ### 2.2 The harness abstraction
 
@@ -309,7 +309,7 @@ flowchart LR
     APP["db.js<br/>(dialect-agnostic)"] --> AD["adapter contract<br/>run/get/all/exec/tx"]
     AD --> S["SQLite adapter<br/>(node:sqlite, sync→async facade)"]
     AD --> P["Postgres adapter<br/>(pg Pool, placeholder rewrite)"]
-    S --> SF[("orbit.db file")]
+    S --> SF[("tether.db file")]
     P --> PG[("Postgres")]
 ```
 
@@ -411,7 +411,7 @@ Notable modeling choices:
 ### 4.3 Filesystem state (per-session)
 
 ```
-<ORBIT_HOME>/sessions/<sessionId>/
+<APP_HOME>/sessions/<sessionId>/
   workspace/                 agent cwd (task work, generated scripts)
   artifacts/                 deliverables → surfaced in the result contract
   tmp/                       scratch
@@ -434,7 +434,7 @@ flowchart TB
     B --> C["Tenant scoping<br/>secrets/connectors/runs/sessions"]
     C --> D["Policy engine<br/>capability × mode matrix"]
     D --> E["Command tokenization<br/>(defeat redirect/subshell evasion)"]
-    E --> F["Hard blocklist<br/>(consent-proof: ~/.ssh, Orbit source)"]
+    E --> F["Hard blocklist<br/>(consent-proof: ~/.ssh, Tether source)"]
     F --> G["Sandbox<br/>host / ephemeral container / remote"]
     G --> H["Per-session FS workspace<br/>(writes outside root need consent)"]
 ```
@@ -448,7 +448,7 @@ Additional controls:
   gateway with an app-local key; the real upstream key stays in the backend and
   is scrubbed from the child env.
 - **Encryption at rest.** AES-256-GCM (`crypto-store`) for secrets + replayable
-  service tokens, keyed by `ORBIT_SECRET` (or a persisted generated key).
+  service tokens, keyed by `APP_SECRET` (or a persisted generated key).
 - **Fail-closed auth.** A DB error during authentication returns 500, never an
   implicit allow. Dev-mode (superadmin-for-all) is only reachable when *no*
   superadmin key is configured and is loopback-only.
@@ -461,7 +461,7 @@ flowchart LR
     KB["API key — tenant B"] --> RB["secrets / connectors / runs /<br/>sessions / templates / fleet B"]
     KA -. no access .-> RB
     KB -. no access .-> RA
-    SHARED["Shared: Orbit MCP servers,<br/>OAuth-wired providers"] --> RA
+    SHARED["Shared: Tether MCP servers,<br/>OAuth-wired providers"] --> RA
     SHARED --> RB
 ```
 
@@ -495,11 +495,11 @@ endpoint and (optionally) `pi`.
 flowchart TB
     subgraph host["Docker host"]
         subgraph net["compose network"]
-            O["orbit<br/>(backend :6800 + dashboard :6801)"]
+            O["tether<br/>(backend :6800 + dashboard :6801)"]
             PG[("postgres")]
             LP["lightpanda<br/>(browser)"]
         end
-        VOL[("orbit-data volume<br/>/data/orbit-home")]
+        VOL[("tether-data volume<br/>/data/tether-home")]
     end
     O --> PG
     O --> LP
@@ -510,18 +510,18 @@ flowchart TB
 
 Notes for operators:
 
-- Source is **baked into `orbit:latest`** (only `/data` is a volume) — rebuild to
+- Source is **baked into `tether:latest`** (only `/data` is a volume) — rebuild to
   ship code changes.
-- The default sandbox is `host` inside the orbit container unless a Docker socket
+- The default sandbox is `host` inside the tether container unless a Docker socket
   is mounted; for true per-run container isolation, mount
-  `/var/run/docker.sock` into the orbit service (docker-out-of-docker).
-- Put TLS + WebSocket upgrade at the proxy; set `ORBIT_PUBLIC_ORIGIN` when behind
+  `/var/run/docker.sock` into the tether service (docker-out-of-docker).
+- Put TLS + WebSocket upgrade at the proxy; set `APP_PUBLIC_ORIGIN` when behind
   chained proxies. See the reverse-proxy recipes in the [README](../README.md#reverse-proxy-tls--websocket-harness).
 
 ### 6.3 Distributed (Fleet)
 
 A backend can drive **remote harnesses** — paired devices running an
-`orbit-adapter` — over WebSocket. Delegated work streams back into the lead
+`tether-adapter` — over WebSocket. Delegated work streams back into the lead
 session's Trace. Remotes are uncontained by design (they run on their own box
 with their own `.pi`), which is why tenant-scoped MCP/secret composition does not
 extend to them.

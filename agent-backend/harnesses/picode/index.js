@@ -10,10 +10,12 @@ const EventEmitter = require("events");
 const HarnessInterface = require("../interface");
 const { stripTuiChars, isMutatingTool, isReadOnlyTool, isConversationalPrompt } = require("./parser");
 const workspacePaths = require("../../workspace-paths");
+const env = require("../../env-config");
+const { PROVIDER_ID, builtinMcpNames } = require("../../brand");
 
 // pi "web-access" extension (npm:pi-web-access) tools, split by capability:
 //   - native SEARCH: only autonomous with a backend key, else prompts a browser
-//     sign-in — excluded unless a key is configured (orbit-search covers search).
+//     sign-in — excluded unless a key is configured (tether-search covers search).
 //   - native BROWSE fallback: superseded by the Lightpanda MCP browser.
 const WEB_NATIVE_SEARCH_TOOLS = ["web_search", "get_search_content"];
 const WEB_BROWSE_FALLBACK_TOOLS = ["fetch_content", "browser", "web"];
@@ -40,13 +42,14 @@ class PiCodeHarness extends HarnessInterface {
     const activeMode = this.mode;
     const activePromptType = this.systemPromptType || this.config.systemPromptType || "standard";
     // Effort-profile-resolved model wins; falls back to the config default.
-    const normalModel = this.model || this.config.litellm.selectedNormalModel;
-    const apiKey = this.config.litellm.apiKey;
-    const baseURL = this.config.litellm.baseURL;
+    const llmCfg = this.config.llm || {};
+    const activeModel = this.model || llmCfg.fastModel;
+    const apiKey = llmCfg.apiKey;
+    const baseURL = llmCfg.baseUrl;
 
     // Per-session workspace: create the session's dir tree first, so the
     // workspace block can name the exact paths the agent may work in (and never
-    // Orbit's source). This is the ONE machine-specific part of the prompt.
+    // Tether's source). This is the ONE machine-specific part of the prompt.
     const dirs = workspacePaths.ensureSessionDirs(this.sessionId);
     this._workspaceDir = dirs.workspace;
 
@@ -69,21 +72,30 @@ class PiCodeHarness extends HarnessInterface {
 
     // CRITICAL: pi's MCP extension loads <cwd>/.pi/mcp.json. Since we run pi in
     // the session workspace (for isolation), COMPOSE that file per-session as
-    // `shared Orbit servers + this tenant's registered connectors` — never the
+    // `shared Tether servers + this tenant's registered connectors` — never the
     // whole global set (that would leak one tenant's connectors to another).
     try {
       const { MCP_CONFIG_PATH } = require("../../mcp-registry");
       const { resolveDeep } = require("../../secrets-resolver");
       const piDir = path.join(this._workspaceDir, ".pi");
       fs.mkdirSync(piDir, { recursive: true });
-      // Shared servers = the global file (Orbit's own fleet/notify/search/… plus
+      // Shared servers = the global file (Tether's own fleet/notify/search/… plus
       // any OAuth-wired provider connectors). Inject this session's id into each
-      // Orbit MCP server's env so session-blind MCP tools (e.g. fleet dispatch)
+      // Tether MCP server's env so session-blind MCP tools (e.g. fleet dispatch)
       // can identify the LEAD session.
       const cfg = JSON.parse(fs.readFileSync(MCP_CONFIG_PATH, "utf-8"));
       if (!cfg.mcpServers || typeof cfg.mcpServers !== "object") cfg.mcpServers = {};
+      // Session id goes ONLY into servers the app itself owns — never into a
+      // tenant's connector, which must not learn the lead session id.
+      //
+      // The set comes from brand.builtinMcpNames(), the same constant server.js
+      // registers them under. This used to test `name.startsWith("tether-")`,
+      // which tied a security-relevant behaviour to the product name: renaming
+      // the servers would have silently stopped injecting session ids, with no
+      // error and no failing test.
+      const builtins = new Set(builtinMcpNames());
       for (const [name, s] of Object.entries(cfg.mcpServers)) {
-        if (name.startsWith("orbit-")) s.env = { ...(s.env || {}), ORBIT_SESSION_ID: this.sessionId };
+        if (builtins.has(name)) s.env = { ...(s.env || {}), AGENT_SESSION_ID: this.sessionId };
       }
       // Tenant connectors = DB rows for THIS session's tenant, with ${secret:NAME}
       // in their env/args resolved to values (in-memory, on-disk in the sandbox's
@@ -141,40 +153,37 @@ class PiCodeHarness extends HarnessInterface {
     const tempPromptPath = path.join(tempPromptDir, `system-prompt-${this.sessionId}.md`);
     fs.writeFileSync(tempPromptPath, combinedPrompt, "utf-8");
 
-    // LLM access goes through the NATIVE "orbit" OpenAI-compatible provider
-    // (registered by the per-spawn `orbit-provider.mjs` extension), NOT the old
+    // LLM access goes through the NATIVE "tether" OpenAI-compatible provider
+    // (registered by the per-spawn `tether-provider.mjs` extension), NOT the old
     // bespoke `--provider litellm` path. Two shapes, decided by whether the app
     // gateway is present in this process's env:
-    //   • local, app-spawned pi → the backend sets ORBIT_GATEWAY_KEY/URL. Point
+    //   • local, app-spawned pi → the backend sets GATEWAY_KEY/URL. Point
     //     pi at the app's internal gateway and pass ONLY the app-local key; the
     //     real upstream key never enters the child.
-    //   • remote pi (run by orbit-adapter, which doesn't set those) → talk
+    //   • remote pi (run by tether-adapter, which doesn't set those) → talk
     //     straight to the remote's own upstream with the remote's own creds
     //     (bring-your-own-LLM).
-    const gatewayKey = process.env.ORBIT_GATEWAY_KEY;
-    const gatewayUrl = process.env.ORBIT_GATEWAY_URL;
+    const gatewayKey = process.env.GATEWAY_KEY;
+    const gatewayUrl = process.env.GATEWAY_URL;
     const useGateway = !!(gatewayKey && gatewayUrl);
     const providerBaseUrl = useGateway ? gatewayUrl : baseURL;
     const providerKey = useGateway ? gatewayKey : apiKey;
 
     const childEnv = {
       ...process.env,
-      ORBIT_MODE: activeMode || "chat",
-      ORBIT_LLM_BASE_URL: providerBaseUrl || "",
+      AGENT_MODE: activeMode || "chat",
+      GATEWAY_BASE_URL: providerBaseUrl || "",
       // Keyless local servers still need a non-empty placeholder for pi to treat
       // the models as usable (see pi models.md).
-      ORBIT_LLM_KEY: providerKey || "orbit-local",
-      ORBIT_LLM_MODEL: normalModel || "",
+      GATEWAY_API_KEY: providerKey || "tether-local",
+      GATEWAY_MODEL: activeModel || "",
     };
     if (useGateway) {
       // Enforce the contract: the real upstream key must not leak into the child
-      // via any inherited alias. Only the gateway key (as ORBIT_LLM_KEY) remains.
-      delete childEnv.OPENAI_API_KEY;
-      delete childEnv.LLM_API_KEY;
-      delete childEnv.LITELLM_KEY;
-      delete childEnv.OPENAI_BASE_URL;
-      delete childEnv.LLM_BASE_URL;
-      delete childEnv.LITELLM_BASE_URL;
+      // via ANY inherited alias. Only the gateway key (as GATEWAY_API_KEY)
+      // remains. The name list is derived from the canonical table, so it can't
+      // fall behind the way a hand-maintained delete list did.
+      for (const name of env.upstreamLlmNames()) delete childEnv[name];
     }
 
     // ── Tenant secrets → sandbox env ────────────────────────────────────
@@ -188,8 +197,11 @@ class PiCodeHarness extends HarnessInterface {
     this._secretNames = [];
     try {
       const { injectIntoEnv } = require("../../secrets-resolver");
-      const RESERVED = /^(ORBIT_|OPENAI_|LLM_|LITELLM_|PATH$|HOME$|NODE_|PWD$|SHELL$)/i;
-      const { injected, skipped } = injectIntoEnv(childEnv, tenantSecrets, RESERVED);
+      // Exact-name set derived from the canonical env table, so declaring a new
+      // app variable protects it automatically. Replaces a brand-prefix regex
+      // that both let unlisted names through and blocked innocent tenant
+      // secrets that merely shared a prefix.
+      const { injected, skipped } = injectIntoEnv(childEnv, tenantSecrets, env.reservedNames());
       this._secretNames = injected;
       if (skipped.length) console.warn(`[PiCodeHarness] skipped reserved-name secret(s): ${skipped.join(", ")}`);
       if (injected.length) console.log(`[PiCodeHarness] injected ${injected.length} tenant secret(s) into sandbox env: ${injected.join(", ")}`);
@@ -200,13 +212,16 @@ class PiCodeHarness extends HarnessInterface {
     // Absolute path to the provider extension, so `-e` resolves regardless of
     // pi's cwd (the session workspace). ContainerHarness reads this to bind-mount
     // the file into the sandbox at the same path.
-    this._providerExtPath = path.join(__dirname, "orbit-provider.mjs");
+    this._providerExtPath = path.join(__dirname, "tether-provider.mjs");
 
     const piArgs = [
       "--session-id", this.sessionId,
       "-e", this._providerExtPath,
-      "--provider", "orbit",
-      "--model", `orbit/${normalModel}`,
+      // Must match the id tether-provider.mjs registers with pi. Both halves are
+      // asserted against brand.PROVIDER_ID by tests/test_brand_identifiers.js —
+      // a mismatch here yields "unknown provider" only at spawn time.
+      "--provider", PROVIDER_ID,
+      "--model", `${PROVIDER_ID}/${activeModel}`,
       "--mode", "rpc",
       "--system-prompt", combinedPrompt,
     ];
@@ -222,7 +237,7 @@ class PiCodeHarness extends HarnessInterface {
     //   • SEARCH (native pi web_search/get_search_content) is PREFERRED when the
     //     user has configured a real backend key — otherwise pi falls back to a
     //     Google/Gemini browser SIGN-IN prompt (not autonomous), so we EXCLUDE it
-    //     and let our keyless `orbit-search` MCP tool be the default retriever.
+    //     and let our keyless `tether-search` MCP tool be the default retriever.
     //   • BROWSE fallback (native fetch_content/browser/web) is off by default —
     //     the Lightpanda MCP browser reads pages; enable via config.webAccess.
     const webAccessEnabled =
@@ -233,7 +248,7 @@ class PiCodeHarness extends HarnessInterface {
       excludeTools = Array.from(new Set([...excludeTools, ...WEB_BROWSE_FALLBACK_TOOLS]));
     }
     // Native search stays only if a real (autonomous) backend key is set; else
-    // exclude it so it never triggers the browser sign-in — orbit-search covers it.
+    // exclude it so it never triggers the browser sign-in — tether-search covers it.
     if (!PiCodeHarness._hasNativeSearchConfigured()) {
       excludeTools = Array.from(new Set([...excludeTools, ...WEB_NATIVE_SEARCH_TOOLS]));
     }
@@ -249,7 +264,7 @@ class PiCodeHarness extends HarnessInterface {
     // A subclass (ContainerHarness) can wrap this to run pi inside a sandbox.
     const { command, args, spawnEnv, cwd } = this._buildSpawnCommand({ nodePath, piPath, piArgs, childEnv });
 
-    console.log(`[PiCodeHarness] Spawning: ${command} (mode=${activeMode}, model=${normalModel})`);
+    console.log(`[PiCodeHarness] Spawning: ${command} (mode=${activeMode}, model=${activeModel})`);
 
     // `detached: true` makes pi its OWN process-group leader, so the tools it
     // spawns (bash → curl, etc.) join pi's group. cancel() can then signal the
@@ -289,7 +304,7 @@ class PiCodeHarness extends HarnessInterface {
    */
   _buildSpawnCommand({ nodePath, piPath, piArgs, childEnv }) {
     // Run pi IN the session workspace so its default writes and relative paths
-    // land there — not in Orbit's source (the backend's cwd).
+    // land there — not in Tether's source (the backend's cwd).
     return { command: nodePath, args: [piPath, ...piArgs], spawnEnv: childEnv, cwd: this._workspaceDir || process.cwd() };
   }
 
@@ -527,7 +542,7 @@ class PiCodeHarness extends HarnessInterface {
   /**
    * True if a real (autonomous) native search backend is configured — an API
    * key in env or ~/.pi/web-search.json. When false, pi's web_search would fall
-   * back to a browser sign-in, so we exclude it and rely on orbit-search.
+   * back to a browser sign-in, so we exclude it and rely on tether-search.
    */
   /**
    * The SINGLE authoritative capability×mode matrix now lives in the shared

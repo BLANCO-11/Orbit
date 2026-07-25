@@ -2,7 +2,7 @@
 
 import React, { useState, useCallback, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { useOrbitState } from '@/providers/OrbitProvider';
+import { useTetherState } from '@/providers/TetherProvider';
 import { Monitor, FileText, RefreshCw, ExternalLink, AlertCircle, Maximize2, Minimize2, X } from 'lucide-react';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
@@ -21,7 +21,7 @@ const IMG_EXT = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'ico', 'bmp'];
  * Kept as a single tab so previewing doesn't spawn extra UI regions.
  */
 export default function PreviewTab({ activeFilePath, onFilePathChange }: { activeFilePath?: string; onFilePathChange?: (path: string) => void }) {
-  const { currentSessionId } = useOrbitState();
+  const { currentSessionId } = useTetherState();
   const sessionQ = currentSessionId ? `&session=${encodeURIComponent(currentSessionId)}` : '';
   const [mode, setMode] = useState<Mode>('live');
   const [fullscreen, setFullscreen] = useState(false);

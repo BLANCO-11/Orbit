@@ -1,6 +1,6 @@
 // agent-backend/services/llm-probe.js
 // Live connection test for the configured OpenAI-compatible LLM endpoint
-// (Workstream F3). Orbit only ever speaks `/v1` HTTP, so a `models.list()` call
+// (Workstream F3). Tether only ever speaks `/v1` HTTP, so a `models.list()` call
 // is a faithful reachability + auth check. The last result is cached so the
 // synchronous capabilities manifest can report `llm.connected` without blocking.
 
@@ -14,8 +14,8 @@ async function probeLlm(getConfig) {
   let apiKey = "";
   try {
     const cfg = (getConfig && getConfig()) || {};
-    baseURL = cfg?.litellm?.baseURL || "";
-    apiKey = cfg?.litellm?.apiKey || "";
+    baseURL = cfg?.llm?.baseUrl || "";
+    apiKey = cfg?.llm?.apiKey || "";
   } catch {}
 
   const configured = !!(baseURL && apiKey);

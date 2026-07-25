@@ -8,6 +8,7 @@
 // never a looser one.
 
 const { isReadOnlyTool } = require("./harnesses/picode/parser");
+const { NOTIFY_NAMES } = require("./brand");
 
 const CAPABILITIES = [
   "read_workspace",
@@ -50,7 +51,10 @@ const META_TOOLS = new Set([
   "litellm_skill_list", "skill_list", "list_skills",
   "task", "todowrite", "todoread", "todo_write", "todo_read",
   "plan", "update_plan", "set_plan",
-  "notify", "orbit_notify",
+  // The notify tool, in every spelling pi/policy configs use it under. Derived
+  // in brand.js: writing one spelling by hand is how this entry silently stops
+  // applying after a rename.
+  ...NOTIFY_NAMES,
 ]);
 
 /**

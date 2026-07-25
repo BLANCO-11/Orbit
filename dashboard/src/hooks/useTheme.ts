@@ -2,9 +2,9 @@
 
 import { useState, useEffect, useCallback } from 'react';
 
-const THEME_KEY = 'orbit-theme'; // 'light' | 'dark'
-const PALETTE_KEY = 'orbit-palette'; // one of PALETTES ids
-const SYNC_EVENT = 'orbit-theme-sync';
+const THEME_KEY = 'tether:theme'; // 'light' | 'dark'
+const PALETTE_KEY = 'tether:palette'; // one of PALETTES ids
+const SYNC_EVENT = 'tether:theme-sync';
 const DEFAULT_MODE = 'light';
 const DEFAULT_PALETTE = 'moss';
 
@@ -17,7 +17,7 @@ export const PALETTES = [
   {
     id: 'moss',
     label: 'Moss',
-    tagline: 'Olive on warm linen — the Orbit default',
+    tagline: 'Olive on warm linen — the Tether default',
     light: { bg: '#f6f4ee', surface: '#fdfcf8', accent: '#5f7a4e' },
     dark: { bg: '#131312', surface: '#1c1c1a', accent: '#93ac80' },
   },

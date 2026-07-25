@@ -2,40 +2,49 @@
 // GET /api/config, POST /api/config
 
 const { Router } = require("express");
-const { loadConfig, saveConfig, loadUiConfig, saveUiConfig } = require("../config");
+const { loadConfig, saveConfig, getResolvedConfig, resolveLlm, stripResolved, loadUiConfig, saveUiConfig } = require("../config");
+const env = require("../env-config");
 
 // Fields that only take effect when the harness process is (re)spawned, so a
 // change to one of them requires cycling active sessions. Everything else —
 // policy (paths/commands/modes), budgets, notifications — is read fresh from
 // getConfig() on every tool call and every turn, so it hot-reloads with no
 // restart. Killing every session on any save was the old, disruptive behavior.
-const SPAWN_TIME_KEYS = {
-  litellm: ["baseURL", "apiKey", "selectedNormalModel", "selectedReasoningModel"],
-  systemPromptType: true,
-};
+const SPAWN_TIME_LLM_KEYS = ["baseUrl", "apiKey", "fastModel", "reasoningModel"];
 
 function requiresRespawn(oldCfg, newCfg) {
   if ((oldCfg.systemPromptType || "") !== (newCfg.systemPromptType || "")) return true;
   // Web-access extension toggle changes the --exclude-tools spawn arg.
   if (!!oldCfg.webAccess?.enabled !== !!newCfg.webAccess?.enabled) return true;
-  // Merge the neutral `llm` alias over `litellm` on both sides so a change to
-  // either key is detected (Workstream F1).
-  const o = { ...(oldCfg.litellm || {}), ...(oldCfg.llm || {}) };
-  const n = { ...(newCfg.litellm || {}), ...(newCfg.llm || {}) };
-  return SPAWN_TIME_KEYS.litellm.some((k) => o[k] !== n[k]);
+  const o = oldCfg.llm || {};
+  const n = newCfg.llm || {};
+  return SPAWN_TIME_LLM_KEYS.some((k) => o[k] !== n[k]);
 }
 
 function createConfigRouter(activeSessionsMap) {
   const router = Router();
 
   router.get("/", (req, res) => {
-    const config = loadConfig();
-    if (!config.litellm) config.litellm = {};
-    if (!config.litellm.baseURL) config.litellm.baseURL = process.env.LITELLM_BASE_URL || "";
-    if (!config.litellm.apiKey) config.litellm.apiKey = process.env.LITELLM_KEY || process.env.OPENAI_API_KEY || "";
+    // Resolved the SAME way the runtime resolves it. This route used to
+    // re-implement the fallback and read only LITELLM_*/OPENAI_*, so setting
+    // LLM_BASE_URL alone made the endpoint report an empty baseUrl while the
+    // app itself worked fine.
+    const config = getResolvedConfig();
     if (!config.tts) config.tts = {};
-    if (!config.tts.url) config.tts.url = process.env.LOCAL_TTS_URL || "";
-    if (!config.tts.apiKey) config.tts.apiKey = process.env.LOCAL_TTS_KEY || "";
+    if (!config.tts.url) config.tts.url = env.get("LOCAL_TTS_URL");
+    if (!config.tts.apiKey) config.tts.apiKey = env.get("LOCAL_TTS_KEY");
+    // Tell the UI which LLM fields came from the environment, so Settings can
+    // show them as defaults (and render them read-only when locked) instead of
+    // presenting an env value as if the user had typed it.
+    config.llmEnv = {
+      locked: config.llm.locked === true,
+      fromEnv: {
+        baseUrl: env.isSet("LLM_BASE_URL"),
+        apiKey: env.isSet("LLM_API_KEY"),
+        fastModel: env.isSet("LLM_FAST_MODEL"),
+        reasoningModel: env.isSet("LLM_REASONING_MODEL"),
+      },
+    };
     res.json(config);
   });
 
@@ -54,9 +63,18 @@ function createConfigRouter(activeSessionsMap) {
 
   router.post("/", (req, res, next) => {
     try {
-      const oldConfig = loadConfig();
-      const config = req.body;
-      saveConfig(config);
+      const oldConfig = getResolvedConfig();
+
+      // Persist WITHOUT env-derived values (see config.stripResolved): the API
+      // hands the client a resolved config, so saving it verbatim would freeze
+      // today's env values into the file and stop the env from being a default.
+      const toPersist = stripResolved(req.body);
+      saveConfig(toPersist);
+
+      // Compare RESOLVED against RESOLVED, so clearing a field back to its env
+      // default is correctly seen as "no effective change" and doesn't cycle
+      // every live session for nothing.
+      const config = { ...toPersist, llm: resolveLlm(toPersist) };
 
       // Only cycle sessions when a spawn-time field changed. Policy and budget
       // edits apply to the next tool call / turn with no interruption.

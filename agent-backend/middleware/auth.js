@@ -13,6 +13,8 @@
 // operator opts into them. Secrets never come from security-config.json (which
 // is writable via an API route and must not be able to reset its own guard).
 
+const env = require("../env-config");
+
 // Map a device pairing scope → an RBAC role. Devices are operator-paired, so a
 // full-scope device acts as an admin; restricted scopes are members/viewers.
 function roleForDeviceScope(scope) {
@@ -22,15 +24,12 @@ function roleForDeviceScope(scope) {
 }
 
 function getSuperadminKey() {
-  // ORBIT_SUPERADMIN_KEY is the current name. ORBIT_API_KEY (pre-multi-tenant)
-  // and AEGIS_API_KEY (pre-rebrand) are kept as fallbacks so existing .env
-  // files keep working unchanged.
-  return (
-    process.env.ORBIT_SUPERADMIN_KEY ||
-    process.env.ORBIT_API_KEY ||
-    process.env.AEGIS_API_KEY ||
-    null
-  );
+  // Exactly one name. The pre-multi-tenant and pre-rebrand aliases are gone: a
+  // stale .env now fails at boot with the exact mapping (env-config's tripwire)
+  // rather than quietly resolving to a name nobody remembers setting. That
+  // matters here more than anywhere else — an unresolved key means dev-mode,
+  // which treats every caller as superadmin.
+  return env.get("AUTH_SUPERADMIN_KEY") || null;
 }
 
 // Legacy alias — some call sites/tests import getSharedApiKey. Same value.
@@ -116,7 +115,7 @@ function createAuthMiddleware(db) {
       return res.status(500).json({ success: false, message: "Authentication backend error." });
     }
     if (!identity) {
-      res.setHeader("WWW-Authenticate", 'Bearer realm="Orbit"');
+      res.setHeader("WWW-Authenticate", 'Bearer realm="Tether"');
       return res.status(401).json({ success: false, message: "Unauthorized: invalid or missing API key." });
     }
     req.auth = identity;

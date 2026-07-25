@@ -1,8 +1,8 @@
 // agent-backend/mcp/fleet-mcp.js
 //
-// The baked-in `orbit-fleet` MCP server: the tools the LEAD agent uses to drive other
+// The baked-in `tether-fleet` MCP server: the tools the LEAD agent uses to drive other
 // devices. It exposes two tools — list_devices and dispatch_to_device — and
-// forwards each call to the Orbit backend's /api/fleet routes, which run the
+// forwards each call to the Tether backend's /api/fleet routes, which run the
 // task on the target device's harness and return the answer. See
 // agent-backend/fleet.js.
 
@@ -13,8 +13,8 @@ const {
   ListToolsRequestSchema,
 } = require("@modelcontextprotocol/sdk/types.js");
 
-const API = process.env.ORBIT_API || "http://127.0.0.1:6800";
-const API_KEY = process.env.ORBIT_API_KEY || "";
+const API = process.env.AGENT_API_URL || "http://127.0.0.1:6800";
+const API_KEY = process.env.AGENT_API_KEY || "";
 
 async function api(path, opts = {}) {
   const headers = { "Content-Type": "application/json", ...(opts.headers || {}) };
@@ -30,7 +30,7 @@ async function api(path, opts = {}) {
 }
 
 const server = new Server(
-  { name: "orbit-fleet", version: "1.0.0" },
+  { name: "tether-fleet", version: "1.0.0" },
   { capabilities: { tools: {} } },
 );
 
@@ -59,7 +59,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     {
       name: "list_capabilities",
       description:
-        "Discover what THIS Orbit backend can actually do right now — which LLM/voice/search/browse are configured, which MCP connectors and service connections (GitHub, Slack, Notion, …) are connected, whether Telegram/Discord/Slack messaging is wired, and what fleet devices are paired. Call this BEFORE assuming a capability exists (e.g. before trying to message Telegram or use a connector). If something you need is unavailable, tell the user how to set it up rather than failing silently.",
+        "Discover what THIS Tether backend can actually do right now — which LLM/voice/search/browse are configured, which MCP connectors and service connections (GitHub, Slack, Notion, …) are connected, whether Telegram/Discord/Slack messaging is wired, and what fleet devices are paired. Call this BEFORE assuming a capability exists (e.g. before trying to message Telegram or use a connector). If something you need is unavailable, tell the user how to set it up rather than failing silently.",
       inputSchema: { type: "object", properties: {} },
     },
   ],
@@ -69,7 +69,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
   try {
     if (name === "list_devices") {
-      const sid = process.env.ORBIT_SESSION_ID || "";
+      const sid = process.env.AGENT_SESSION_ID || "";
       const d = await api(`/api/fleet/devices${sid ? `?sessionId=${encodeURIComponent(sid)}` : ""}`);
       const list = (d.devices || [])
         .map((x) => `- ${x.id}  (${x.name}${x.machine && x.machine !== x.id ? ` · ${x.machine}` : ""}) — ${x.transport}, ${x.status}`)
@@ -84,7 +84,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           device: args.device,
           prompt: args.task,
           mode: args.mode,                          // explicit rights (capped server-side)
-          leadSessionId: process.env.ORBIT_SESSION_ID, // so the delegate inherits the lead's rights
+          leadSessionId: process.env.AGENT_SESSION_ID, // so the delegate inherits the lead's rights
         }),
       });
       return {
@@ -105,7 +105,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const lines = Object.entries(caps).map(
         ([k, c]) => `- ${k}: ${label(c)}${c && c.detail ? ` — ${c.detail}` : ""}`
       );
-      return { content: [{ type: "text", text: `Orbit capabilities right now:\n${lines.join("\n")}` }] };
+      return { content: [{ type: "text", text: `Tether capabilities right now:\n${lines.join("\n")}` }] };
     }
 
     throw new Error(`Unknown tool: ${name}`);
@@ -117,10 +117,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 async function run() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error("Orbit Fleet MCP server running on stdio");
+  console.error("Tether Fleet MCP server running on stdio");
 }
 
 run().catch((error) => {
-  console.error("Fatal error in Orbit Fleet MCP server:", error);
+  console.error("Fatal error in Tether Fleet MCP server:", error);
   process.exit(1);
 });

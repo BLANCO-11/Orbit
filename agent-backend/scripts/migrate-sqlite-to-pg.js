@@ -2,8 +2,8 @@
 // One-time SQLite → PostgreSQL data migration.
 //
 // Usage:
-//   DATABASE_URL=postgres://orbit:orbit@localhost:5432/orbit \
-//   ORBIT_SQLITE_PATH=agent-backend/orbit.db \
+//   DATABASE_URL=postgres://tether:tether@localhost:5432/tether \
+//   DB_PATH=agent-backend/tether.db \
 //   node agent-backend/scripts/migrate-sqlite-to-pg.js
 //
 // - Idempotent & resumable: every insert is ON CONFLICT DO NOTHING, so re-running
@@ -13,11 +13,12 @@
 //   has the exact current schema before any rows are copied.
 // - Data is stored as JSON-in-TEXT, so rows copy verbatim — no transformation.
 //
-// Point DATABASE_URL at the TARGET Postgres and ORBIT_SQLITE_PATH at the SOURCE
+// Point DATABASE_URL at the TARGET Postgres and DB_PATH at the SOURCE
 // file. The source is opened read-only and never modified.
 
 const path = require("path");
 const fs = require("fs");
+const env = require("../env-config");
 
 // Tables to copy, in FK-friendly order (all PKs are provided/UUID; no FKs are
 // enforced, but keep a sensible order anyway). meta first so schema_version rides
@@ -38,15 +39,15 @@ const TABLES = [
 ];
 
 async function main() {
-  const dbUrl = process.env.DATABASE_URL;
+  const dbUrl = env.get("DATABASE_URL");
   if (!dbUrl) {
     console.error("ERROR: DATABASE_URL (the target Postgres) must be set.");
     process.exit(1);
   }
-  const sqlitePath = process.env.ORBIT_SQLITE_PATH || process.env.ORBIT_DB_PATH
-    || path.join(__dirname, "..", "orbit.db");
+  // Two legacy names collapsed into DB_PATH (see env-config.js LEGACY).
+  const sqlitePath = env.get("DB_PATH") || path.join(__dirname, "..", "tether.db");
   if (!fs.existsSync(sqlitePath)) {
-    console.error(`ERROR: source SQLite DB not found at ${sqlitePath} (set ORBIT_SQLITE_PATH).`);
+    console.error(`ERROR: source SQLite DB not found at ${sqlitePath} (set DB_PATH).`);
     process.exit(1);
   }
 
@@ -55,7 +56,7 @@ async function main() {
 
   // 1. Create the schema on the target by running the app's init against pg.
   //    Requiring ../db with DATABASE_URL set builds the pg adapter.
-  if (!process.env.ORBIT_DB_DRIVER) process.env.ORBIT_DB_DRIVER = "postgres";
+  if (!process.env.DB_DRIVER) process.env.DB_DRIVER = "postgres";
   const db = require("../db");
   await db.init();
   console.log("[migrate] target schema ready (db.init on postgres).");

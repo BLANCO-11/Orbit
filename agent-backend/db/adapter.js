@@ -19,14 +19,16 @@
 // LIKE vs ILIKE, INSERT OR REPLACE) is branched in db.js on `q.dialect`.
 
 // ── env → driver resolution ──────────────────────────────────────────
-// Explicit ORBIT_DB_DRIVER wins; else a DATABASE_URL implies postgres; else
+// Explicit DB_DRIVER wins; else a DATABASE_URL implies postgres; else
 // sqlite. Keeps existing SQLite deploys unchanged (no env → sqlite).
+const env = require("../env-config");
+
 function resolveDriver() {
-  const explicit = String(process.env.ORBIT_DB_DRIVER || "").toLowerCase().trim();
+  const explicit = env.get("DB_DRIVER").toLowerCase();
   if (explicit === "postgres" || explicit === "postgresql" || explicit === "pg") return "postgres";
   if (explicit === "sqlite") return "sqlite";
-  if (explicit) throw new Error(`ORBIT_DB_DRIVER: unknown driver "${explicit}" (use "sqlite" or "postgres")`);
-  if (process.env.DATABASE_URL) return "postgres";
+  if (explicit) throw new Error(`DB_DRIVER: unknown driver "${explicit}" (use "sqlite" or "postgres")`);
+  if (env.isSet("DATABASE_URL")) return "postgres";
   return "sqlite";
 }
 
@@ -55,20 +57,12 @@ function createSqliteAdapter() {
   const path = require("path");
   const fs = require("fs");
 
-  const dbPath = process.env.ORBIT_DB_PATH || path.join(__dirname, "..", "orbit.db");
+  // The auto-migration shim from the rebrand two names ago has been removed: it
+  // outlived the name it migrated from by a full cycle, which is the recurring
+  // pattern this codebase keeps paying for (see docs/rebranding.md). If an old
+  // database needs carrying forward, rename the file by hand.
+  const dbPath = env.get("DB_PATH") || path.join(__dirname, "..", "tether.db");
   try { fs.mkdirSync(path.dirname(dbPath), { recursive: true }); } catch {}
-  // Rebrand migration: carry the pre-rebrand database over so no data is lost.
-  const legacyDbPath = path.join(__dirname, "..", "aegis.db");
-  if (!fs.existsSync(dbPath) && fs.existsSync(legacyDbPath)) {
-    try {
-      for (const suffix of ["", "-wal", "-shm"]) {
-        if (fs.existsSync(legacyDbPath + suffix)) fs.renameSync(legacyDbPath + suffix, dbPath + suffix);
-      }
-      console.log("[DB] Migrated aegis.db → orbit.db (rebrand).");
-    } catch (e) {
-      console.error("[DB] rebrand migration failed:", e.message);
-    }
-  }
 
   const db = new DatabaseSync(dbPath);
   try { db.exec("PRAGMA journal_mode = WAL"); } catch {}
@@ -122,8 +116,8 @@ function createPgAdapter() {
   // integers as numbers, so db.js stays dialect-agnostic on types.
   pg.types.setTypeParser(20, (v) => (v == null ? null : Number(v)));
   const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    max: Number(process.env.ORBIT_PG_POOL_MAX || 10),
+    connectionString: env.get("DATABASE_URL"),
+    max: env.get("DB_PG_POOL_MAX"),
   });
   pool.on("error", (err) => console.error("[DB] pg pool error:", err.message));
 

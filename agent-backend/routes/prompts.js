@@ -12,7 +12,7 @@ const PROMPTS_DIR = path.join(__dirname, "../../prompts");
 const MODE_FILES = new Set(["plan-mode.md", "edit-mode.md", "yolo-mode.md"]);
 const ID_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
 // Can be edited but never deleted (default persona + the always-injected self-docs).
-const PROTECTED = new Set(["standard", "orbit-system"]);
+const PROTECTED = new Set(["standard", "tether-system"]);
 
 /** First markdown heading, else the filename stem title-cased. */
 function titleOf(content, stem) {

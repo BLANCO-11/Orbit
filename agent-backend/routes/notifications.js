@@ -5,7 +5,7 @@
 // Discord/Slack webhooks, Telegram, WS broadcast) lives in the bus + server.js
 // sink registrations — this route no longer talks to any transport directly.
 //
-// This is also the route the `orbit-notify` MCP tool calls, so the agent raises
+// This is also the route the `tether-notify` MCP tool calls, so the agent raises
 // alerts through a first-class network tool instead of shelling out to curl.
 
 const { Router } = require("express");
@@ -18,7 +18,7 @@ function createNotificationsRouter(notifyBus) {
       const { title, message, body, severity, sinks } = req.body || {};
       // Accept either `message` (legacy shell util / webhook callers) or `body`.
       const result = notifyBus.notify({
-        title: title || "Orbit Alert",
+        title: title || "Tether Alert",
         body: body || message || "",
         severity: severity || "info",
         sinks: Array.isArray(sinks) && sinks.length ? sinks : undefined,

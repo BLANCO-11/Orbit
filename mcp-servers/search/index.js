@@ -1,6 +1,6 @@
 // mcp-server-search/index.js
 //
-// The `orbit-search` MCP server: a keyless, best-effort web SEARCH tool — the
+// The `tether-search` MCP server: a keyless, best-effort web SEARCH tool — the
 // default retriever when no native/keyed search is configured.
 //
 // WHY IT EXISTS: an LLM can't browse the live web, and the Lightpanda browser
@@ -81,7 +81,7 @@ async function webSearch(query, limit = 6) {
 }
 
 const server = new Server(
-  { name: "orbit-search", version: "1.0.0" },
+  { name: "tether-search", version: "1.0.0" },
   { capabilities: { tools: {} } },
 );
 
@@ -125,10 +125,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 async function run() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error("Orbit Search MCP server running on stdio");
+  console.error("Tether Search MCP server running on stdio");
 }
 
 run().catch((error) => {
-  console.error("Fatal error in Orbit Search MCP server:", error);
+  console.error("Fatal error in Tether Search MCP server:", error);
   process.exit(1);
 });

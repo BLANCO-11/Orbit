@@ -2,11 +2,11 @@
 //
 // Shared system-prompt composer. Extracted from PiCodeHarness.connect() so the
 // SAME prompt can be built for a LOCAL pi child (in-process) and for a REMOTE
-// agent (built on the backend, sent down to a paired orbit-connect). The only
+// agent (built on the backend, sent down to a paired tether-connect). The only
 // machine-specific piece — the per-session workspace block — is passed in:
 // local pi supplies its real session dirs; for a remote the backend omits it and
 // the remote appends its own (it alone knows its paths). Everything else (base
-// prompt by type, orbit-system, orbit-behavior, the live policy matrix, the
+// prompt by type, tether-system, tether-behavior, the live policy matrix, the
 // capabilities manifest, the mode directive, attached skills) is portable and
 // identical either way.
 
@@ -41,7 +41,7 @@ function renderPolicyMatrix(config) {
 
 /**
  * Compose the full system prompt. Order is canonical and must match what pi has
- * always received: base → orbit-system → orbit-behavior → policy matrix →
+ * always received: base → tether-system → tether-behavior → policy matrix →
  * capabilities → [workspace] → mode directive → skills.
  *
  * @param {object}   opts
@@ -65,13 +65,13 @@ function composeSystemPrompt({ config, systemPromptType, mode, skills, capabilit
   const basePrompt = fs.readFileSync(path.join(promptsDir, basePromptFile), "utf-8");
   let combined = basePrompt;
 
-  // Orbit's self-knowledge (WHAT it is) + operating manual (HOW to operate).
+  // Tether's self-knowledge (WHAT it is) + operating manual (HOW to operate).
   try {
-    combined += "\n\n" + fs.readFileSync(path.join(promptsDir, "orbit-system.md"), "utf-8");
-  } catch (e) { console.error("[prompt] orbit-system.md not found:", e.message); }
+    combined += "\n\n" + fs.readFileSync(path.join(promptsDir, "tether-system.md"), "utf-8");
+  } catch (e) { console.error("[prompt] tether-system.md not found:", e.message); }
   try {
-    combined += "\n\n" + fs.readFileSync(path.join(promptsDir, "orbit-behavior.md"), "utf-8");
-  } catch (e) { console.error("[prompt] orbit-behavior.md not found:", e.message); }
+    combined += "\n\n" + fs.readFileSync(path.join(promptsDir, "tether-behavior.md"), "utf-8");
+  } catch (e) { console.error("[prompt] tether-behavior.md not found:", e.message); }
 
   // Live capability × mode matrix, generated FROM the enforced policy config.
   try {

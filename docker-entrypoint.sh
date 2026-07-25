@@ -18,17 +18,17 @@
 # 127.0.0.1:6800, dashboard (the only published port) on 0.0.0.0:6801.
 set -euo pipefail
 
-echo "[entrypoint] starting Orbit (NODE_ENV=${NODE_ENV:-production})"
+echo "[entrypoint] starting Tether (NODE_ENV=${NODE_ENV:-production})"
 
 # Container→host reachability. Inside a container `localhost`/`127.0.0.1` means
 # the container itself, so a user-supplied upstream like http://localhost:5000
 # (a LiteLLM/TTS/etc. running on the Docker HOST) is unreachable. So the operator
 # only ever writes the real URL as they'd type it on the host, and we rewrite the
 # host part to the Docker host-gateway (mapped via extra_hosts in compose).
-# Override the gateway name with ORBIT_HOST_GATEWAY if needed. Only upstreams the
+# Override the gateway name with SANDBOX_HOST_GATEWAY if needed. Only upstreams the
 # container DIALS OUT to are rewritten — never DASHBOARD_ORIGIN (its own public
 # origin) or the forced-internal backend bind.
-HOST_GATEWAY="${ORBIT_HOST_GATEWAY:-host.docker.internal}"
+HOST_GATEWAY="${SANDBOX_HOST_GATEWAY:-host.docker.internal}"
 rewrite_host_local() {
   local name="$1" val="${!1:-}"
   [ -n "$val" ] || return 0
@@ -39,7 +39,9 @@ rewrite_host_local() {
     echo "[entrypoint] $name: rewrote host-local → $HOST_GATEWAY"
   fi
 }
-for _v in LLM_BASE_URL LITELLM_BASE_URL OPENAI_BASE_URL LOCAL_TTS_URL; do
+# Only canonical names. LITELLM_BASE_URL / OPENAI_BASE_URL are no longer read
+# by the app, so rewriting them here would have been pure theatre.
+for _v in LLM_BASE_URL LOCAL_TTS_URL RUN_TESTER_URL; do
   rewrite_host_local "$_v"
 done
 

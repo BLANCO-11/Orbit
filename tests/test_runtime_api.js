@@ -11,13 +11,13 @@ const os = require("os");
 const path = require("path");
 const fs = require("fs");
 
-// Isolate the DB + ORBIT_HOME to temp dirs BEFORE requiring the modules.
-const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "orbit-runtime-test-"));
-process.env.ORBIT_DB_DRIVER = "sqlite";
-process.env.ORBIT_DB_PATH = path.join(TMP, "test.db");
-process.env.ORBIT_HOME = path.join(TMP, "orbit-home");
+// Isolate the DB + APP_HOME to temp dirs BEFORE requiring the modules.
+const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "tether-runtime-test-"));
+process.env.DB_DRIVER = "sqlite";
+process.env.DB_PATH = path.join(TMP, "test.db");
+process.env.APP_HOME = path.join(TMP, "tether-home");
 // Deterministic encryption key so the crypto round-trip is stable across runs.
-process.env.ORBIT_SECRET = "test-secret-key-for-runtime-api-suite";
+process.env.APP_SECRET = "test-secret-key-for-runtime-api-suite";
 
 const db = require("../agent-backend/db");
 const { encrypt, decrypt } = require("../agent-backend/crypto-store");
@@ -66,14 +66,33 @@ async function testSecretsStore() {
   assert.strictEqual(deep.env.A, "keyA");
   assert.strictEqual(deep.args[1], "${secret:MISSING}");
 
-  // env injection respects reserved names
-  const env = { HOME: "/root", ORBIT_LLM_KEY: "gk" };
-  const { injected, skipped } = resolver.injectIntoEnv(env, { GOOD: "g", ORBIT_LLM_KEY: "hijack", HOME: "hijack" }, /^(ORBIT_|HOME$)/i);
+  // env injection respects reserved names.
+  //
+  // The guard is now an exact-name SET derived from the canonical env table,
+  // not a brand-prefix regex. That change was forced by de-branding: with names
+  // like GATEWAY_API_KEY, a single-brand-prefix fence protects nothing — a
+  // tenant secret named GATEWAY_API_KEY would sail through and hijack the
+  // child's gateway credential. This test is what caught that.
+  const appEnv = require("../agent-backend/env-config");
+  const RESERVED = appEnv.reservedNames();
+  const env = { HOME: "/root", GATEWAY_API_KEY: "gk" };
+  const { injected, skipped } = resolver.injectIntoEnv(
+    env, { GOOD: "g", GATEWAY_API_KEY: "hijack", HOME: "hijack" }, RESERVED,
+  );
   assert.strictEqual(env.GOOD, "g");
-  assert.strictEqual(env.ORBIT_LLM_KEY, "gk", "reserved not overwritten");
+  assert.strictEqual(env.GATEWAY_API_KEY, "gk", "reserved not overwritten");
   assert.strictEqual(env.HOME, "/root", "reserved not overwritten");
   assert.deepStrictEqual(injected, ["GOOD"]);
-  assert.deepStrictEqual(skipped.sort(), ["HOME", "ORBIT_LLM_KEY"]);
+  assert.deepStrictEqual(skipped.sort(), ["GATEWAY_API_KEY", "HOME"]);
+
+  // Every declared app variable is reserved, automatically — that is the point
+  // of deriving the set rather than maintaining a list.
+  for (const name of ["LLM_API_KEY", "AUTH_SUPERADMIN_KEY", "APP_SECRET", "DATABASE_URL", "AGENT_SESSION_ID"]) {
+    assert.ok(RESERVED.has(name), `${name} must be reserved against tenant-secret injection`);
+  }
+  // A name that merely shares a prefix with an app variable is NOT reserved —
+  // the old fence blocked these, breaking legitimate tenant secrets.
+  assert.ok(!RESERVED.has("LLM_MY_TENANT_TOKEN"), "prefix-similar tenant secrets must still be injectable");
 
   assert.strictEqual(await db.deleteSecret(A, "API_KEY"), true);
   assert.strictEqual(await db.deleteSecret(A, "API_KEY"), false, "delete missing → false");

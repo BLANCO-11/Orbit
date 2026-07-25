@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 // tests/e2e/run-e2e.js
 // End-to-end harness for the runtime run-API + isolation plan. Drives a LIVE
-// Orbit server over HTTP exactly as a parent app would, proving all five gaps.
+// Tether server over HTTP exactly as a parent app would, proving all five gaps.
 //
 // Requires a running server with an LLM configured, network egress, and (for
 // true container isolation) Docker. It is NOT part of the offline unit suite —
 // run it against a real deployment:
 //
-//   ORBIT_URL=http://localhost:6801 \
-//   ORBIT_SUPERADMIN_KEY=... \
+//   APP_URL=http://localhost:6801 \
+//   AUTH_SUPERADMIN_KEY=... \
 //   node tests/e2e/run-e2e.js               # weather + crypto, both domains
 //   node tests/e2e/run-e2e.js weather       # one domain
 //
@@ -27,8 +27,8 @@ const assert = require("assert");
 const path = require("path");
 const { spawn } = require("child_process");
 
-const BASE = process.env.ORBIT_URL || "http://localhost:6801";
-const ADMIN = process.env.ORBIT_SUPERADMIN_KEY || process.env.ORBIT_API_KEY || "";
+const BASE = process.env.APP_URL || "http://localhost:6801";
+const ADMIN = process.env.AUTH_SUPERADMIN_KEY || process.env.AGENT_API_KEY || "";
 const STUB = path.join(__dirname, "stub-mcp-server.js");
 const POLL_TIMEOUT_MS = Number(process.env.E2E_POLL_MS || 240_000);
 
@@ -166,7 +166,7 @@ async function testHangVariant() {
 
 async function main() {
   if (!ADMIN) {
-    console.error("Set ORBIT_SUPERADMIN_KEY (and ORBIT_URL) to run the live E2E.");
+    console.error("Set AUTH_SUPERADMIN_KEY (and APP_URL) to run the live E2E.");
     process.exit(2);
   }
   const which = process.argv.slice(2).filter((a) => DOMAINS[a]);

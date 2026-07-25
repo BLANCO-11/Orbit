@@ -3,13 +3,13 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Folder, File, ChevronRight, ChevronDown, RefreshCw, ExternalLink, Eye, Code } from 'lucide-react';
-import { useOrbitState } from '@/providers/OrbitProvider';
+import { useTetherState } from '@/providers/TetherProvider';
 
 /**
  * WorkspaceTab — File tree browser + file preview in a resizable split pane.
  */
 export default function WorkspaceTab() {
-  const { currentSessionId, status, metrics } = useOrbitState();
+  const { currentSessionId, status, metrics } = useTetherState();
   const [tree, setTree] = useState([]);
   const [activeFile, setActiveFile] = useState(null);
   const [fileContent, setFileContent] = useState(null);
@@ -19,7 +19,7 @@ export default function WorkspaceTab() {
   const [dirContents, setDirContents] = useState(new Map());
   const [loading, setLoading] = useState(false);
 
-  // The explorer is scoped to the CURRENT session's tree (~/.orbit/sessions/<id>/).
+  // The explorer is scoped to the CURRENT session's tree (~/.tether/sessions/<id>/).
   const sessionQ = currentSessionId ? `&session=${encodeURIComponent(currentSessionId)}` : '';
 
   const expandedDirsRef = useRef(expandedDirs);

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useCallback, useState } from 'react';
-import { useOrbitDispatch, actions } from '@/providers/OrbitProvider';
+import { useTetherDispatch, actions } from '@/providers/TetherProvider';
 
 /**
  * useWebSocket — WebSocket lifecycle + message dispatch.
@@ -16,7 +16,7 @@ export function useWebSocket(
     onIntelligentSpeech?: (text: string) => void;
   } = {}
 ) {
-  const dispatch = useOrbitDispatch();
+  const dispatch = useTetherDispatch();
   // The WS onmessage closure is created once (connect deps are stable). Reading
   // callbacks through a ref that we refresh every render means speech handlers
   // always call the LATEST queueSentence/speakText — which capture the current
@@ -114,7 +114,7 @@ export function useWebSocket(
             break;
             
           case 'refresh_sessions':
-            window.dispatchEvent(new CustomEvent('orbit:refresh_sessions'));
+            window.dispatchEvent(new CustomEvent('tether:refresh-sessions'));
             break;
             
           case 'reasoning_update':

@@ -1,26 +1,26 @@
-# Orbit — bring the whole system up with `docker compose up -d --build`.
+# Tether — bring the whole system up with `docker compose up -d --build`.
 #
-#   orbit      backend + dashboard (only 6801 is exposed)
+#   tether      backend + dashboard (only 6801 is exposed)
 #   lightpanda the agent browser, reached internally at ws://lightpanda:9222
 #
 # The `pi` CLI is bind-mounted from the host (see the `volumes` note). Copy
-# .env.example → .env first and set your LLM creds + ORBIT_SUPERADMIN_* there.
+# .env.example → .env first and set your LLM creds + TETHER_SUPERADMIN_* there.
 #
 # PROD (default):  docker compose up -d --build
 # DEV  (HMR):      docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
 
 services:
-  orbit:
+  tether:
     build:
       context: .
       target: runtime          # prod image (built .next, deps pruned). Dev override flips this.
-    image: orbit:latest
+    image: tether:latest
     restart: unless-stopped
     ports:
       - "6801:6801"            # dashboard (UI + proxies /api and /api/ws to the backend)
       # Backend API/WS. Only needed if an EXTERNAL nginx proxies /api straight to
       # :6800 (the bare-metal layout). Requires HOST=0.0.0.0 (backend binds all
-      # interfaces) + ORBIT_SUPERADMIN_KEY set; firewall this port to the proxy
+      # interfaces) + AUTH_SUPERADMIN_KEY set; firewall this port to the proxy
       # host. If nginx instead sends /api to :6801, you can remove this line.
       - "6800:6800"
     # Let the container reach services running on the HOST (e.g. a host-run
@@ -40,15 +40,15 @@ services:
       # DEFAULT: PostgreSQL (the `postgres` service below). DATABASE_URL selects
       # the pg driver automatically (see agent-backend/db/adapter.js). To fall
       # back to the bundled SQLite instead, comment DATABASE_URL out (or set
-      # ORBIT_DB_DRIVER=sqlite) — ORBIT_DB_PATH then persists it on the volume.
-      DATABASE_URL: "postgres://orbit:orbit@postgres:5432/orbit"
-      ORBIT_DB_PATH: "/data/orbit.db"
-      ORBIT_HOME: "/data/orbit-home"
+      # DB_DRIVER=sqlite) — DB_PATH then persists it on the volume.
+      DATABASE_URL: "postgres://tether:tether@postgres:5432/tether"
+      DB_PATH: "/data/tether.db"
+      APP_HOME: "/data/tether-home"
       # pi (@earendil-works/pi-coding-agent) is baked into the image and on PATH,
-      # so no PI_CLI_PATH / host mount is needed. PORT/HOST are forced per-process
+      # so no HARNESS_PI_PATH / host mount is needed. PORT/HOST are forced per-process
       # by the entrypoint (backend :6800, dashboard :6801) — don't set them here.
     volumes:
-      - orbit-data:/data
+      - tether-data:/data
     depends_on:
       lightpanda:
         condition: service_started
@@ -59,29 +59,29 @@ services:
     image: lightpanda/browser:nightly
     restart: unless-stopped
     expose:
-      - "9222"                 # internal only; orbit connects via LIGHTPANDA_WS
+      - "9222"                 # internal only; tether connects via LIGHTPANDA_WS
 
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      # Match the credentials in the orbit service's DATABASE_URL above. Override
+      # Match the credentials in the tether service's DATABASE_URL above. Override
       # all three via .env for a real deployment (and change the password!).
-      POSTGRES_USER: "${POSTGRES_USER:-orbit}"
-      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-orbit}"
-      POSTGRES_DB: "${POSTGRES_DB:-orbit}"
+      POSTGRES_USER: "${POSTGRES_USER:-tether}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-tether}"
+      POSTGRES_DB: "${POSTGRES_DB:-tether}"
     volumes:
-      - orbit-pgdata:/var/lib/postgresql/data
-    # Gates the orbit service's `depends_on: condition: service_healthy` so the
+      - tether-pgdata:/var/lib/postgresql/data
+    # Gates the tether service's `depends_on: condition: service_healthy` so the
     # app never boots before the DB is accepting connections.
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-orbit} -d ${POSTGRES_DB:-orbit}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tether} -d ${POSTGRES_DB:-tether}"]
       interval: 5s
       timeout: 5s
       retries: 10
     expose:
-      - "5432"                 # internal only; orbit connects via DATABASE_URL
+      - "5432"                 # internal only; tether connects via DATABASE_URL
 
 volumes:
-  orbit-data:
-  orbit-pgdata:
+  tether-data:
+  tether-pgdata:

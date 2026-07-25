@@ -1,6 +1,6 @@
 // mcp-server-transcript/index.js
 //
-// The `orbit-transcript` MCP server: a first-class tool for pulling the spoken
+// The `tether-transcript` MCP server: a first-class tool for pulling the spoken
 // TRANSCRIPT / captions of a video. WHY IT EXISTS: the Lightpanda browser can
 // load a YouTube page but cannot play the video or open the "Show transcript"
 // panel — it only sees the title. Agents were papering over that by fabricating
@@ -110,7 +110,7 @@ async function fetchYouTubeTranscript(url, preferLang) {
 }
 
 const server = new Server(
-  { name: "orbit-transcript", version: "1.0.0" },
+  { name: "tether-transcript", version: "1.0.0" },
   { capabilities: { tools: {} } },
 );
 
@@ -152,10 +152,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 async function run() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error("Orbit Transcript MCP server running on stdio");
+  console.error("Tether Transcript MCP server running on stdio");
 }
 
 run().catch((error) => {
-  console.error("Fatal error in Orbit Transcript MCP server:", error);
+  console.error("Fatal error in Tether Transcript MCP server:", error);
   process.exit(1);
 });

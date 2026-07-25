@@ -1,20 +1,29 @@
 // agent-backend/services/tts.js
-// TTS summary generation via LiteLLM
+// TTS summary generation via the configured LLM.
 
 async function generateIntelligentSpeech(query, responseText, getConfig) {
   try {
     const config = getConfig();
-    // Resolved config key first (folds in LLM_*/LITELLM_*/OPENAI_* env — F1).
-    const apiKey = (config && config.litellm && config.litellm.apiKey) || process.env.LLM_API_KEY || process.env.LITELLM_KEY;
+    // getConfig() resolves env → config once (config.getResolvedConfig); this
+    // used to re-implement the env fallback chain here, and drifted.
+    const llm = (config && config.llm) || {};
+    const apiKey = llm.apiKey;
     if (!apiKey) {
       console.error("[Intelligent TTS] No LLM API key configured; skipping summary generation.");
       return null;
     }
-    const baseURL = (config && config.litellm && config.litellm.baseURL) || "http://127.0.0.1:5000/v1";
-    const model = (config && config.litellm && config.litellm.selectedNormalModel) || "litellm/deepseek-v4-flash";
+    // No hardcoded baseURL or model. Both were provider guesses — a dead
+    // 127.0.0.1:5000 address and "litellm/deepseek-v4-flash", which 401s on any
+    // gateway that doesn't serve it. Missing config now says so.
+    const baseURL = llm.baseUrl;
+    const model = llm.fastModel;
+    if (!baseURL || !model) {
+      console.error("[Intelligent TTS] No LLM endpoint/model configured; skipping summary generation.");
+      return null;
+    }
 
-    console.log(`[Intelligent TTS] Requesting summary from LiteLLM: ${model}...`);
-    
+    console.log(`[Intelligent TTS] Requesting summary from ${model}...`);
+
     const response = await fetch(`${baseURL}/chat/completions`, {
       method: "POST",
       headers: {
@@ -39,7 +48,7 @@ async function generateIntelligentSpeech(query, responseText, getConfig) {
     });
 
     if (!response.ok) {
-      throw new Error(`LiteLLM returned status ${response.status}`);
+      throw new Error(`LLM upstream returned status ${response.status}`);
     }
 
     const data = await response.json();

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { useOrbitDispatch, useOrbitState, actions } from '@/providers/OrbitProvider';
+import { useTetherDispatch, useTetherState, actions } from '@/providers/TetherProvider';
 
 // The complete flat UI-metrics shape, mirroring the reducer's initial
 // state.metrics AND agent-backend/metrics.js toFrontendUpdate(). Every field
@@ -81,12 +81,12 @@ function normalizeMetricsForUI(raw) {
  * useSessions - Session CRUD, persistence, search, grouping.
  */
 export function useSessions() {
-  const dispatch = useOrbitDispatch();
+  const dispatch = useTetherDispatch();
   // `liveMetrics` is the reducer's real-time metrics for the OPEN session; the
   // per-session `metrics` in the `sessions` list is only a zero seed. Snapshot
   // live values into the list when leaving a session so switching back shows the
   // right numbers without a round-trip to the backend.
-  const { currentSessionId, sessionMode, metrics: liveMetrics, messages: liveMessages, executionPlan: livePlan, logs: liveLogs, planSteps: livePlanSteps, plans: livePlans, activePlanId: liveActivePlanId } = useOrbitState();
+  const { currentSessionId, sessionMode, metrics: liveMetrics, messages: liveMessages, executionPlan: livePlan, logs: liveLogs, planSteps: livePlanSteps, plans: livePlans, activePlanId: liveActivePlanId } = useTetherState();
 
   const [sessions, setSessions] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -119,7 +119,7 @@ export function useSessions() {
     } catch {
       // Fallback to localStorage
       try {
-        const stored = localStorage.getItem('orbit_sessions');
+        const stored = localStorage.getItem('tether:sessions');
         if (stored) loaded = JSON.parse(stored);
       } catch {}
     }
@@ -188,11 +188,11 @@ export function useSessions() {
         body: JSON.stringify(session),
       }).catch(() => {});
       try {
-        const raw = localStorage.getItem('orbit_sessions');
+        const raw = localStorage.getItem('tether:sessions');
         if (raw) {
           const list = JSON.parse(raw);
           const next = list.map(s => s.id === session.id ? session : s);
-          localStorage.setItem('orbit_sessions', JSON.stringify(next));
+          localStorage.setItem('tether:sessions', JSON.stringify(next));
         }
       } catch {}
     };
@@ -419,8 +419,8 @@ export function useSessions() {
 
   useEffect(() => {
     const handleRefresh = () => loadSessions();
-    window.addEventListener('orbit:refresh_sessions', handleRefresh);
-    return () => window.removeEventListener('orbit:refresh_sessions', handleRefresh);
+    window.addEventListener('tether:refresh-sessions', handleRefresh);
+    return () => window.removeEventListener('tether:refresh-sessions', handleRefresh);
   }, [loadSessions]);
 
   return {

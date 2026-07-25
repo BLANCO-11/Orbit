@@ -15,7 +15,7 @@
 ### Option A — local (dev)
 
 ```bash
-git clone <repo> && cd Orbit
+git clone <repo> && cd Tether
 ./setup.sh                 # installs deps for backend + dashboard
 cp .env.example .env       # then edit: LLM endpoint, key, ports
 npm run dev                # backend :6800 + dashboard :6801
@@ -25,14 +25,14 @@ npm run dev                # backend :6800 + dashboard :6801
 ### Option B — Docker Compose (prod-style, Postgres)
 
 ```bash
-docker compose up -d --build          # orbit + postgres + lightpanda
+docker compose up -d --build          # tether + postgres + lightpanda
 # open http://localhost:6801
 ```
 
 The Compose stack runs the backend on **:6800** and the dashboard on **:6801**,
-uses Postgres, and persists data under the `orbit-data` volume
-(`ORBIT_HOME=/data/orbit-home`). Source is **baked into the `orbit:latest`
-image**, so rebuild (`docker compose up -d --build orbit`) to pick up code
+uses Postgres, and persists data under the `tether-data` volume
+(`APP_HOME=/data/tether-home`). Source is **baked into the `tether:latest`
+image**, so rebuild (`docker compose up -d --build tether`) to pick up code
 changes.
 
 > The dev override (`docker-compose.dev.yml`) bind-mounts source for HMR — see
@@ -46,7 +46,7 @@ changes.
 | **6801** | Dashboard UI. Proxies `/api` to the backend, so REST also works here. |
 
 The backend binds to `127.0.0.1` only. To expose it beyond loopback, set
-`ORBIT_SUPERADMIN_KEY` first (see [Authentication](./integration/authentication.md)).
+`AUTH_SUPERADMIN_KEY` first (see [Authentication](./integration/authentication.md)).
 
 ## Your first task (UI)
 
@@ -62,7 +62,7 @@ See the [User guide](./user-guide.md) for the full console tour.
 ## Your first task (headless API)
 
 ```bash
-# In dev-mode (no ORBIT_SUPERADMIN_KEY set) every caller is superadmin.
+# In dev-mode (no AUTH_SUPERADMIN_KEY set) every caller is superadmin.
 BASE=http://localhost:6800
 
 # Submit a run and wait (long-poll) for the contract.

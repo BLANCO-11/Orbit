@@ -29,8 +29,12 @@ function createModelsRouter(getConfig) {
   router.get("/", async (req, res, next) => {
     try {
       const config = getConfig();
-      const baseURL = config?.litellm?.baseURL || process.env.LITELLM_BASE_URL || "";
-      const apiKey = config?.litellm?.apiKey || process.env.LITELLM_KEY || process.env.OPENAI_API_KEY || "";
+      // getConfig() already resolves env → config (config.getResolvedConfig),
+      // so there is no second fallback chain here. The old one read only
+      // LITELLM_*/OPENAI_*, which is why setting LLM_BASE_URL alone listed no
+      // models.
+      const baseURL = config?.llm?.baseUrl || "";
+      const apiKey = config?.llm?.apiKey || "";
 
       if (!baseURL) {
         return res.json([]);

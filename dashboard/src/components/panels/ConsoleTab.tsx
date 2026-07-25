@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { TerminalSquare, CornerDownLeft } from 'lucide-react';
-import { useOrbitState } from '@/providers/OrbitProvider';
+import { useTetherState } from '@/providers/TetherProvider';
 
 interface Entry { command: string; stdout: string; stderr: string; code: number; timedOut: boolean }
 
@@ -13,7 +13,7 @@ interface Entry { command: string; stdout: string; stderr: string; code: number;
  * (20s cap). This is the operator's shell, not the agent's — not policy-gated.
  */
 export default function ConsoleTab({ harnessId }: { harnessId?: string }) {
-  const { currentSessionId } = useOrbitState();
+  const { currentSessionId } = useTetherState();
   const [cmd, setCmd] = useState('');
   const [history, setHistory] = useState<Entry[]>([]);
   const [busy, setBusy] = useState(false);
@@ -24,7 +24,7 @@ export default function ConsoleTab({ harnessId }: { harnessId?: string }) {
   const histIdx = useRef(-1);
 
   // Console runs in the CURRENT session's workspace on the SELECTED agent's
-  // runtime — the Orbit host for a local agent, the remote machine for a remote
+  // runtime — the Tether host for a local agent, the remote machine for a remote
   // one (backend routes over the connector). Re-fetch cwd on session/agent change.
   const remoteQ = harnessId && harnessId !== 'local' ? `harnessId=${encodeURIComponent(harnessId)}` : '';
   const scopeQ = [currentSessionId ? `session=${encodeURIComponent(currentSessionId)}` : '', remoteQ].filter(Boolean).join('&');

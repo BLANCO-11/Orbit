@@ -1,13 +1,13 @@
 'use client';
 
 import { useRef, useCallback, useEffect, useState } from 'react';
-import { useOrbitDispatch, actions } from '@/providers/OrbitProvider';
+import { useTetherDispatch, actions } from '@/providers/TetherProvider';
 
 /**
  * useSTT — Browser Speech Recognition wrapper.
  */
 export function useSTT() {
-  const dispatch = useOrbitDispatch();
+  const dispatch = useTetherDispatch();
   const [isListening, setIsListening] = useState(false);
   const [isSupported, setIsSupported] = useState(false);
   const [error, setError] = useState(null);

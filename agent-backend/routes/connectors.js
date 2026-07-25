@@ -3,7 +3,7 @@
 // registers is isolated to the tenant of its API key: only that tenant's
 // sessions get it composed into their per-session .pi/mcp.json at spawn.
 //
-// Orbit's OWN servers (fleet/notify/search/transcript/lightpanda) and any
+// Tether's OWN servers (fleet/notify/search/transcript/lightpanda) and any
 // OAuth-wired provider connectors live in the global .pi/mcp.json and are SHARED
 // across tenants — surfaced here read-only (shared:true), managed elsewhere.
 //
@@ -25,7 +25,7 @@ function createConnectorsRouter({ db, registry }) {
   const tenantOf = (req) => (req.auth && req.auth.tenantId) || null;
 
   router.get("/", async (req, res) => {
-    // Shared Orbit/OAuth servers from the global registry (read-only here).
+    // Shared Tether/OAuth servers from the global registry (read-only here).
     const shared = (registry.list() || []).map((c) => ({ ...c, shared: true, scope: "shared" }));
     // This tenant's own connectors (DB-backed). Status/tools aren't probed here;
     // they come alive in the session sandbox.

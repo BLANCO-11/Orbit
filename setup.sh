@@ -10,7 +10,7 @@ RED='\033[0;31m'
 NC='\033[0m' # No Color
 
 printf "${GREEN}=========================================${NC}\n"
-printf "${GREEN}   Orbit Platform Setup Script           ${NC}\n"
+printf "${GREEN}   Tether Platform Setup Script           ${NC}\n"
 printf "${GREEN}=========================================${NC}\n"
 echo ""
 
@@ -88,7 +88,7 @@ printf "▸ Configuring environment variables…\n"
 if [ ! -f .env ]; then
     cp .env.example .env
     printf "${GREEN}✓ Created .env file from .env.example.${NC}\n"
-    printf "Please edit .env to configure your LLM settings (LLM_BASE_URL, LLM_API_KEY, LLM_MODEL).\n"
+    printf "Please edit .env to configure your LLM settings (LLM_BASE_URL, LLM_API_KEY, LLM_FAST_MODEL).\n"
 else
     printf "  - .env file already exists.\n"
 fi
@@ -115,12 +115,12 @@ if command -v pi > /dev/null 2>&1; then
     echo ""
 else
     printf "${YELLOW}⚠ pi CLI not found on PATH — the local agent harness will not run without it.${NC}\n"
-    printf "  Orbit spawns the ${YELLOW}pi${NC} CLI to run local agent sessions. Install it, then re-run\n"
+    printf "  Tether spawns the ${YELLOW}pi${NC} CLI to run local agent sessions. Install it, then re-run\n"
     printf "  this script (or the two commands below) so the required extensions are registered:\n"
     printf "      ${YELLOW}pi install npm:pi-mcp-extension${NC}\n"
     printf "      ${YELLOW}pi install npm:pi-provider-litellm${NC}\n"
-    printf "  See the pi install docs, or set ${YELLOW}PI_CLI_PATH${NC}/${YELLOW}PI_NODE_PATH${NC} if pi lives off PATH.\n"
-    printf "  (You can still run Orbit as a headless backend or drive a remote/paired harness.)\n"
+    printf "  See the pi install docs, or set ${YELLOW}HARNESS_PI_PATH${NC}/${YELLOW}HARNESS_NODE_PATH${NC} if pi lives off PATH.\n"
+    printf "  (You can still run Tether as a headless backend or drive a remote/paired harness.)\n"
     echo ""
 fi
 
@@ -129,7 +129,7 @@ printf "${GREEN}   Setup Completed Successfully!         ${NC}\n"
 printf "${GREEN}=========================================${NC}\n"
 echo ""
 printf "To get started:\n"
-printf "  1. Edit ${YELLOW}.env${NC} and fill in your LLM configuration (LLM_BASE_URL / LLM_API_KEY / LLM_MODEL).\n"
+printf "  1. Edit ${YELLOW}.env${NC} and fill in your LLM configuration (LLM_BASE_URL / LLM_API_KEY / LLM_FAST_MODEL).\n"
 printf "  2. Start the development servers by running:\n"
 printf "     ${YELLOW}npm run dev${NC}\n"
 printf "  3. Open ${YELLOW}http://localhost:6801${NC} in your browser.\n"

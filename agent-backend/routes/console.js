@@ -1,6 +1,6 @@
 // agent-backend/routes/console.js
 // A minimal operator console: run a shell command in the CURRENT session's own
-// workspace directory (~/.orbit/sessions/<id>/workspace) — the same cwd the
+// workspace directory (~/.tether/sessions/<id>/workspace) — the same cwd the
 // agent's shell uses — and return its output. This is the OPERATOR's shell, not
 // the agent's — it is deliberately NOT gated by the agent security policy (the
 // operator outranks the agent). It is still authed and bound to loopback like
@@ -26,7 +26,7 @@ const TIMEOUT_MS = 20000;
 const MAX_OUTPUT = 200 * 1024; // 200KB cap per stream
 
 // Resolve the cwd for a request: the session workspace when a session id is
-// given (created if missing), else the Orbit project root (legacy behavior for
+// given (created if missing), else the Tether project root (legacy behavior for
 // operator sessions with no active session).
 function cwdFor(session) {
   if (session) {
@@ -57,9 +57,9 @@ function blockedReason(command) {
 }
 
 // When the session's selected agent is a connected REMOTE harness, the operator
-// console targets the AGENT'S RUNTIME (that machine), not the Orbit host. Route
+// console targets the AGENT'S RUNTIME (that machine), not the Tether host. Route
 // exec/cwd over the connector socket. Id from ?harnessId else the session's
-// persisted composer.harnessId; null → run locally on the Orbit host.
+// persisted composer.harnessId; null → run locally on the Tether host.
 async function remoteHarnessFor(reqLike, harnessRegistry) {
   if (!harnessRegistry || !harnessRegistry.get) return null;
   let hid = reqLike.harnessId;

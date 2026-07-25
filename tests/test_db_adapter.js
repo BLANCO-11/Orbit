@@ -23,20 +23,20 @@ function testPlaceholderTranslation() {
 
 function testResolveDriver() {
   console.log("resolveDriver env logic...");
-  const save = { d: process.env.ORBIT_DB_DRIVER, u: process.env.DATABASE_URL };
+  const save = { d: process.env.DB_DRIVER, u: process.env.DATABASE_URL };
   try {
-    delete process.env.ORBIT_DB_DRIVER; delete process.env.DATABASE_URL;
+    delete process.env.DB_DRIVER; delete process.env.DATABASE_URL;
     assert.strictEqual(resolveDriver(), "sqlite", "no env → sqlite");
     process.env.DATABASE_URL = "postgres://x";
     assert.strictEqual(resolveDriver(), "postgres", "DATABASE_URL → postgres");
-    process.env.ORBIT_DB_DRIVER = "sqlite";
+    process.env.DB_DRIVER = "sqlite";
     assert.strictEqual(resolveDriver(), "sqlite", "explicit sqlite wins over DATABASE_URL");
-    process.env.ORBIT_DB_DRIVER = "pg";
+    process.env.DB_DRIVER = "pg";
     assert.strictEqual(resolveDriver(), "postgres", "'pg' alias → postgres");
-    process.env.ORBIT_DB_DRIVER = "bogus";
+    process.env.DB_DRIVER = "bogus";
     assert.throws(() => resolveDriver(), /unknown driver/, "bad driver throws");
   } finally {
-    if (save.d === undefined) delete process.env.ORBIT_DB_DRIVER; else process.env.ORBIT_DB_DRIVER = save.d;
+    if (save.d === undefined) delete process.env.DB_DRIVER; else process.env.DB_DRIVER = save.d;
     if (save.u === undefined) delete process.env.DATABASE_URL; else process.env.DATABASE_URL = save.u;
   }
   console.log("  ok");
@@ -44,11 +44,11 @@ function testResolveDriver() {
 
 async function testSqliteAdapterLive() {
   console.log("sqlite adapter (live, temp file)...");
-  const tmp = path.join(os.tmpdir(), `orbit-adapter-test-${process.pid}.db`);
+  const tmp = path.join(os.tmpdir(), `tether-adapter-test-${process.pid}.db`);
   for (const s of ["", "-wal", "-shm"]) { try { fs.unlinkSync(tmp + s); } catch {} }
-  const prevDriver = process.env.ORBIT_DB_DRIVER, prevPath = process.env.ORBIT_DB_PATH;
-  process.env.ORBIT_DB_DRIVER = "sqlite";
-  process.env.ORBIT_DB_PATH = tmp;
+  const prevDriver = process.env.DB_DRIVER, prevPath = process.env.DB_PATH;
+  process.env.DB_DRIVER = "sqlite";
+  process.env.DB_PATH = tmp;
   // Require fresh (module has no cached singleton — createAdapter builds anew).
   const { createAdapter } = require("../agent-backend/db/adapter");
   const q = createAdapter();
@@ -79,8 +79,8 @@ async function testSqliteAdapterLive() {
     await q.close();
   } finally {
     for (const s of ["", "-wal", "-shm"]) { try { fs.unlinkSync(tmp + s); } catch {} }
-    if (prevDriver === undefined) delete process.env.ORBIT_DB_DRIVER; else process.env.ORBIT_DB_DRIVER = prevDriver;
-    if (prevPath === undefined) delete process.env.ORBIT_DB_PATH; else process.env.ORBIT_DB_PATH = prevPath;
+    if (prevDriver === undefined) delete process.env.DB_DRIVER; else process.env.DB_DRIVER = prevDriver;
+    if (prevPath === undefined) delete process.env.DB_PATH; else process.env.DB_PATH = prevPath;
   }
   console.log("  ok");
 }

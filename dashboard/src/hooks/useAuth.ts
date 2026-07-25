@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 
 // The caller's identity, from GET /api/auth/whoami. In a local/household deploy
-// (no ORBIT_SUPERADMIN_KEY) the backend runs in dev-mode and returns superadmin,
+// (no AUTH_SUPERADMIN_KEY) the backend runs in dev-mode and returns superadmin,
 // so the whole RBAC layer stays invisible unless an operator opts into it.
 export interface AuthIdentity {
   role: 'superadmin' | 'admin' | 'member' | 'viewer';

@@ -15,8 +15,8 @@ contract refusing a false success — not a plumbing error. Common causes:
 
 ### A run ends `timeout`
 It hit a watchdog. Either the task genuinely hung (no harness events for
-`ORBIT_RUN_IDLE_MS`, default 180s) or exceeded the absolute backstop
-(`ORBIT_RUN_MAX_MS`, default ~20 min). Raise them per-run via the `timeouts`
+`RUN_IDLE_MS`, default 180s) or exceeded the absolute backstop
+(`RUN_MAX_MS`, default ~20 min). Raise them per-run via the `timeouts`
 field, or globally via env. A script that `sleep`s forever will always time out —
 by design.
 
@@ -29,7 +29,7 @@ The `error` field has a hint; full detail is in the session logs
 - Confirm the backend can reach your LLM endpoint (`GET /api/models`).
 - Check the server log for spawn errors.
 - The watchdogs guarantee a terminal status eventually; if it's stuck past
-  `ORBIT_RUN_MAX_MS`, check that the process isn't blocked on a slow image pull
+  `RUN_MAX_MS`, check that the process isn't blocked on a slow image pull
   (see below).
 
 ### Closing the browser tab killed my running task
@@ -55,17 +55,17 @@ container→host** automatically (so it still returns a terminal contract), but 
 real isolation:
 
 - On a bare-metal host: ensure `docker info` works for the backend's user.
-- **Inside a Dockerized Orbit** (`orbit-orbit-1`): the container has no Docker by
-  default, so runs execute in the orbit container's own filesystem. For true
-  per-run container isolation, mount the host socket into the orbit service:
+- **Inside a Dockerized Tether** (`tether-tether-1`): the container has no Docker by
+  default, so runs execute in the tether container's own filesystem. For true
+  per-run container isolation, mount the host socket into the tether service:
   `-v /var/run/docker.sock:/var/run/docker.sock` (docker-out-of-docker).
 
 ### Air-gapped host
-Set `ORBIT_SANDBOX_PULL=never` and pre-load the image (`docker load`), or point
-`ORBIT_SANDBOX_IMAGE` at an internal registry tag you've mirrored.
+Set `SANDBOX_PULL=never` and pre-load the image (`docker load`), or point
+`SANDBOX_IMAGE` at an internal registry tag you've mirrored.
 
 ### Generated python/node scripts fail to run in the sandbox
-The default image ships both. If you overrode `ORBIT_SANDBOX_IMAGE` with a
+The default image ships both. If you overrode `SANDBOX_IMAGE` with a
 node-only or python-only image, scripts in the other language will fail — use an
 image with both, or a base with the language you need.
 
@@ -73,7 +73,7 @@ image with both, or a base with the language you need.
 
 ### `401 Unauthorized`
 - Send the key as `x-api-key: <key>` or `Authorization: Bearer <key>`.
-- If `ORBIT_SUPERADMIN_KEY` is set, dev-mode is off — you need a valid key.
+- If `AUTH_SUPERADMIN_KEY` is set, dev-mode is off — you need a valid key.
 - Verify with `GET /api/auth/whoami`.
 
 ### `403 Forbidden` on secrets/connectors writes
@@ -88,7 +88,8 @@ by tenant A returns 404 to tenant B — that's the isolation working.
 
 ### The script can't read my secret
 - The env-var **name** must match exactly (`os.environ["NAME"]`).
-- Reserved names (`ORBIT_*`, `OPENAI_*`, `PATH`, `HOME`, `NODE_*`, …) are
+- Reserved names (every variable declared in `agent-backend/env-config.js`, plus
+  `PATH`, `HOME`, `NODE_*`, …) are
   **not** injected — rename the secret.
 - Confirm it exists: `GET /api/secrets` (shows names + `hasValue`).
 
@@ -103,10 +104,10 @@ an HTTP (`url`) connector, or an image that contains the command.
 
 ### `[Crypto] decrypt failed: Unsupported state or unable to authenticate data`
 The encryption key differs from the one that encrypted the value — an AES-GCM
-auth-tag mismatch. Almost always: `ORBIT_SECRET` is unset **and** the generated key
+auth-tag mismatch. Almost always: `APP_SECRET` is unset **and** the generated key
 file wasn't persisted, so a container rebuild/recreate minted a new key. Fix going
-forward by pinning a stable `ORBIT_SECRET` (or keeping `ORBIT_SECRET_FILE` on a
-volume — it defaults to `$ORBIT_HOME/.orbit-secret`). Values already encrypted under
+forward by pinning a stable `APP_SECRET` (or keeping `APP_SECRET_FILE` on a
+volume — it defaults to `$APP_HOME/.tether-secret`). Values already encrypted under
 the lost key are unrecoverable — **re-save** them (re-enter the secret / re-add the
 datasource) so they re-encrypt under the current key.
 
@@ -114,21 +115,21 @@ datasource) so they re-encrypt under the current key.
 
 - Backend REST + WS: **:6800**. Dashboard: **:6801** (proxies `/api`).
 - The backend binds `127.0.0.1` only. To expose it, set `HOST=0.0.0.0`, set
-  `ORBIT_SUPERADMIN_KEY`, and firewall the port to your proxy. See the reverse-
+  `AUTH_SUPERADMIN_KEY`, and firewall the port to your proxy. See the reverse-
   proxy recipes in the [README](../README.md#reverse-proxy-tls--websocket-harness).
 
 ## Database
 
-- Driver resolution: `ORBIT_DB_DRIVER` → else `DATABASE_URL` → postgres → else
+- Driver resolution: `DB_DRIVER` → else `DATABASE_URL` → postgres → else
   sqlite. Check the boot log line `[DB] Using <driver> adapter.`
 - Schema migrations run automatically on boot (`[DB] Migrated … to version N`).
-- Encrypted data (secrets, tokens) becomes unreadable if `ORBIT_SECRET` changes
-  or the generated key file is lost — pin `ORBIT_SECRET` for portability.
+- Encrypted data (secrets, tokens) becomes unreadable if `APP_SECRET` changes
+  or the generated key file is lost — pin `APP_SECRET` for portability.
 
 ## Still stuck?
 
-- Server log: `/tmp/orbit-backend.log` (via `restart-orbit.sh`) or
-  `docker logs orbit-orbit-1` (Compose).
+- Server log: `/tmp/tether-backend.log` (via `restart-tether.sh`) or
+  `docker logs tether-tether-1` (Compose).
 - Run the offline test suite to confirm the core is healthy:
   `npm test`.
 - Endpoint reference: [`../API.md`](../API.md).

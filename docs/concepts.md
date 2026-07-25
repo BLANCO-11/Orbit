@@ -1,6 +1,6 @@
 # Concepts
 
-The mental model behind Orbit. Skim this once; the rest of the docs assume it.
+The mental model behind Tether. Skim this once; the rest of the docs assume it.
 
 ## Session
 
@@ -12,11 +12,11 @@ explicitly via the UI / `POST /api/sessions`.
 
 ### Workspace layout
 
-Each session gets an isolated tree under `ORBIT_HOME` (default `~/.orbit`, or
-`/data/orbit-home` in Docker):
+Each session gets an isolated tree under `APP_HOME` (default `~/.tether`, or
+`/data/tether-home` in Docker):
 
 ```
-<ORBIT_HOME>/sessions/<sessionId>/
+<APP_HOME>/sessions/<sessionId>/
   workspace/     ← agent cwd; all task work + scripts land here
   artifacts/     ← deliverables to keep (reports, scripts) — surfaced in the contract
   tmp/           ← scratch
@@ -69,8 +69,8 @@ sees all of the tenant's; an API-key or device caller (which has no per-user
 identity) is scoped to the whole tenant. This holds over both REST and the
 WebSocket stream.
 
-**Dev-mode:** if no `ORBIT_SUPERADMIN_KEY` is configured, every caller is treated
-as superadmin (zero-config local use). Set the key before exposing Orbit.
+**Dev-mode:** if no `AUTH_SUPERADMIN_KEY` is configured, every caller is treated
+as superadmin (zero-config local use). Set the key before exposing Tether.
 
 See [Authentication](./integration/authentication.md).
 
@@ -95,8 +95,8 @@ Where a run executes, chosen per-run or by deployment default:
 - **remote** — a paired remote harness.
 
 Runs are additionally bounded by an **idle watchdog** and an **absolute
-backstop** so a hung task always terminates (`ORBIT_RUN_IDLE_MS`,
-`ORBIT_RUN_MAX_MS`).
+backstop** so a hung task always terminates (`RUN_IDLE_MS`,
+`RUN_MAX_MS`).
 
 ## Policy & modes
 
@@ -110,7 +110,7 @@ Every tool call is evaluated against a **capability × mode** matrix:
 | `yolo` | Broad autonomy (shell, network, write) within the hard blocklist. |
 
 On top of the matrix sits a **consent-proof hard blocklist** (your `~/.ssh`,
-Orbit's own source, etc.) that no mode can cross, and shell-command tokenization
+Tether's own source, etc.) that no mode can cross, and shell-command tokenization
 so a blocklisted path can't sneak through a redirect or subshell. The sandbox is
 the containment layer beneath the policy.
 
@@ -118,7 +118,7 @@ the containment layer beneath the policy.
 
 **Connectors** are MCP tool servers the agent can call. Two kinds:
 
-- **Shared** — Orbit's own servers (fleet, notify, search, transcript,
+- **Shared** — Tether's own servers (fleet, notify, search, transcript,
   lightpanda, and the baked-in `ask`/`build` tools) and OAuth-wired providers;
   available to all tenants.
 - **Tenant** — servers a tenant registers via `POST /api/connectors`; isolated to
@@ -150,7 +150,7 @@ synced from a tenant-provided URL/repo. See
 
 ## Built-in tools: ask & build
 
-Two capabilities are baked into every session as always-on Orbit MCP servers:
+Two capabilities are baked into every session as always-on Tether MCP servers:
 
 - **`ask_questions`** — the agent can ask the user for clarification (free-text
   or multiple-choice). In the console it opens a live dialog; in a headless run
@@ -158,7 +158,7 @@ Two capabilities are baked into every session as always-on Orbit MCP servers:
 - **`start_build` / `end_build`** — lifecycle notifiers the agent calls once code
   is written, to hand it off to the **external** build+test facility. `end_build`
   submits the artifacts and merges the returned verdict into the contract's
-  `build` block (inert until `ORBIT_TESTER_URL` is configured).
+  `build` block (inert until `RUN_TESTER_URL` is configured).
 
 ## Result contract
 

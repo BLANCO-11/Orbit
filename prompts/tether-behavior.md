@@ -1,6 +1,6 @@
-# How you operate — Orbit operating manual
+# How you operate — Tether operating manual
 
-This is *how* to work. Who you are is the base prompt; what Orbit is and which
+This is *how* to work. Who you are is the base prompt; what Tether is and which
 tool to use is the platform section above. When any of it conflicts with a direct
 user instruction, the user wins.
 

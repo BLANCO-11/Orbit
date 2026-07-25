@@ -90,7 +90,7 @@ export default function ServicesSection() {
             ) : p.configured ? (
               <button onClick={() => connectOauth(p.id)} className="shrink-0 rounded-lg bg-primary px-3 py-1 text-[12px] font-semibold text-primary-foreground hover:opacity-90">Connect</button>
             ) : (
-              <a href={p.setupUrl || '#'} target="_blank" rel="noreferrer" title="Register an OAuth app, then set its client id/secret in Orbit's env" className="shrink-0 inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1 text-[11.5px] text-muted-foreground hover:bg-muted">
+              <a href={p.setupUrl || '#'} target="_blank" rel="noreferrer" title="Register an OAuth app, then set its client id/secret in Tether's env" className="shrink-0 inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1 text-[11.5px] text-muted-foreground hover:bg-muted">
                 Set up <ExternalLink size={11} />
               </a>
             )}
@@ -98,7 +98,7 @@ export default function ServicesSection() {
         ))}
       </div>
       <p className="mt-2 text-[11px] leading-relaxed text-faint">
-        OAuth providers need a one-time app registration (their client id/secret in Orbit&apos;s env) unless the server supports dynamic registration; token providers just take a pasted token. Tokens are encrypted at rest. Connecting lets the agent <span className="font-semibold">use</span> the service — add a channel to also <span className="font-semibold">trigger</span> on it.
+        OAuth providers need a one-time app registration (their client id/secret in Tether&apos;s env) unless the server supports dynamic registration; token providers just take a pasted token. Tokens are encrypted at rest. Connecting lets the agent <span className="font-semibold">use</span> the service — add a channel to also <span className="font-semibold">trigger</span> on it.
       </p>
     </div>
   );

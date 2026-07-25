@@ -9,7 +9,7 @@ BASE=http://localhost:6800      # backend API port
 KEY=orb_live_…                  # a tenant member key (or the superadmin key)
 ```
 
-> In dev-mode (no `ORBIT_SUPERADMIN_KEY`), any value for `KEY` works and you
+> In dev-mode (no `AUTH_SUPERADMIN_KEY`), any value for `KEY` works and you
 > operate in the shared local tenant.
 
 ## curl
@@ -165,5 +165,5 @@ A/B isolation, hang→timeout) ships in the repo:
   stdio MCP datasource exposing `get_watchlist()`.
 
 ```bash
-ORBIT_URL=http://localhost:6800 ORBIT_SUPERADMIN_KEY=… node tests/e2e/run-e2e.js weather
+APP_URL=http://localhost:6800 AUTH_SUPERADMIN_KEY=… node tests/e2e/run-e2e.js weather
 ```

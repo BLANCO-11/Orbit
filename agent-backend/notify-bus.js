@@ -34,7 +34,7 @@ function createNotifyBus({ log = console } = {}) {
    */
   function notify(event = {}) {
     const {
-      title = "Orbit",
+      title = "Tether",
       body = "",
       severity = "info",
       sinks: targets = ["web"],

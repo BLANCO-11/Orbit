@@ -1,6 +1,6 @@
 // agent-backend/harnesses/remote/index.js
 // RemoteHarness — a HarnessInterface implementation that drives a harness
-// running inside a connected `orbit-adapter` (see ws/harness.js) instead of a
+// running inside a connected `tether-adapter` (see ws/harness.js) instead of a
 // local child process. connect/sendPrompt/cancel/disconnect become messages to
 // the adapter; the adapter relays the standard harness events back over the
 // same socket, and we re-emit them on our own EventEmitter so the rest of the
@@ -14,7 +14,7 @@ class RemoteHarness extends HarnessInterface {
     // The registry entry ({ ws, sessions, _eventHandlers }) for the adapter.
     this.registryEntry = options.registryEntry;
     // db handle — used to mint the scoped, budget-capped LLM token this device
-    // presents to Orbit's gateway (the zero-config default brain). Optional: the
+    // presents to Tether's gateway (the zero-config default brain). Optional: the
     // listTools probe constructs a RemoteHarness without it and never spawns.
     this.db = options.db || null;
   }
@@ -71,9 +71,9 @@ class RemoteHarness extends HarnessInterface {
     });
     entry.sessions.add(this.sessionId);
 
-    // Build the FULL portable Orbit system prompt HERE (on the backend, which
+    // Build the FULL portable Tether system prompt HERE (on the backend, which
     // has the prompt library, policy config, and capabilities manifest) and send
-    // it down, so a remote agent behaves as a real Orbit agent — not a generic
+    // it down, so a remote agent behaves as a real Tether agent — not a generic
     // coder. The ONE machine-specific piece, the per-session workspace block, is
     // omitted: the remote appends its own (only it knows its paths). Uses the
     // SAME composer as local pi, so the two prompts match. No secrets ride along
@@ -100,10 +100,10 @@ class RemoteHarness extends HarnessInterface {
       systemPrompt,
       skills: this.skills,
       model: this.model,
-      // The brain. By default the remote runs on Orbit's OWN LLM gateway (like
+      // The brain. By default the remote runs on Tether's OWN LLM gateway (like
       // the container pi) via a scoped per-device token — zero config on the box.
       // A per-device bring-your-own endpoint overrides it. `null` → the connector
-      // falls back to whatever OPENAI_*/LLM_* env it has locally.
+      // falls back to whatever LLM_* env it has locally.
       llm: await this._resolveLlm(),
       excludeTools: this.excludeTools,
       // Kept for older/pi-based adapters that build their own prompt from parts.
@@ -116,19 +116,19 @@ class RemoteHarness extends HarnessInterface {
   /**
    * Decide which brain the remote runs on this spawn.
    *
-   * The model (remote-agent-connect plan §3, as corrected): Orbit is the
+   * The model (remote-agent-connect plan §3, as corrected): Tether is the
    * ORCHESTRATING brain — it hands the remote a reasoned plan/context/task (the
    * system prompt + the prompt). The remote is an autonomous agent that does its
-   * OWN LLM inference to carry that out, and MUST NOT depend on Orbit for
+   * OWN LLM inference to carry that out, and MUST NOT depend on Tether for
    * inference. So the DEFAULT is: send no `llm` block → the connector uses its
-   * own OPENAI_ / LLM_ env (its own provider).
+   * own LLM_ env (its own provider).
    *
    * Two central-config overrides, both still "the remote's own provider", just
-   * configured from Orbit instead of the box's env (device.llmConfig, set via
+   * configured from Tether instead of the box's env (device.llmConfig, set via
    * PATCH /api/devices/:id/llm):
    *   • a bring-your-own endpoint ({baseURL,apiKey,model}) → routed to that;
-   *   • the sentinel {provider:"orbit"} → an explicit, off-by-default opt-in to
-   *     borrow Orbit's own gateway as the brain (scoped, budget-capped token).
+   *   • the sentinel {provider:"tether"} → an explicit, off-by-default opt-in to
+   *     borrow Tether's own gateway as the brain (scoped, budget-capped token).
    *     Only used when the operator deliberately turns it on for a device that
    *     has no provider of its own; never the default.
    */
@@ -141,23 +141,23 @@ class RemoteHarness extends HarnessInterface {
       if (byo && byo.baseURL) {
         return { provider: "byo", baseURL: byo.baseURL, apiKey: byo.apiKey || "", model: byo.model || this.model || "" };
       }
-      // Explicit opt-in: borrow Orbit's gateway as this device's brain. NOT the
-      // default — only when the operator set provider:"orbit" for this device.
-      if (byo && byo.provider === "orbit") {
+      // Explicit opt-in: borrow Tether's gateway as this device's brain. NOT the
+      // default — only when the operator set provider:"tether" for this device.
+      if (byo && byo.provider === "tether") {
         const httpOrigin = entry && entry.origin && entry.origin.httpOrigin;
         if (this.db && device && device.id && httpOrigin) {
-          const budget = Number(process.env.ORBIT_DEVICE_LLM_BUDGET) || undefined;
+          const budget = Number(process.env.APP_DEVICE_LLM_BUDGET) || undefined;
           const token = await this.db.mintDeviceLlmToken(device.id, { budget, sessionId: this.sessionId });
           if (token) {
-            const model = byo.model || this.model || (this.config && this.config.litellm && this.config.litellm.selectedNormalModel) || "";
-            return { provider: "orbit", baseURL: `${httpOrigin}/llm/v1`, apiKey: token, model };
+            const model = byo.model || this.model || (this.config && this.config.llm && this.config.llm.fastModel) || "";
+            return { provider: "tether", baseURL: `${httpOrigin}/llm/v1`, apiKey: token, model };
           }
         }
       }
     } catch (e) {
       console.error("[RemoteHarness] Failed to resolve LLM for spawn:", e.message);
     }
-    // DEFAULT: the remote uses its own provider (env on the box). Orbit supplies
+    // DEFAULT: the remote uses its own provider (env on the box). Tether supplies
     // only the plan/context, never the inference.
     return null;
   }

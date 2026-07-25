@@ -9,7 +9,7 @@ import NotificationCenter from '@/components/widgets/NotificationCenter';
 import QuestionDialog from '@/components/QuestionDialog';
 
 // Providers & Hooks
-import { OrbitProvider, useOrbitState, useOrbitDispatch, actions } from '@/providers/OrbitProvider';
+import { TetherProvider, useTetherState, useTetherDispatch, actions } from '@/providers/TetherProvider';
 import { useTheme, useResponsive, useWebSocket, useSessions, useTTS, useSTT, useSettings, useAuth } from '@/hooks';
 
 // Layout
@@ -70,9 +70,9 @@ export default function Dashboard() {
   }
 
   return (
-    <OrbitProvider>
+    <TetherProvider>
       <AuthGate />
-    </OrbitProvider>
+    </TetherProvider>
   );
 }
 
@@ -80,7 +80,7 @@ export default function Dashboard() {
 // before the boot splash, which lives in DashboardInner), so an authenticated
 // session is required first. DashboardInner only mounts once authenticated, so
 // all of its mount-time /api fetches + the WebSocket carry a valid credential.
-// In dev-mode (no ORBIT_SUPERADMIN_KEY) whoami returns superadmin immediately,
+// In dev-mode (no AUTH_SUPERADMIN_KEY) whoami returns superadmin immediately,
 // so this never blocks a local/household deploy.
 function AuthGate() {
   const { auth, loading, authenticated, ssoAvailable, refetch } = useAuth();
@@ -105,8 +105,8 @@ function AuthGate() {
 }
 
 function DashboardInner({ auth, onLogout }: { auth: AuthIdentity; onLogout: () => void }) {
-  const dispatch = useOrbitDispatch();
-  const state = useOrbitState();
+  const dispatch = useTetherDispatch();
+  const state = useTetherState();
   const { theme, mounted, toggleTheme, setTheme } = useTheme();
   const { isMobile } = useResponsive();
 
@@ -116,7 +116,7 @@ function DashboardInner({ auth, onLogout }: { auth: AuthIdentity; onLogout: () =
     models, voices,
     systemPromptType, setSystemPromptType,
     saveAllSettings, addConfigItem, removeConfigItem,
-    llmStatus, saveState,
+    llmStatus, saveState, llmEnv,
   } = useSettings();
   const { speakText, queueSentence, startSession: startTtsSession, stopSpeaking } = useTTS(settings.selectedVoice);
 
@@ -261,7 +261,7 @@ function DashboardInner({ auth, onLogout }: { auth: AuthIdentity; onLogout: () =
   }, [dispatch, setSystemPromptType]);
   const [rightPanelCollapsed, setRightPanelCollapsed] = useState(() => {
     if (typeof window !== 'undefined') {
-      return localStorage.getItem('orbit_right_panel_collapsed') === 'true';
+      return localStorage.getItem('tether:right-panel-collapsed') === 'true';
     }
     return false;
   });
@@ -269,7 +269,7 @@ function DashboardInner({ auth, onLogout }: { auth: AuthIdentity; onLogout: () =
     setRightPanelCollapsed((prev) => {
       const next = !prev;
       if (typeof window !== 'undefined') {
-        localStorage.setItem('orbit_right_panel_collapsed', String(next));
+        localStorage.setItem('tether:right-panel-collapsed', String(next));
       }
       return next;
     });
@@ -286,7 +286,7 @@ function DashboardInner({ auth, onLogout }: { auth: AuthIdentity; onLogout: () =
       { text: "Connecting to LLM orchestrator...", delay: 850 },
       { text: "Detecting active harnesses (pi, OpenCode)...", delay: 1100 },
       { text: "Loading custom UI preferences...", delay: 1300 },
-      { text: "Workspace fully hydrated. Booting Orbit OS...", delay: 1550 }
+      { text: "Workspace fully hydrated. Booting Tether OS...", delay: 1550 }
     ];
 
     steps.forEach((step) => {
@@ -593,6 +593,7 @@ function DashboardInner({ auth, onLogout }: { auth: AuthIdentity; onLogout: () =
           onSetSessionMode={handleSetSessionMode}
           uiConfig={uiConfig}
           onUiConfigChange={handleUiConfigChange}
+          llmEnv={llmEnv}
         />
       </ComponentErrorBoundary>
     </div>
@@ -603,7 +604,7 @@ function DashboardInner({ auth, onLogout }: { auth: AuthIdentity; onLogout: () =
     return (
       <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-background px-6 select-none font-sans transition-colors duration-300">
         <div className="flex flex-col items-center max-w-md w-full text-center">
-          {/* Glowing Animated Orbit Logo */}
+          {/* Glowing Animated Tether Logo */}
           <div className="relative mb-8 grid size-16 place-items-center rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 animate-pulse">
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -622,7 +623,7 @@ function DashboardInner({ auth, onLogout }: { auth: AuthIdentity; onLogout: () =
           </div>
 
           {/* Title */}
-          <h1 className="text-lg font-bold tracking-tight text-foreground mb-1">ORBIT_OS</h1>
+          <h1 className="text-lg font-bold tracking-tight text-foreground mb-1">TETHER_OS</h1>
           <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-faint mb-6">Initializing Secure Agent Runtime</p>
 
           {/* Progress Bar */}
@@ -936,7 +937,7 @@ function DashboardInner({ auth, onLogout }: { auth: AuthIdentity; onLogout: () =
 
 // ── Login page ──
 // The sign-in boundary, shown before the boot splash whenever the backend
-// requires auth (ORBIT_SUPERADMIN_KEY set). Two ways in:
+// requires auth (AUTH_SUPERADMIN_KEY set). Two ways in:
 //   • Local — username + password against the local superadmin account
 //     (POST /api/auth/local). On success the server returns a session TOKEN,
 //     which we store as the request credential (never the password itself).
@@ -988,7 +989,7 @@ function LoginPage({ ssoAvailable, onAuthed }: { ssoAvailable: boolean; onAuthed
             <circle cx="18" cy="6" r="1" fill="currentColor" />
           </svg>
         </div>
-        <h1 className="text-lg font-semibold text-foreground">Sign in to Orbit</h1>
+        <h1 className="text-lg font-semibold text-foreground">Sign in to Tether</h1>
         <p className="mb-6 mt-1 text-center text-[13px] text-muted-foreground">Authentication is required to continue.</p>
 
         {(error || ssoError) && (

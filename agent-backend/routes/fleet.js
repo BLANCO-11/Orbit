@@ -1,6 +1,6 @@
 // agent-backend/routes/fleet.js
 // HTTP surface for orchestrated-lead fleet dispatch. Called by the
-// `orbit-fleet` MCP tool server (agent-backend/mcp/fleet-mcp.js), which is what the
+// `tether-fleet` MCP tool server (agent-backend/mcp/fleet-mcp.js), which is what the
 // lead agent actually invokes. Kept separate so the agent reaches it the same
 // way it reaches any tool.
 
@@ -10,9 +10,9 @@ function createFleetRouter({ fleet, db }) {
   const router = express.Router();
 
   // Devices the lead can delegate to — tenant-scoped. This is called by the
-  // orbit-fleet MCP tool as the app key (superadmin), so we CANNOT rely on
+  // tether-fleet MCP tool as the app key (superadmin), so we CANNOT rely on
   // req.auth.tenantId; scope to the LEAD SESSION's tenant instead (the MCP passes
-  // ?sessionId=ORBIT_SESSION_ID). Superadmin with no session context sees all.
+  // ?sessionId=AGENT_SESSION_ID). Superadmin with no session context sees all.
   router.get("/devices", async (req, res, next) => {
     try {
       let tenantId = (req.auth && req.auth.role === "superadmin") ? null : (req.auth && req.auth.tenantId) || null;

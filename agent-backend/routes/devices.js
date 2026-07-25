@@ -27,12 +27,12 @@ const PROTOCOL_VERSION = "1";
 // descriptor's wsUrl (ws:// vs wss://) is derived here, so getting the scheme
 // wrong behind a proxy makes the harness dial the wrong scheme and the WS upgrade
 // fails with a non-101. Resolution order:
-//   1. ORBIT_PUBLIC_ORIGIN (e.g. "https://orbit.example.com") — an explicit pin
+//   1. APP_PUBLIC_ORIGIN (e.g. "https://tether.example.com") — an explicit pin
 //      that ignores request headers entirely. Use this when a proxy can't be
 //      trusted to set X-Forwarded-Proto (chained proxies, Cloudflare Tunnel, …).
 //   2. else req.secure / X-Forwarded-Proto === "https" + the Host header.
 function detectOrigins(req) {
-  const override = process.env.ORBIT_PUBLIC_ORIGIN;
+  const override = process.env.APP_PUBLIC_ORIGIN;
   if (override) {
     try {
       const u = new URL(override);
@@ -57,7 +57,7 @@ function detectOrigins(req) {
 
 // Explicit host-trust advisory for a full-scope pairing. A paired remote runs
 // agent tool calls — including arbitrary shell — on its OWN machine, where
-// Orbit's container isolation does NOT reach (the policy gate still evaluates
+// Tether's container isolation does NOT reach (the policy gate still evaluates
 // calls, but containment is host-local only). Surfaced so the UI and the human
 // pairing the device see the trust decision they're making. `null` for the
 // narrower scopes (read_only / chat_voice) that can't run shell.
@@ -69,7 +69,7 @@ function remoteTrustNotice(scope) {
     title: "This machine will run agent commands on itself",
     detail:
       "A full-scope remote harness executes agent tool calls — including arbitrary shell — on its own OS. " +
-      "Orbit's container sandbox does not apply to remote machines; the policy gate still evaluates each call, " +
+      "Tether's container sandbox does not apply to remote machines; the policy gate still evaluates each call, " +
       "but pairing a remote is a host-trust decision. Pair only machines you control and trust.",
   };
 }
@@ -141,7 +141,7 @@ function createDevicesRouter(db, authMiddleware, getDashboardOrigin) {
     return null;
   };
 
-  // Generic connection descriptor for ANY harness (Orbit's adapter or a custom
+  // Generic connection descriptor for ANY harness (Tether's adapter or a custom
   // third-party one). Redeems the code single-use, then hands back everything
   // needed to connect and stay connected as plain JSON.
   router.get("/pair/connect", pairRateLimit, async (req, res) => {
@@ -167,25 +167,25 @@ function createDevicesRouter(db, authMiddleware, getDashboardOrigin) {
     }
 
     // The bootstrap IS the adapter: we serve the generic, zero-dependency
-    // `orbit-connect.js` with the pairing descriptor baked in. `curl … | node`
+    // `tether-connect.js` with the pairing descriptor baked in. `curl … | node`
     // then pairs + connects in one step — no secondary download, no `npm
     // install ws`, no `pi`, no repo checkout. It runs on any OS with a stock
     // Node 20+ and drives whatever OpenAI-SDK-compatible model the machine has.
     const descriptor = buildDescriptor(req, device);
-    const adapterPath = path.join(__dirname, "../adapter/orbit-connect.js");
+    const adapterPath = path.join(__dirname, "../adapter/tether-connect.js");
     let adapterSrc;
     try { adapterSrc = fs.readFileSync(adapterPath, "utf8"); }
     catch { return res.status(500).send("// Error: adapter source not found on server."); }
     // Node only strips a shebang on LINE 1. Prepending the descriptor header
-    // pushes orbit-connect's `#!/usr/bin/env node` down, which then throws a
+    // pushes tether-connect's `#!/usr/bin/env node` down, which then throws a
     // SyntaxError under `curl … | node`. Drop the leading shebang before injecting.
     adapterSrc = adapterSrc.replace(/^#![^\n]*\n/, "");
 
     const header =
-      `// Injected by the Orbit server — one-time redemption of a pairing code.\n` +
+      `// Injected by the Tether server — one-time redemption of a pairing code.\n` +
       `// The descriptor below is the durable credential from here on; it is\n` +
-      `// persisted to ~/.orbit so a restart reconnects without re-pairing.\n` +
-      `globalThis.__ORBIT_DESCRIPTOR__ = ${JSON.stringify(descriptor)};\n\n`;
+      `// persisted to ~/.tether so a restart reconnects without re-pairing.\n` +
+      `globalThis.__TETHER_DESCRIPTOR__ = ${JSON.stringify(descriptor)};\n\n`;
 
     res.setHeader("Content-Type", "application/javascript");
     res.send(header + adapterSrc);
@@ -199,16 +199,16 @@ function createDevicesRouter(db, authMiddleware, getDashboardOrigin) {
   router.get("/pair/agent", pairRateLimit, (req, res) => {
     const { code } = req.query || {};
     if (!code || typeof code !== "string") {
-      return res.status(400).type("text/markdown").send("# Error\nMissing pairing code. Ask the operator for a fresh Orbit pairing link.");
+      return res.status(400).type("text/markdown").send("# Error\nMissing pairing code. Ask the operator for a fresh Tether pairing link.");
     }
     const safeCode = code.toUpperCase().trim().replace(/[^A-Z0-9]/g, "").slice(0, 16);
     const { httpOrigin } = detectOrigins(req);
     const bootstrap = `curl -fsSL '${httpOrigin}/api/pair/bootstrap?code=${safeCode}' | node`;
     const md =
-`# Connect this machine to Orbit (run a persistent connector)
+`# Connect this machine to Tether (run a persistent connector)
 
-You are asked to connect **this machine** to an Orbit control plane as a *harness*.
-Orbit sends tasks; you carry them out with your own agent (its own tools + model)
+You are asked to connect **this machine** to a Tether control plane as a *harness*.
+Tether sends tasks; you carry them out with your own agent (its own tools + model)
 and results stream back. A small **connector process holds the live connection** —
 it auto-detects your installed agent (pi, Claude Code, OpenCode, Codex, Gemini CLI,
 Aider, …) and drives it. **No API keys needed.**
@@ -222,7 +222,7 @@ Aider, …) and drives it. **No API keys needed.**
 - **Network drop → automatic.** The connector reconnects on its own (backoff +
   heartbeat). You don't do anything, and you never need a new code for this.
 - **The durable credential is a token, not the code.** Pairing exchanges the
-  single-use code for a device token saved to \`~/.orbit\`. Every reconnect/restart
+  single-use code for a device token saved to \`~/.tether\`. Every reconnect/restart
   reuses that token — re-pair ONLY if the operator revokes this device.
 - **What the connector can't do itself: come back after its process is killed or
   the box reboots.** That needs a supervisor/service (below).
@@ -231,16 +231,16 @@ Aider, …) and drives it. **No API keys needed.**
 1. Node.js 20+: \`node --version\`.
 2. Start it detached:
    \`\`\`bash
-   nohup sh -c "${bootstrap}" > "$HOME/orbit-connect.log" 2>&1 &
+   nohup sh -c "${bootstrap}" > "$HOME/tether-connect.log" 2>&1 &
    disown 2>/dev/null || true
    \`\`\`
 3. Verify (don't skip):
    \`\`\`bash
-   sleep 3 && grep -m1 "Registered as harness" "$HOME/orbit-connect.log" \\
+   sleep 3 && grep -m1 "Registered as harness" "$HOME/tether-connect.log" \\
      && echo "OK — connected. Leave this running." \\
-     || (echo "NOT connected:"; tail -n 20 "$HOME/orbit-connect.log")
+     || (echo "NOT connected:"; tail -n 20 "$HOME/tether-connect.log")
    \`\`\`
-This step also saves the connector to \`~/.orbit/orbit-connect.js\` for Tier 2.
+This step also saves the connector to \`~/.tether/tether-connect.js\` for Tier 2.
 
 ## Tier 2 — durable (survives crashes + reboots) — RECOMMENDED
 The restart command must be the **saved connector run from the persisted token** —
@@ -249,55 +249,55 @@ NOT the bootstrap curl (its code is single-use). After Tier 1 has paired once:
 **Linux (systemd user service):**
 \`\`\`bash
 mkdir -p ~/.config/systemd/user
-cat > ~/.config/systemd/user/orbit-connect.service <<'EOF'
+cat > ~/.config/systemd/user/tether-connect.service <<'EOF'
 [Unit]
-Description=Orbit connector
+Description=Tether connector
 After=network-online.target
 [Service]
-ExecStart=/usr/bin/env node %h/.orbit/orbit-connect.js
+ExecStart=/usr/bin/env node %h/.tether/tether-connect.js
 Restart=always
 RestartSec=3
 [Install]
 WantedBy=default.target
 EOF
-systemctl --user daemon-reload && systemctl --user enable --now orbit-connect
+systemctl --user daemon-reload && systemctl --user enable --now tether-connect
 loginctl enable-linger "$USER"   # keep running with no active login
 \`\`\`
 
 **macOS (launchd):**
 \`\`\`bash
-cat > ~/Library/LaunchAgents/ai.orbit.connect.plist <<EOF
+cat > ~/Library/LaunchAgents/ai.tether.connect.plist <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
-  <key>Label</key><string>ai.orbit.connect</string>
-  <key>ProgramArguments</key><array><string>/usr/bin/env</string><string>node</string><string>$HOME/.orbit/orbit-connect.js</string></array>
+  <key>Label</key><string>ai.tether.connect</string>
+  <key>ProgramArguments</key><array><string>/usr/bin/env</string><string>node</string><string>$HOME/.tether/tether-connect.js</string></array>
   <key>RunAtLoad</key><true/><key>KeepAlive</key><true/>
 </dict></plist>
 EOF
-launchctl load ~/Library/LaunchAgents/ai.orbit.connect.plist
+launchctl load ~/Library/LaunchAgents/ai.tether.connect.plist
 \`\`\`
 
 **Windows (Task Scheduler, run at logon + restart):** pair once, then:
 \`\`\`powershell
-schtasks /Create /TN OrbitConnect /SC ONLOGON /RL LIMITED /F ^
-  /TR "node %USERPROFILE%\\.orbit\\orbit-connect.js"
+schtasks /Create /TN TetherConnect /SC ONLOGON /RL LIMITED /F ^
+  /TR "node %USERPROFILE%\\.tether\\tether-connect.js"
 \`\`\`
 
 ## Notes
 - The pairing code is **single-use** and **expires in 5 minutes**. \`code_expired\`
   → ask the operator for a fresh link.
 - No supported agent installed? Install one, or run the built-in generic loop:
-  export \`OPENAI_BASE_URL\`/\`OPENAI_API_KEY\`/\`OPENAI_MODEL\` and prefix
-  \`ORBIT_CONNECT_AGENT=generic\`. Force a specific agent with
-  \`ORBIT_CONNECT_AGENT=<pi|claude|opencode|codex|gemini|aider>\`.
+  export \`LLM_BASE_URL\`/\`LLM_API_KEY\`/\`LLM_FAST_MODEL\` and prefix
+  \`AGENT_CONNECT_KIND=generic\`. Force a specific agent with
+  \`AGENT_CONNECT_KIND=<pi|claude|opencode|codex|gemini|aider>\`.
 `;
     res.type("text/markdown").send(md);
   });
 
   // Raw generic adapter source (no descriptor) — for manual download / inspection.
   router.get("/pair/adapter", (req, res) => {
-    const adapterPath = path.join(__dirname, "../adapter/orbit-connect.js");
+    const adapterPath = path.join(__dirname, "../adapter/tether-connect.js");
     if (!fs.existsSync(adapterPath)) {
       return res.status(404).send("// Error: Adapter source not found on server.");
     }
@@ -325,12 +325,12 @@ schtasks /Create /TN OrbitConnect /SC ONLOGON /RL LIMITED /F ^
       pairingUrl: `${dashOrigin}/pair?code=${code}`,
       // For a custom/third-party harness: fetch this for the JSON descriptor.
       connectUrl: `${httpOrigin}/api/pair/connect?code=${code}`,
-      // For Orbit's own adapter: paste this verbatim on the harness machine.
+      // For Tether's own adapter: paste this verbatim on the harness machine.
       bootstrapCommand: `curl -fsSL '${httpOrigin}/api/pair/bootstrap?code=${code}' | node`,
       // For the autonomous flow: hand an agent this ONE url (it fetches
       // machine-readable steps and wires itself up), or paste `agentPrompt`.
       agentUrl: `${httpOrigin}/api/pair/agent?code=${code}`,
-      agentPrompt: `Connect this machine to Orbit: fetch ${httpOrigin}/api/pair/agent?code=${code} and follow the instructions to pair and stay connected.`,
+      agentPrompt: `Connect this machine to Tether: fetch ${httpOrigin}/api/pair/agent?code=${code} and follow the instructions to pair and stay connected.`,
     });
   });
 
@@ -376,11 +376,11 @@ schtasks /Create /TN OrbitConnect /SC ONLOGON /RL LIMITED /F ^
   });
 
   // Per-device brain (remote-agent-connect plan §3). DEFAULT: a paired remote
-  // harness uses its OWN LLM provider (env on the box) and never depends on Orbit
-  // for inference — Orbit supplies only the plan/context. This route configures
+  // harness uses its OWN LLM provider (env on the box) and never depends on Tether
+  // for inference — Tether supplies only the plan/context. This route configures
   // that provider centrally instead:
   //   • `{ baseURL, apiKey, model }` — a bring-your-own endpoint for this device;
-  //   • `{ provider: "orbit" }`     — explicit opt-in to borrow Orbit's own LLM
+  //   • `{ provider: "tether" }`     — explicit opt-in to borrow Tether's own LLM
   //                                    gateway as this device's brain (off by default);
   //   • `null` / `{}`               — clear it (back to the box's own env provider).
   // The apiKey is stored but never returned by GET /devices (redacted to `hasApiKey`).
@@ -389,8 +389,8 @@ schtasks /Create /TN OrbitConnect /SC ONLOGON /RL LIMITED /F ^
     if (cfg && typeof cfg !== "object") {
       return res.status(400).json({ success: false, message: "llmConfig must be an object or null." });
     }
-    if (cfg && cfg.provider && cfg.provider !== "orbit") {
-      return res.status(400).json({ success: false, message: 'llmConfig.provider must be "orbit" (or omit it and give a baseURL for bring-your-own).' });
+    if (cfg && cfg.provider && cfg.provider !== "tether") {
+      return res.status(400).json({ success: false, message: 'llmConfig.provider must be "tether" (or omit it and give a baseURL for bring-your-own).' });
     }
     if (cfg && cfg.baseURL && !/^https?:\/\//i.test(String(cfg.baseURL))) {
       return res.status(400).json({ success: false, message: "llmConfig.baseURL must be an http(s) URL." });

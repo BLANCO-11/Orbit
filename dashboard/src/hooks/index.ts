@@ -10,9 +10,9 @@ export { useDevices } from './useDevices';
 export { useAuth } from './useAuth';
 
 export {
-  OrbitProvider,
-  useOrbitState,
-  useOrbitDispatch,
-  useOrbit,
+  TetherProvider,
+  useTetherState,
+  useTetherDispatch,
+  useTether,
   actions,
-} from '@/providers/OrbitProvider';
+} from '@/providers/TetherProvider';

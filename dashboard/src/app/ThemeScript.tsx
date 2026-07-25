@@ -9,8 +9,8 @@ export function ThemeScript() {
         __html: `
           (function() {
             try {
-              var mode = localStorage.getItem('orbit-theme') || 'light';
-              var palette = localStorage.getItem('orbit-palette') || 'moss';
+              var mode = localStorage.getItem('tether:theme') || 'light';
+              var palette = localStorage.getItem('tether:palette') || 'moss';
               document.documentElement.classList.toggle('dark', mode === 'dark');
               document.documentElement.style.colorScheme = mode;
               document.documentElement.setAttribute('data-palette', palette);

@@ -1,18 +1,18 @@
 // agent-backend/mcp/build-mcp.js
 //
-// The `orbit-build` MCP server: build-handoff notifiers. Once the agent has
+// The `tether-build` MCP server: build-handoff notifiers. Once the agent has
 // written a runnable script/app, it calls these to hand the code off to the
-// EXTERNAL build+test facility (a separate service, out of Orbit's scope).
+// EXTERNAL build+test facility (a separate service, out of Tether's scope).
 //
 //   start_build — mark the build/test phase as starting; returns a buildId and
 //                 emits a lifecycle event to the parent app / console.
-//   end_build   — the code is final: Orbit packages the session artifacts and
+//   end_build   — the code is final: Tether packages the session artifacts and
 //                 submits them to the external tester, then attaches the verdict
 //                 to the run's result contract.
 //
-// Thin stdio shim over the backend (like orbit-notify): it HTTP-calls
-// /api/build/* with the injected app creds + ORBIT_SESSION_ID. The real tester
-// integration lives behind those routes (stubbed until ORBIT_TESTER_URL is set).
+// Thin stdio shim over the backend (like tether-notify): it HTTP-calls
+// /api/build/* with the injected app creds + AGENT_SESSION_ID. The real tester
+// integration lives behind those routes (stubbed until RUN_TESTER_URL is set).
 
 const { Server } = require("@modelcontextprotocol/sdk/server/index.js");
 const { StdioServerTransport } = require("@modelcontextprotocol/sdk/server/stdio.js");
@@ -21,9 +21,9 @@ const {
   ListToolsRequestSchema,
 } = require("@modelcontextprotocol/sdk/types.js");
 
-const API = process.env.ORBIT_API || "http://127.0.0.1:6800";
-const API_KEY = process.env.ORBIT_API_KEY || "";
-const SESSION_ID = process.env.ORBIT_SESSION_ID || "";
+const API = process.env.AGENT_API_URL || "http://127.0.0.1:6800";
+const API_KEY = process.env.AGENT_API_KEY || "";
+const SESSION_ID = process.env.AGENT_SESSION_ID || "";
 
 async function post(pathname, payload) {
   const headers = { "Content-Type": "application/json" };
@@ -43,7 +43,7 @@ async function post(pathname, payload) {
 }
 
 const server = new Server(
-  { name: "orbit-build", version: "1.0.0" },
+  { name: "tether-build", version: "1.0.0" },
   { capabilities: { tools: {} } },
 );
 
@@ -65,7 +65,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     {
       name: "end_build",
       description:
-        "Signal that the code is final and hand it off for building + testing. Orbit packages the session's artifacts and submits them to the external test facility, then attaches the returned verdict to the run result. Call this last, after start_build and after the code is complete.",
+        "Signal that the code is final and hand it off for building + testing. Tether packages the session's artifacts and submits them to the external test facility, then attaches the returned verdict to the run result. Call this last, after start_build and after the code is complete.",
       inputSchema: {
         type: "object",
         properties: {
@@ -81,7 +81,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
   try {
-    if (!SESSION_ID) throw new Error("no session context (ORBIT_SESSION_ID missing)");
+    if (!SESSION_ID) throw new Error("no session context (AGENT_SESSION_ID missing)");
     if (name === "start_build") {
       const out = await post("/api/build/start", {
         language: args?.language || "", entrypoint: args?.entrypoint || "", summary: args?.summary || "",
@@ -107,10 +107,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 async function run() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error("Orbit Build MCP server running on stdio");
+  console.error("Tether Build MCP server running on stdio");
 }
 
 run().catch((error) => {
-  console.error("Fatal error in Orbit Build MCP server:", error);
+  console.error("Fatal error in Tether Build MCP server:", error);
   process.exit(1);
 });

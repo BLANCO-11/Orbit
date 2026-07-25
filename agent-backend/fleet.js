@@ -1,7 +1,7 @@
 // agent-backend/fleet.js
 //
 // Orchestrated-lead fleet dispatch. The lead agent (the local pi you talk to)
-// delegates a self-contained task to another device via the `orbit-fleet` MCP
+// delegates a self-contained task to another device via the `tether-fleet` MCP
 // tools; the backend runs a headless turn on that device's harness and hands
 // the final answer back as the tool result, which the lead then merges into its
 // own reasoning. One agent to drive; N devices doing work underneath.
@@ -10,6 +10,7 @@
 // the timeline) tagged source:"fleet" so the UI can group it under its lead.
 
 const HeadlessSocket = require("./ws/headless-socket");
+const { FLEET_DISPATCH_NAMES } = require("./brand");
 
 /**
  * @param {object} deps
@@ -110,8 +111,9 @@ function createFleet({ db, harnessRegistry, handleStartTask, getSessionMode, cre
 
     // Recursion guard (best-effort): a delegate must not re-delegate, or a
     // typo'd loop could fan out forever. Exclude the fleet dispatch tool from
-    // the delegate's toolset by every name pi might expose it under.
-    const noRedelegate = ["dispatch_to_device", "mcp_orbit-fleet_dispatch_to_device", "orbit-fleet_dispatch_to_device"];
+    // the delegate's toolset by every name pi might expose it under — derived
+    // in brand.js, because a spelling missed here disables the guard silently.
+    const noRedelegate = [...FLEET_DISPATCH_NAMES];
 
     // Delegates run headless and can't answer an approval prompt; resolvedMode
     // (inherited from the lead, capped) governs what they may actually do.

@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# Orbit — single image running the backend (127.0.0.1:6800 by default) and the
+# Tether — single image running the backend (127.0.0.1:6800 by default) and the
 # dashboard custom server (0.0.0.0:6801). The `pi` agent harness is the public
 # npm package @earendil-works/pi-coding-agent, installed into the image (no host
 # mount needed). Lightpanda runs as a sibling compose service via LIGHTPANDA_WS.
@@ -24,10 +24,10 @@ RUN apt-get update \
 # Ideal for agent-authored .py scripts; sidesteps Debian's PEP 668 global-pip lock.
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
 # LLM access uses pi's NATIVE OpenAI-compatible provider (registered per-spawn by
-# agent-backend/harnesses/picode/orbit-provider.mjs, pointed at the app's own LLM
+# agent-backend/harnesses/picode/tether-provider.mjs, pointed at the app's own LLM
 # gateway) — so the bespoke `pi-provider-litellm` extension is no longer baked in.
 # pi is now on PATH (/usr/local/bin/pi) with node at /usr/local/bin/node, so
-# Orbit's binary discovery finds it — no PI_CLI_PATH/PI_NODE_PATH needed.
+# Tether's binary discovery finds it — no HARNESS_PI_PATH/HARNESS_NODE_PATH needed.
 
 # ── Build stage: all deps + dashboard build (NOT pruned; shared by dev+runtime) ──
 FROM pi AS build

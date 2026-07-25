@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// orbit-adapter — connect a local pi harness to a remote Orbit console.
+// tether-adapter — connect a local pi harness to a remote Tether console.
 //
 // Run this on any machine that has `pi` installed to make it a harness the
 // console can drive, exactly like the console's own local pi. It pairs with
@@ -8,22 +8,22 @@
 // sends spawn/prompt/cancel, and every harness event streams back.
 //
 // The token is the durable credential: on first pair it is persisted to
-// ~/.orbit/adapter-credentials.json (keyed by server host, chmod 600). On
+// ~/.tether/adapter-credentials.json (keyed by server host, chmod 600). On
 // restart the adapter reconnects straight from that file — no re-pairing.
 // Dropped sockets self-heal via a supervised reconnect loop with backoff.
 //
 // Usage:
 //   # First pair (any ONE of these):
-//   node orbit-adapter.js --connect 'https://HOST/api/pair/connect?code=AB3XK9'
-//   node orbit-adapter.js --server wss://HOST --code AB3XK9 [--name "My workstation"]
-//   node orbit-adapter.js --server wss://HOST --token <deviceToken>
+//   node tether-adapter.js --connect 'https://HOST/api/pair/connect?code=AB3XK9'
+//   node tether-adapter.js --server wss://HOST --code AB3XK9 [--name "My workstation"]
+//   node tether-adapter.js --server wss://HOST --token <deviceToken>
 //   # Reconnect after a restart (credentials already stored):
-//   node orbit-adapter.js --server wss://HOST     # or with no args if only one host is stored
+//   node tether-adapter.js --server wss://HOST     # or with no args if only one host is stored
 //
-// Flags: --credentials <path>, --no-persist, and env ORBIT_ADAPTER_HOME.
+// Flags: --credentials <path>, --no-persist, and env AGENT_ADAPTER_HOME.
 //
-// LiteLLM creds come from this machine's env: LITELLM_KEY (or OPENAI_API_KEY),
-// LITELLM_BASE_URL, LITELLM_MODEL.
+// LLM creds come from THIS machine's env: LLM_BASE_URL, LLM_API_KEY,
+// LLM_FAST_MODEL (bring-your-own-LLM — the app never proxies a remote's LLM).
 
 const os = require("os");
 const fs = require("fs");
@@ -54,7 +54,7 @@ function parseArgs(argv) {
 
 function credentialsPath(args) {
   if (args.credentials) return args.credentials;
-  const home = process.env.ORBIT_ADAPTER_HOME || path.join(os.homedir(), ".orbit");
+  const home = process.env.AGENT_ADAPTER_HOME || path.join(os.homedir(), ".tether");
   return path.join(home, "adapter-credentials.json");
 }
 
@@ -201,9 +201,9 @@ function connectSupervised(descriptor, { name, machine, config, binaries, credsP
       // Report (read-only) which LLM this remote is bringing, so the console can
       // DISPLAY it in Fleet + the chat header. The app never manages or proxies
       // a remote's LLM — this is observability only.
-      const llmModel = (config.litellm && config.litellm.selectedNormalModel) || "";
+      const llmModel = (config.llm && config.llm.fastModel) || "";
       let llmProvider = "";
-      try { llmProvider = config.litellm && config.litellm.baseURL ? new URL(config.litellm.baseURL).host : ""; } catch {}
+      try { llmProvider = config.llm && config.llm.baseUrl ? new URL(config.llm.baseUrl).host : ""; } catch {}
       ws.send(JSON.stringify({
         type: "register",
         name,
@@ -368,17 +368,9 @@ async function main() {
   console.log(`[adapter] Using ${persisted ? "stored" : "fresh"} credentials for ${descriptor.wsUrl}.`);
 
   // Bring-your-own-LLM: a remote harness uses THIS machine's own OpenAI-compatible
-  // endpoint (the app does not proxy it). Neutral LLM_* names win, with the
-  // historical LITELLM_* / OPENAI_* as fallbacks. No poisoned default — an empty
-  // baseURL means "not configured here" rather than silently dialing 127.0.0.1.
-  const llm = resolveLlmEnv();
-  const config = {
-    litellm: {
-      baseURL: llm.baseURL,
-      apiKey: llm.apiKey,
-      selectedNormalModel: llm.model,
-    },
-  };
+  // endpoint (the app does not proxy it). No poisoned default — an empty baseUrl
+  // means "not configured here" rather than silently dialing 127.0.0.1.
+  const config = { llm: resolveLlmEnv() };
   const binaries = discoverPiBinaries();
 
   connectSupervised(descriptor, { name, machine, config, binaries, credsPath, persisted });

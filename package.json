@@ -1,7 +1,7 @@
 {
-  "name": "llm-os-agent",
+  "name": "tether",
   "version": "1.0.0",
-  "description": "Orbit — local agent-operations console: harness orchestration, policy, observability.",
+  "description": "Tether \u2014 local agent-operations console: harness orchestration, policy, observability.",
   "main": "index.js",
   "scripts": {
     "dev": "npm run clean && concurrently -k -n backend,dashboard -c blue,magenta \"npm run dev:backend\" \"npm run dev:frontend\"",
@@ -11,8 +11,11 @@
     "start": "npm run build && concurrently -k -n backend,dashboard -c blue,magenta \"npm run dev:backend\" \"npm --prefix dashboard run start\"",
     "verify": "npm run typecheck && NEXT_DIST_DIR=.next-verify npm --prefix dashboard run build",
     "typecheck": "npm --prefix dashboard run typecheck",
-    "test": "node tests/test_policy_hardening.js && node tests/test_db_adapter.js && node tests/test_runtime_api.js",
-    "clean": "rm -rf dashboard/.next dashboard/.next-verify"
+    "test": "node tests/test_policy_hardening.js && node tests/test_db_adapter.js && node tests/test_runtime_api.js && node tests/test_brand_identifiers.js",
+    "clean": "rm -rf dashboard/.next dashboard/.next-verify",
+    "env:example": "node scripts/gen-env-example.js",
+    "env:check": "node scripts/gen-env-example.js --check",
+    "env:migrate": "node scripts/migrate-env.js"
   },
   "keywords": [],
   "author": "",

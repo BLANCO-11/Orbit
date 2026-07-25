@@ -1,20 +1,20 @@
 // agent-backend/harnesses/opencode/index.js
 //
-// OpenCodeHarness — drives the OpenCode CLI (https://opencode.ai) as an Orbit
+// OpenCodeHarness — drives the OpenCode CLI (https://opencode.ai) as a Tether
 // harness, proving the harness-agnostic contract with a second real agent.
 //
 // OpenCode differs from pi: it has no persistent rpc stdin loop. Instead each
 // turn is `opencode run --format json …`, which streams newline-delimited JSON
 // events to stdout and exits. We spawn per prompt, translate OpenCode's events
-// to Orbit's standardized events, and reuse the SAME session across turns via
+// to Tether's standardized events, and reuse the SAME session across turns via
 // OpenCode's own session id (--session).
 //
-// OpenCode uses its own provider config; we point it at the user's LiteLLM
-// endpoint (OpenAI-compatible) by writing an opencode.json into the session
+// OpenCode uses its own provider config; we point it at the user's configured
+// OpenAI-compatible endpoint by writing an opencode.json into the session
 // workspace, so it runs on the user's own model — no proprietary dependency.
 //
 // Isolation note: OpenCode executes its tools INTERNALLY (we only observe the
-// resulting events), so Orbit's per-tool policy gate can't block them mid-flight
+// resulting events), so Tether's per-tool policy gate can't block them mid-flight
 // the way it can advise for pi. Isolation therefore comes from cwd = the session
 // workspace (and, ideally, the container sandbox). We pass --auto so it doesn't
 // hang waiting for permission in headless mode.
@@ -24,6 +24,7 @@ const fs = require("fs");
 const path = require("path");
 const HarnessInterface = require("../interface");
 const workspacePaths = require("../../workspace-paths");
+const { PROVIDER_ID, PROVIDER_NAME } = require("../../brand");
 
 // OpenCode's built-in tool set (for the tools manager; observed tools are added
 // by the catalog as they're used).
@@ -37,7 +38,7 @@ class OpenCodeHarness extends HarnessInterface {
     this._buf = "";
     this._textByPart = {};        // partID → last emitted text length (for deltas)
     this._toolSeen = new Set();   // callID → started, so we emit start/end once
-    this._binaryPath = options.opencodePath || process.env.OPENCODE_PATH || "opencode";
+    this._binaryPath = options.opencodePath || process.env.HARNESS_OPENCODE_PATH || "opencode";
   }
 
   getMetadata() {
@@ -64,33 +65,36 @@ class OpenCodeHarness extends HarnessInterface {
   }
 
   /**
-   * Write opencode.json into the session workspace: point OpenCode at the user's
-   * LiteLLM (OpenAI-compatible) model, and give it the SAME MCP servers Orbit
+   * Write opencode.json into the session workspace: point OpenCode at the
+   * configured OpenAI-compatible model, and give it the SAME MCP servers Tether
    * runs (translated from .pi/mcp.json) so it's a real peer of pi — same search,
    * notify, plan, transcript, browser tools.
    */
   _writeProviderConfig(dir) {
-    const llm = this.config.litellm || {};
-    const model = this.model || llm.selectedNormalModel || "gpt-4o";
-    this._model = `litellm/${model}`;
+    const llm = this.config.llm || {};
+    // No hardcoded model fallback. "gpt-4o" was a provider guess that 401s on
+    // any gateway that doesn't serve it; an empty model surfaces as "no model
+    // configured" instead of an opaque auth error.
+    const model = this.model || llm.fastModel || "";
+    this._model = model ? `${PROVIDER_ID}/${model}` : "";
     const cfg = {
       $schema: "https://opencode.ai/config.json",
       provider: {
-        litellm: {
+        [PROVIDER_ID]: {
           npm: "@ai-sdk/openai-compatible",
-          name: "LiteLLM",
-          options: { baseURL: (llm.baseURL || "http://127.0.0.1:5000/v1"), apiKey: llm.apiKey || "sk-none" },
+          name: PROVIDER_NAME,
+          options: { baseURL: llm.baseUrl || "", apiKey: llm.apiKey || "sk-none" },
           models: { [model]: { name: model } },
         },
       },
-      mcp: this._orbitMcpForOpenCode(),
+      mcp: this._tetherMcpForOpenCode(),
     };
     try { fs.writeFileSync(path.join(dir, "opencode.json"), JSON.stringify(cfg, null, 2)); }
     catch (e) { console.error("[OpenCodeHarness] Could not write opencode.json:", e.message); }
   }
 
-  /** Translate Orbit's .pi/mcp.json (stdio servers) → OpenCode's `mcp` config. */
-  _orbitMcpForOpenCode() {
+  /** Translate Tether's .pi/mcp.json (stdio servers) → OpenCode's `mcp` config. */
+  _tetherMcpForOpenCode() {
     const out = {};
     try {
       const { MCP_CONFIG_PATH } = require("../../mcp-registry");
@@ -153,7 +157,7 @@ class OpenCodeHarness extends HarnessInterface {
     }
   }
 
-  /** Translate one OpenCode JSON event → Orbit standardized events. */
+  /** Translate one OpenCode JSON event → Tether standardized events. */
   _handleEvent(line) {
     let evt;
     try { evt = JSON.parse(line); } catch { return; }

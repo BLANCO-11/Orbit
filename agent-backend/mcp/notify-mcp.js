@@ -1,15 +1,15 @@
 // mcp-server-notify/index.js
 //
-// The `orbit-notify` MCP server: a first-class NETWORK capability the agent uses
+// The `tether-notify` MCP server: a first-class NETWORK capability the agent uses
 // to message the user and raise alerts — Telegram, the in-app bell, desktop.
 //
 // WHY THIS EXISTS: without it, the agent reaches for `bash`+curl (or the old
-// ./orbit-notify shell script) to send a Telegram message, which is a SHELL
+// ./tether-notify shell script) to send a Telegram message, which is a SHELL
 // capability and is blocked in chat mode — so a harmless "message me" turned
 // into a policy escalation. Routing through an MCP tool makes messaging a
 // network action (allowed in chat), killing that escalation for good.
 //
-// Both tools POST to the Orbit backend's /api/notify route, which fans the alert
+// Both tools POST to the Tether backend's /api/notify route, which fans the alert
 // through the notification bus to the chosen sinks.
 
 const { Server } = require("@modelcontextprotocol/sdk/server/index.js");
@@ -19,8 +19,8 @@ const {
   ListToolsRequestSchema,
 } = require("@modelcontextprotocol/sdk/types.js");
 
-const API = process.env.ORBIT_API || "http://127.0.0.1:6800";
-const API_KEY = process.env.ORBIT_API_KEY || "";
+const API = process.env.AGENT_API_URL || "http://127.0.0.1:6800";
+const API_KEY = process.env.AGENT_API_KEY || "";
 
 async function postNotify(payload) {
   const headers = { "Content-Type": "application/json" };
@@ -40,7 +40,7 @@ async function postNotify(payload) {
 }
 
 const server = new Server(
-  { name: "orbit-notify", version: "1.0.0" },
+  { name: "tether-notify", version: "1.0.0" },
   { capabilities: { tools: {} } },
 );
 
@@ -106,10 +106,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 async function run() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error("Orbit Notify MCP server running on stdio");
+  console.error("Tether Notify MCP server running on stdio");
 }
 
 run().catch((error) => {
-  console.error("Fatal error in Orbit Notify MCP server:", error);
+  console.error("Fatal error in Tether Notify MCP server:", error);
   process.exit(1);
 });

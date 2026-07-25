@@ -1,4 +1,4 @@
-# Orbit Wire Protocol
+# Tether Wire Protocol
 
 Two boundaries, documented in one place:
 

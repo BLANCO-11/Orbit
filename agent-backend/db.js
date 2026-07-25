@@ -777,8 +777,8 @@ async function setDeviceLlmConfig(id, cfg) {
   await init();
   let clean = {};
   if (cfg && typeof cfg === "object") {
-    if (cfg.provider === "orbit") {
-      clean = { provider: "orbit", model: cfg.model ? String(cfg.model) : "" };
+    if (cfg.provider === "tether") {
+      clean = { provider: "tether", model: cfg.model ? String(cfg.model) : "" };
     } else if (cfg.baseURL) {
       clean = { baseURL: String(cfg.baseURL), apiKey: cfg.apiKey ? String(cfg.apiKey) : "", model: cfg.model ? String(cfg.model) : "" };
     }
@@ -1071,7 +1071,7 @@ async function deleteRunsForSession(sessionId) {
 
 // ── Connectors (tenant-scoped MCP servers; Gap 3) ───────────────────
 // User-registered MCP tool servers, isolated to the tenant of the API key that
-// registered them. Orbit's OWN servers (fleet/notify/search/…) stay in the
+// registered them. Tether's OWN servers (fleet/notify/search/…) stay in the
 // global .pi/mcp.json (shared) and are NOT stored here. def_json holds the
 // connector definition ({ command, args, env } | { url }); env may carry
 // ${secret:NAME} references resolved at spawn. tenant_id '' = dev/local bucket.

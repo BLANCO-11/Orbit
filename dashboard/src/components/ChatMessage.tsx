@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { useOrbitState } from '@/providers/OrbitProvider';
+import { useTetherState } from '@/providers/TetherProvider';
 import {
   Check, Copy, ChevronDown, ChevronRight, Loader2, CheckCircle2,
   Shield, Edit3, Zap, Play, FileText, Search, Terminal, Globe, Wrench,
@@ -83,7 +83,7 @@ function ChatMessageBase({
       </div>
       <div className="min-w-0 flex-1">
         <div className="mb-1.5 flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-faint">
-          Orbit
+          Tether
           {time && <span className="font-medium normal-case tracking-normal">{time}</span>}
           <button
             onClick={handleCopy}
@@ -148,7 +148,7 @@ export default ChatMessage;
 // ── Tool group card ─────────────────────────────────────────────
 
 function ToolGroup({ tools, expandedTools, toggleTool, getToolSummary, getToolOutput }) {
-  const { status } = useOrbitState();
+  const { status } = useTetherState();
   const isSessionRunning = status === 'running' || status === 'connecting';
 
   // Hidden/collapsed by default — only a compact affordance shows; never
@@ -201,7 +201,7 @@ function ToolGroup({ tools, expandedTools, toggleTool, getToolSummary, getToolOu
 }
 
 function ToolRow({ tool, isExpanded, onToggle, getToolSummary, getToolOutput }) {
-  const { status } = useOrbitState();
+  const { status } = useTetherState();
   const isSessionRunning = status === 'running' || status === 'connecting';
   const isRunning = tool.status === 'running' && isSessionRunning;
   const isInterrupted = tool.status === 'running' && !isSessionRunning;
@@ -285,7 +285,7 @@ export function ChatEmptyState() {
       <div className="mb-4 grid size-12 place-items-center rounded-2xl bg-gradient-to-br from-primary/80 to-primary text-white shadow-card">
         <Shield size={22} />
       </div>
-      <h3 className="mb-1.5 text-[17px] font-semibold tracking-tight">Orbit ready</h3>
+      <h3 className="mb-1.5 text-[17px] font-semibold tracking-tight">Tether ready</h3>
       <p className="text-[13.5px] leading-relaxed text-muted-foreground">
         Delegate OS operations, write code, run audits, or browse the web — by voice or text.
       </p>

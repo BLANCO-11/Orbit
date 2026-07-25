@@ -82,7 +82,7 @@ export default function Header({
             <div className="relative size-[18px] rounded-md bg-gradient-to-br from-primary/80 to-primary shadow-[0_0_0_3px_var(--accent)]">
               <div className="absolute inset-[5px] rounded-[2px] bg-white/90" />
             </div>
-            <span className="text-[15px] font-semibold tracking-tight">Orbit</span>
+            <span className="text-[15px] font-semibold tracking-tight">Tether</span>
           </>
         )}
         {/* Primary agent this console is driving — the selected harness. Shown

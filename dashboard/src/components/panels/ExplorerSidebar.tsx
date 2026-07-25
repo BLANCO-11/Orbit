@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Folder, File, ChevronRight, ChevronDown, RefreshCw, FileText } from 'lucide-react';
-import { useOrbitState } from '@/providers/OrbitProvider';
+import { useTetherState } from '@/providers/TetherProvider';
 
 interface FileNode {
   name: string;
@@ -18,7 +18,7 @@ interface ExplorerSidebarProps {
 }
 
 export default function ExplorerSidebar({ onFileSelect, harnessId }: ExplorerSidebarProps) {
-  const { currentSessionId, status, metrics } = useOrbitState();
+  const { currentSessionId, status, metrics } = useTetherState();
   const [rootFiles, setRootFiles] = useState<FileNode[]>([]);
   const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set());
   const [dirContents, setDirContents] = useState<Map<string, FileNode[]>>(new Map());

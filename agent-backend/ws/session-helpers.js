@@ -123,7 +123,7 @@ const CMD_PATH_RE = /^(~|\/|\.\.?\/|[a-zA-Z]:\\)/;
  * Tokenize a shell command and return every argv token that looks like a
  * filesystem path — across operators (`&& || ; |`), redirects (`> >> <`), and
  * subshells (`$()`, backticks). Used ONLY to feed the hard blocklist (secrets +
- * Orbit source); it never drives zone/capability decisions, so a stray token can
+ * Tether source); it never drives zone/capability decisions, so a stray token can
  * hard-block a protected path but can never soft-gate an otherwise-allowed shell
  * command.
  *

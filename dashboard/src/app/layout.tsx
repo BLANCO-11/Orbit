@@ -10,7 +10,7 @@ const plusJakartaSans = Plus_Jakarta_Sans({
 });
 
 export const metadata = {
-  title: "Orbit - Personal Assistant Console",
+  title: "Tether - Personal Assistant Console",
   description:
     "Advanced Personal Assistant OS framework with access controls and headless browsing console",
 };

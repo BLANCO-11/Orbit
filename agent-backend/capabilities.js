@@ -1,6 +1,6 @@
 // agent-backend/capabilities.js
 //
-// The single source of truth for "what can Orbit actually do right now?" — one
+// The single source of truth for "what can Tether actually do right now?" — one
 // manifest aggregating every capability the app detects across config, env,
 // the MCP registry, service connections, the Telegram bridge and the fleet.
 //
@@ -54,12 +54,12 @@ async function buildCapabilities(deps = {}) {
 
   // ── LLM ──────────────────────────────────────────────────────────
   try {
-    const l = config.litellm || {};
-    const configured = !!(l.apiKey && l.baseURL);
+    const l = config.llm || {};
+    const configured = !!(l.apiKey && l.baseUrl);
     // `connected` reflects the last live probe (Workstream F3): true (reachable),
     // false (configured but the endpoint/key/model failed), or null (untested).
     let connected = null;
-    let detail = configured ? `model ${l.selectedNormalModel || "?"} via ${l.baseURL}` : "no LLM endpoint configured";
+    let detail = configured ? `model ${l.fastModel || "?"} via ${l.baseUrl}` : "no LLM endpoint configured";
     if (configured) {
       try {
         const probe = require("./services/llm-probe").getLastLlmProbe();
@@ -67,7 +67,7 @@ async function buildCapabilities(deps = {}) {
           connected = true;
         } else if (probe && probe.configured && probe.ok === false) {
           connected = false;
-          detail = `connection failed: ${probe.error || "unknown error"} (${l.baseURL})`;
+          detail = `connection failed: ${probe.error || "unknown error"} (${l.baseUrl})`;
         }
       } catch {}
     } else {
@@ -84,13 +84,13 @@ async function buildCapabilities(deps = {}) {
   } catch { capabilities.tts = cap(false, false, "unknown"); }
 
   // ── Web search ───────────────────────────────────────────────────
-  // orbit-search (keyless MCP) is ALWAYS available; a native backend key just
+  // tether-search (keyless MCP) is ALWAYS available; a native backend key just
   // upgrades quality. So search is configured either way.
   try {
     const native = hasNativeSearch();
     capabilities.web_search = cap(true, true,
-      native ? "native web_search (backend key set)" : "orbit-search MCP (keyless default)");
-  } catch { capabilities.web_search = cap(true, true, "orbit-search MCP"); }
+      native ? "native web_search (backend key set)" : "tether-search MCP (keyless default)");
+  } catch { capabilities.web_search = cap(true, true, "tether-search MCP"); }
 
   // ── Web browse (Lightpanda) ──────────────────────────────────────
   try {
@@ -138,8 +138,8 @@ async function buildCapabilities(deps = {}) {
     capabilities.slack = cap(!!n.slackWebhook, !!n.slackWebhook, n.slackWebhook ? "webhook set" : "no webhook");
   } catch { capabilities.discord = cap(false, false, "unknown"); capabilities.slack = cap(false, false, "unknown"); }
 
-  // ── Notifications (always available: web bell + desktop + orbit-notify) ──
-  capabilities.notify = cap(true, true, "orbit-notify tool → web/desktop/channel sinks");
+  // ── Notifications (always available: web bell + desktop + tether-notify) ──
+  capabilities.notify = cap(true, true, "tether-notify tool → web/desktop/channel sinks");
 
   // ── Enterprise SSO (OIDC) ────────────────────────────────────────
   try {
