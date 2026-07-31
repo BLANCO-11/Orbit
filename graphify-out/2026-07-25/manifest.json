@@ -30,8 +30,8 @@
     "semantic_hash": "93cfa5a4ceae9ea1cb1ae850bb656b8d"
   },
   "agent-backend/harnesses/picode/index.js": {
-    "mtime": 1785007936.6278057,
-    "ast_hash": "eb704e6aec171a9c1b2abbf2f8947ecf",
+    "mtime": 1784996862.5906215,
+    "ast_hash": "6d67a740803a5f2b7575d904b2907222",
     "semantic_hash": ""
   },
   "agent-backend/harnesses/picode/parser.js": {
@@ -100,8 +100,8 @@
     "semantic_hash": ""
   },
   "agent-backend/server.js": {
-    "mtime": 1785007936.6298056,
-    "ast_hash": "39bfd74ed8927eb6393cce4c29f7ad4d",
+    "mtime": 1784999109.630582,
+    "ast_hash": "94285706032b18cc07b5488a1f3267f6",
     "semantic_hash": ""
   },
   "agent-backend/services/plan-generator.js": {
@@ -505,8 +505,8 @@
     "semantic_hash": ""
   },
   "agent-backend/crypto-store.js": {
-    "mtime": 1785000324.8625202,
-    "ast_hash": "f0929dc54e92a5f3b44e40182901d19b",
+    "mtime": 1784996862.5886216,
+    "ast_hash": "9ec08415488ea64417bfa402a0d1309d",
     "semantic_hash": ""
   },
   "agent-backend/fleet.js": {
@@ -775,8 +775,8 @@
     "semantic_hash": ""
   },
   "setup.sh": {
-    "mtime": 1785482476.2425637,
-    "ast_hash": "5bd59273cf1ecff3bd16a92fcbc80173",
+    "mtime": 1784996862.6036215,
+    "ast_hash": "adde5a04b2dff142e9aa1608434af0c0",
     "semantic_hash": ""
   },
   "agent-backend/adapter/tether-adapter.js": {
@@ -800,8 +800,8 @@
     "semantic_hash": ""
   },
   "agent-backend/env-config.js": {
-    "mtime": 1785007936.6278057,
-    "ast_hash": "2e864e4dca2ee6672caebe15f35fe025",
+    "mtime": 1784996862.5896215,
+    "ast_hash": "ed5eff982dd79a649267c260ec62851b",
     "semantic_hash": ""
   },
   "agent-backend/harnesses/picode/prompt.js": {
@@ -815,8 +815,8 @@
     "semantic_hash": ""
   },
   "agent-backend/llm-gateway.js": {
-    "mtime": 1785007936.6288056,
-    "ast_hash": "742e45e218fddb852acff723de6d7028",
+    "mtime": 1784996862.5906215,
+    "ast_hash": "f7da4c68e1c4eb02e0ed3fba56bbfbe7",
     "semantic_hash": ""
   },
   "agent-backend/mcp/ask-mcp.js": {
@@ -865,8 +865,8 @@
     "semantic_hash": ""
   },
   "agent-backend/run-contract.js": {
-    "mtime": 1785007936.6288056,
-    "ast_hash": "8694bf07516416f2494656a0e5664bbe",
+    "mtime": 1784541736.2409077,
+    "ast_hash": "9f326b03f10bd6ff346ee3b294d4723e",
     "semantic_hash": ""
   },
   "agent-backend/scripts/migrate-sqlite-to-pg.js": {
@@ -945,8 +945,8 @@
     "semantic_hash": ""
   },
   "mcp-servers/search/index.js": {
-    "mtime": 1785482466.140603,
-    "ast_hash": "db3b5d4d02e7607584382a8a1d3657d7",
+    "mtime": 1784996862.6016214,
+    "ast_hash": "04d8df259ca4922c9452e71e7439ab42",
     "semantic_hash": ""
   },
   "mcp-servers/transcript/index.js": {
@@ -1090,28 +1090,13 @@
     "semantic_hash": ""
   },
   "prompts/tether-system.md": {
-    "mtime": 1785482662.846853,
-    "ast_hash": "b9b9462bb5b6739d36c25c991aeac0fc",
+    "mtime": 1784996862.6026216,
+    "ast_hash": "4f54ea9a16ffa9c8fb421ea7e240fb4e",
     "semantic_hash": ""
   },
   "skills/script-gen/SKILL.md": {
     "mtime": 1784541736.2449076,
     "ast_hash": "316e9317bff7f0a40c2f908c1cd1fcc3",
-    "semantic_hash": ""
-  },
-  "mcp-servers/search/search_engine.py": {
-    "mtime": 1785482458.2836337,
-    "ast_hash": "d27855149397800ed6296b94b7628096",
-    "semantic_hash": ""
-  },
-  "tests/test_search_mcp.js": {
-    "mtime": 1785482470.2415872,
-    "ast_hash": "fdaaf543745435179a633d743b6bb80b",
-    "semantic_hash": ""
-  },
-  "mcp-servers/search/requirements.txt": {
-    "mtime": 1785482461.565621,
-    "ast_hash": "4848fa6433a9538e4381fd13c974e578",
     "semantic_hash": ""
   }
 }

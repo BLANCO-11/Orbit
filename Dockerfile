@@ -38,6 +38,8 @@ COPY dashboard/package.json dashboard/package-lock.json ./dashboard/
 RUN npm --prefix dashboard ci
 COPY mcp-servers/lightpanda/package.json mcp-servers/lightpanda/package-lock.json ./mcp-servers/lightpanda/
 RUN npm --prefix mcp-servers/lightpanda ci
+COPY mcp-servers/search/requirements.txt ./mcp-servers/search/
+RUN python3 -m venv mcp-servers/search/venv && ./mcp-servers/search/venv/bin/pip install -r mcp-servers/search/requirements.txt
 COPY . .
 RUN npm --prefix dashboard run build
 
