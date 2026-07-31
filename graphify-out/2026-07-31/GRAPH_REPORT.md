@@ -1,7 +1,7 @@
 # Graph Report - LLM-OS-AGENT  (2026-07-31)
 
 ## Corpus Check
-- 213 files · ~178,312 words
+- 213 files · ~178,189 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary

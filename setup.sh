@@ -106,6 +106,15 @@ npm --prefix dashboard install
 printf "${GREEN}✓ Dashboard dependencies installed.${NC}\n"
 echo ""
 
+# 6.5 Setup search MCP Python dependencies
+if command -v python3 > /dev/null 2>&1; then
+    printf "▸ Setting up search MCP Python dependencies…\n"
+    python3 -m venv mcp-servers/search/venv
+    mcp-servers/search/venv/bin/pip install -r mcp-servers/search/requirements.txt
+    printf "${GREEN}✓ Search MCP Python dependencies installed.${NC}\n"
+    echo ""
+fi
+
 # 7. Configure pi extensions (pi is a hard prerequisite for the local harness)
 if command -v pi > /dev/null 2>&1; then
     printf "▸ Configuring pi agent extensions…\n"

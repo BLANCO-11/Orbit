@@ -207,9 +207,5 @@
   "205": "remark-gfm",
   "206": "shadcn",
   "207": "script-gen.md",
-  "208": "restart-tether.sh",
-  "209": "test_search_mcp.js",
-  "210": "search_engine.py",
-  "211": "getProfile",
-  "212": "clsx"
+  "208": "restart-tether.sh"
 }

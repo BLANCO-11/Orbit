@@ -1,16 +1,16 @@
-# Graph Report - LLM-OS-AGENT  (2026-07-31)
+# Graph Report - LLM-OS-AGENT  (2026-07-25)
 
 ## Corpus Check
-- 213 files · ~178,312 words
+- 211 files · ~175,813 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 2015 nodes · 2899 edges · 213 communities (124 shown, 89 thin omitted)
-- Extraction: 91% EXTRACTED · 9% INFERRED · 0% AMBIGUOUS · INFERRED: 256 edges (avg confidence: 0.52)
+- 1993 nodes · 2868 edges · 209 communities (121 shown, 88 thin omitted)
+- Extraction: 91% EXTRACTED · 9% INFERRED · 0% AMBIGUOUS · INFERRED: 254 edges (avg confidence: 0.52)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `d97e87f1`
+- Built from commit: `4f2bf2e7`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -215,9 +215,6 @@
 - shadcn
 - script-gen.md
 - restart-tether.sh
-- test_search_mcp.js
-- getProfile
-- clsx
 
 ## God Nodes (most connected - your core abstractions)
 1. `init()` - 84 edges
@@ -227,7 +224,7 @@
 5. `SubagentTracker` - 26 edges
 6. `useTetherState()` - 20 edges
 7. `PiCodeHarness` - 18 edges
-8. `handleStartTask()` - 18 edges
+8. `handleStartTask()` - 17 edges
 9. `compilerOptions` - 16 edges
 10. `2. REST API Endpoints` - 14 edges
 
@@ -252,15 +249,15 @@
 - **Fable-5 Memory and Personalization Subsystem** — prompts_claude_fable_5_memory_system, prompts_claude_fable_5_forbidden_memory_phrases, prompts_claude_fable_5_past_chats_tools, prompts_claude_fable_5_preferences_info [INFERRED 0.85]
 - **Next.js Starter Assets** — dashboard_public_file_file_document_icon, dashboard_public_globe_globe_icon, dashboard_public_next_next_logo, dashboard_public_vercel_vercel_logo, dashboard_public_window_window_icon [INFERRED 0.75]
 
-## Communities (213 total, 89 thin omitted)
+## Communities (209 total, 88 thin omitted)
 
 ### Community 0 - "Dashboard Components & Settings Panel"
 Cohesion: 0.06
-Nodes (33): ComponentErrorBoundary, ErrorBoundary, ErrorBoundaryState, AGENT_MODES, AppearanceSection(), Badge(), badgeVariants, Button() (+25 more)
+Nodes (32): ComponentErrorBoundary, ErrorBoundary, ErrorBoundaryState, AGENT_MODES, Badge(), badgeVariants, Button(), buttonVariants (+24 more)
 
 ### Community 1 - "App Shell & Layout"
-Cohesion: 0.16
-Nodes (21): DashboardInner(), useDebounce(), EMPTY_METRICS, normalizeMetricsForUI(), useSessions(), DEFAULT_SETTINGS, useSettings(), useSTT() (+13 more)
+Cohesion: 0.20
+Nodes (15): DashboardInner(), useDebounce(), EMPTY_METRICS, normalizeMetricsForUI(), useSessions(), DEFAULT_SETTINGS, useSettings(), useSTT() (+7 more)
 
 ### Community 2 - "Product Plans & Design Docs"
 Cohesion: 0.50
@@ -268,7 +265,7 @@ Nodes (3): Deploy on Vercel, Getting Started, Learn More
 
 ### Community 3 - "Express Server & Routers"
 Cohesion: 0.02
-Nodes (98): startScheduler(), ACTIVE_SA, activeBuilds, activeRuns, activeSessions, answerRun(), app, ASK_TIMEOUT_MS (+90 more)
+Nodes (96): startScheduler(), ACTIVE_SA, activeBuilds, activeRuns, activeSessions, answerRun(), app, ASK_TIMEOUT_MS (+88 more)
 
 ### Community 4 - "Subagent Tracker & Harness Events"
 Cohesion: 0.13
@@ -292,7 +289,7 @@ Nodes (31): compilerOptions, allowJs, esModuleInterop, incremental, isolatedModu
 
 ### Community 10 - "Frontend Dependencies"
 Cohesion: 0.12
-Nodes (17): @base-ui/react, class-variance-authority, dependencies, @base-ui/react, class-variance-authority, dompurify, lucide-react, marked (+9 more)
+Nodes (17): class-variance-authority, clsx, dependencies, class-variance-authority, clsx, dompurify, lucide-react, marked (+9 more)
 
 ### Community 11 - "Chat UI & Mode Selectors"
 Cohesion: 0.22
@@ -307,8 +304,8 @@ Cohesion: 0.09
 Nodes (21): aliases, components, hooks, lib, ui, utils, iconLibrary, menuAccent (+13 more)
 
 ### Community 15 - "Lightpanda MCP Client"
-Cohesion: 0.25
-Nodes (7): { Client }, env, path, { StdioClientTransport }, assert, LightpandaMcpClient, testMcpClient()
+Cohesion: 0.13
+Nodes (8): { Client }, env, LightpandaMcpClient, path, { StdioClientTransport }, assert, LightpandaMcpClient, testMcpClient()
 
 ### Community 16 - "Security Guard (Path/Command)"
 Cohesion: 0.06
@@ -399,8 +396,8 @@ Cohesion: 0.15
 Nodes (12): After search, Connector directory first, Data Scope, Error Handling, Key Design Pattern, Limitations, Storage API, [third_party_mcp_app] tools need opt-in (+4 more)
 
 ### Community 54 - "About Orbit (platform self-knowledge)"
-Cohesion: 0.22
-Nodes (6): FLEET_DISPATCH_NAMES, createFleet(), { FLEET_DISPATCH_NAMES }, HeadlessSocket, MODE_RANK, RANK_MODE
+Cohesion: 0.12
+Nodes (11): FLEET_DISPATCH_NAMES, isFleetDispatch(), MCP, NOTIFY_MCP_TOOL, NOTIFY_NAMES, NOTE: this leaks into stored data — pi resolves models as `<PROVIDER_ID>/<model>, createFleet(), { FLEET_DISPATCH_NAMES } (+3 more)
 
 ### Community 55 - "OpenCodeHarness"
 Cohesion: 0.06
@@ -448,7 +445,7 @@ Nodes (14): createAdapter(), createPgAdapter(), createSqliteAdapter(), env, reso
 
 ### Community 66 - "crypto-store.js"
 Cohesion: 0.05
-Nodes (43): crypto, decrypt(), encrypt(), env, fs, KEY, KEY_FILE, path (+35 more)
+Nodes (40): crypto, decrypt(), encrypt(), env, fs, KEY, KEY_FILE, path (+32 more)
 
 ### Community 67 - "fleet-mcp.js"
 Cohesion: 0.19
@@ -479,8 +476,8 @@ Cohesion: 0.29
 Nodes (6): catalog, CATALOG_PATH, fs, path, persist(), recordObserved()
 
 ### Community 74 - "PreviewTab.tsx"
-Cohesion: 0.17
-Nodes (11): ConsoleTab(), Entry, ExplorerSidebar(), ExplorerSidebarProps, FileNode, IMG_EXT, Mode, OpenFile (+3 more)
+Cohesion: 0.13
+Nodes (17): ConsoleTab(), Entry, ExplorerSidebar(), ExplorerSidebarProps, FileNode, IMG_EXT, Mode, OpenFile (+9 more)
 
 ### Community 75 - "FleetView.tsx"
 Cohesion: 0.28
@@ -593,11 +590,11 @@ Nodes (6): {
 }, fs, path, puppeteer, { Server }, { StdioServerTransport }
 
 ### Community 164 - "index.js"
-Cohesion: 0.20
-Nodes (12): {
+Cohesion: 0.31
+Nodes (7): {
   CallToolRequestSchema,
   ListToolsRequestSchema,
-}, decodeEntities(), { execFile }, fs, getPythonExecutable(), path, runPythonEngine(), searchDuckDuckGoJs() (+4 more)
+}, decodeEntities(), searchDuckDuckGo(), { Server }, { StdioServerTransport }, unwrapDdg(), webSearch()
 
 ### Community 165 - "How you operate — Tether operating manual"
 Cohesion: 0.22
@@ -696,8 +693,8 @@ Cohesion: 0.40
 Nodes (3): FALLBACK, LibraryPrompt, PromptTypeSelectorProps
 
 ### Community 187 - "useTheme"
-Cohesion: 0.67
-Nodes (3): PALETTE_IDS, PALETTES, useTheme()
+Cohesion: 0.50
+Nodes (4): AppearanceSection(), PALETTE_IDS, PALETTES, useTheme()
 
 ### Community 188 - "Integration guide — driving Tether from your app"
 Cohesion: 0.40
@@ -712,8 +709,8 @@ Cohesion: 0.50
 Nodes (4): getDevice(), getDeviceByToken(), listDevices(), mapDeviceRow()
 
 ### Community 191 - "getProfile"
-Cohesion: 0.25
-Nodes (5): isFleetDispatch(), MCP, NOTIFY_MCP_TOOL, NOTIFY_NAMES, NOTE: this leaks into stored data — pi resolves models as `<PROVIDER_ID>/<model>
+Cohesion: 0.50
+Nodes (4): getChannel(), listChannels(), mapChannelRow(), saveChannel()
 
 ### Community 197 - "docker-entrypoint.sh"
 Cohesion: 0.83
@@ -723,33 +720,25 @@ Nodes (3): rewrite_host_local(), docker-entrypoint.sh script, shutdown()
 Cohesion: 0.50
 Nodes (4): Integration (headless backend) docs, Start here, Tether Documentation, Two ways to use Tether
 
-### Community 209 - "test_search_mcp.js"
-Cohesion: 0.40
-Nodes (5): assert, { Client }, path, { StdioClientTransport }, testSearchMcpServer()
-
-### Community 211 - "getProfile"
-Cohesion: 0.50
-Nodes (4): getChannel(), listChannels(), mapChannelRow(), saveChannel()
-
 ## Knowledge Gaps
-- **886 isolated node(s):** `os`, `fs`, `path`, `WebSocket`, `EventEmitter` (+881 more)
+- **877 isolated node(s):** `os`, `fs`, `path`, `WebSocket`, `EventEmitter` (+872 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **89 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **88 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `init()` connect `Lightpanda MCP Server Package` to `class-variance-authority`, `mapRow`, `Database & Device Pairing`, `secretTenant`, `connectorTenant`, `getTemplate`, `getProfile`, `getTenant`, `mapUserRow`, `page.tsx`, `getUser`, `getDeviceByToken`?**
-  _High betweenness centrality (0.169) - this node is a cross-community bridge._
+- **Why does `init()` connect `Lightpanda MCP Server Package` to `class-variance-authority`, `mapRow`, `Database & Device Pairing`, `secretTenant`, `connectorTenant`, `getTemplate`, `getTenant`, `mapUserRow`, `page.tsx`, `getUser`, `getDeviceByToken`, `getProfile`?**
+  _High betweenness centrality (0.179) - this node is a cross-community bridge._
 - **Why does `installApiAuthFetch()` connect `page.tsx` to `Lightpanda MCP Server Package`?**
-  _High betweenness centrality (0.168) - this node is a cross-community bridge._
-- **Why does `dependencies` connect `Frontend Dependencies` to `next`, `http-proxy`, `react-dom`, `remark-gfm`, `DetailPanel.tsx`, `shadcn`, `clsx`, `package.json`?**
-  _High betweenness centrality (0.022) - this node is a cross-community bridge._
+  _High betweenness centrality (0.178) - this node is a cross-community bridge._
+- **Why does `dependencies` connect `Frontend Dependencies` to `next`, `clsx`, `http-proxy`, `react-dom`, `remark-gfm`, `DetailPanel.tsx`, `shadcn`, `package.json`?**
+  _High betweenness centrality (0.023) - this node is a cross-community bridge._
 - **Are the 2 inferred relationships involving `init()` (e.g. with `db.js` and `installApiAuthFetch()`) actually correct?**
   _`init()` has 2 INFERRED edges - model-reasoned connections that need verification._
 - **What connects `os`, `fs`, `path` to the rest of the system?**
-  _896 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _887 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Dashboard Components & Settings Panel` be split into smaller, more focused modules?**
-  _Cohesion score 0.059227921734531994 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.060451977401129946 - nodes in this community are weakly interconnected._
 - **Should `Express Server & Routers` be split into smaller, more focused modules?**
-  _Cohesion score 0.019597069597069597 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.019988577955454025 - nodes in this community are weakly interconnected._

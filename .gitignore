@@ -58,5 +58,9 @@ plans/
 .pi/
 
 # graphify knowledge graph
-graphify-out/
+# python virtualenv & cache
+venv/
+__pycache__/
+*.pyc
+
 
